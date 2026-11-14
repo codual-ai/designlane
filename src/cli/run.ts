@@ -9,6 +9,8 @@ import { scanRepo } from "../scan/index.js";
 import { scanNotes } from "../scan/notes.js";
 import { FRAMEWORK_NAMES, type ScanResult, SUPPORTED_FRAMEWORKS } from "../scan/types.js";
 import { AGENT_PROMPT } from "./agent-prompt.js";
+import { type Output, UsageError } from "./command.js";
+import { EDIT_USAGE, edit } from "./edit.js";
 
 const HELP = `designmap: map a mobile app's design system from its code
 
@@ -18,6 +20,7 @@ Usage
   designmap mcp [dir]
                     Run the MCP server, so a coding agent reads the app's design system while it builds
   designmap prompt  Print instructions for a coding agent to read the app's design system into designmap/agent.json
+${EDIT_USAGE}
 
 Let a coding agent read an app whose setup Designmap's own reading misses
   claude -p "$(npx designmap prompt)" --allowedTools Read Glob Grep Write
@@ -36,24 +39,10 @@ Options
   -h, --help
 `;
 
-export interface Output {
-  out: (text: string) => void;
-  error: (text: string) => void;
-}
-
-/** A mistake in how the command was run: its message, and the exit code it ends with. */
-class UsageError extends Error {
-  constructor(
-    message: string,
-    readonly code: number,
-  ) {
-    super(message);
-  }
-}
-
 /** Runs the command line with `argv` (without `node` and the script), and returns the exit code. */
 export async function run(argv: string[], io: Output): Promise<number> {
   try {
+    if (argv[0] === "edit") return await edit(argv.slice(1), io);
     const { values, positionals } = parse(argv);
     if (values.help) return done(io.out, HELP);
     if (values.version) return done(io.out, await version());

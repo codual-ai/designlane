@@ -32,7 +32,7 @@ const ENDS_BEFORE_START = "a span ends before it starts";
  * it holds (see `ValueKind`: a literal's text without its quotes, a whole expression, a font name holding the weight
  * too, a family's identifier, or an asset's `components`). `via` holds each name on the way to it when the token names
  * another value (`link: colors.blue0`), the token's own first. Files from before it was recorded have none. */
-const ValueLocation = SpanFields.extend({
+export const ValueLocation = SpanFields.extend({
   kind: z.enum(VALUE_KINDS),
   via: z.array(SpanFields.refine(isOrdered, ENDS_BEFORE_START)).optional(),
 }).refine(isOrdered, ENDS_BEFORE_START);

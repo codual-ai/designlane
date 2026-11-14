@@ -98,7 +98,7 @@ export interface KeyedStyle {
 }
 
 /** Font weights as the numbers both formats use. */
-const WEIGHT_NUMBERS: Record<string, number> = {
+export const WEIGHT_NUMBERS: Record<string, number> = {
   thin: 100,
   ultraLight: 200,
   light: 300,

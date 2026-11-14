@@ -41,7 +41,8 @@ export const MATERIAL_DEFAULTS: Record<string, Default> = {
 
 /** Weights by the hundred, 100 to 900. */
 const BY_HUNDRED = ["thin", "ultraLight", "light", "regular", "medium", "semibold", "bold", "heavy", "black"];
-const NAMED_WEIGHTS: Record<string, string> = {
+/** Compose's named weights (`FontWeight.SemiBold`), each as the name Designmap gives it. */
+export const COMPOSE_WEIGHTS: Record<string, string> = {
   Thin: "thin",
   ExtraLight: "ultraLight",
   Light: "light",
@@ -57,7 +58,7 @@ const NAMED_WEIGHTS: Record<string, string> = {
  * app runs. */
 export function weightOf(expression: string): string {
   const named = expression.match(/^FontWeight\.(\w+)$/)?.[1] ?? "";
-  if (NAMED_WEIGHTS[named]) return NAMED_WEIGHTS[named];
+  if (COMPOSE_WEIGHTS[named]) return COMPOSE_WEIGHTS[named];
   const number = Number(
     named.match(/^W(\d00)$/)?.[1] ??
       expression.match(/^FontWeight\s*\(\s*(?:weight\s*=\s*)?(\d+)\s*\)$/)?.[1],

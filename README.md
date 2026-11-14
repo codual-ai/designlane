@@ -138,13 +138,40 @@ npx designmap --from-agent designmap/agent.json                           # chec
 A colour is kept only when the code writes its exact value and uses its name; whatever isn't is listed and left out.
 Any agent works: `designmap prompt` prints plain instructions.
 
+## Change a token in the code
+
+`designmap edit` makes a design change in the code, in the one place tokens.json says the value is written, and
+writes it the way the code already does:
+
+```sh
+npx designmap edit Theme.brand light '#de2413' --dry-run
+```
+
+```diff
+--- a/Shop/Theme.swift
++++ b/Shop/Theme.swift
+@@ -2,1 +2,1 @@
+-  static let brand = Color(red: 0.2, green: 0.4, blue: 0.9)
++  static let brand = Color(red: 0.87, green: 0.14, blue: 0.075)
+```
+
+Name the token by its key in tokens.json or how the code refers to it, and the property as `light`, `dark`,
+`family`, `size` or `weight`. Without `--dry-run` it writes the file. The new value keeps the code's notation: hex
+case and length, Compose's `0xFF…`, Swift's `/ 255` or its decimals, `rgb()`, an asset catalog's components (with more decimals only when the code's can't hold the new value), `22.sp`,
+`.semibold` or `FontWeight.SemiBold`. A colour the code gives as another name (`link: colors.blue0`) gets its own value
+in place of that name, so everything else using `colors.blue0` keeps it.
+
+When it can't be sure, it changes nothing and says why: the code changed since designmap last ran (run it again), the
+colour is a named or computed one (`.white`, `Brand.copy(alpha = 0.5f)`), the weight is part of a font's name
+(`Inter-Bold`), another token is written in the same place, or a text style's value comes from a style it builds on.
+
 ## Supported
 
 | | Today | Next |
 |---|---|---|
 | **Code** | SwiftUI, Jetpack Compose, React Native | more to come |
 | **Design tools** | Figma | Penpot, Sketch |
-| **Direction** | code to design | design to code: a change in Figma suggests the code edit, ready for a pull request |
+| **Direction** | code to design; design to code with `designmap edit` | design to code from Figma: a change there opens the code edit as a pull request |
 | **Token formats** | W3C design tokens (Tokens Studio, Style Dictionary) | |
 
 ## What it reads
