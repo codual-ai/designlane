@@ -3,7 +3,7 @@ import type { NamedColor } from "../scan/palette.js";
 import { rgbToHex } from "../scan/tokens.js";
 import type { ValueLocation } from "../scan/types.js";
 import { locator } from "./source-text.js";
-import { valueAt } from "./value-locations.js";
+import { valueAt, withLocations } from "./value-locations.js";
 
 const COLORSET = /([^/]+)\.colorset\/Contents\.json$/;
 
@@ -79,10 +79,6 @@ export function parseColorset(rel: string, text: string | undefined): NamedColor
   const light = written.get("light") ?? written.get("any");
   if (!light) return undefined;
   const dark = written.get("dark") ?? written.get("any");
-  const locations = {
-    ...(light.location && { light: light.location }),
-    ...(dark !== light && dark?.location && { dark: dark.location }),
-  };
   return {
     name,
     light: light.hex,
@@ -90,7 +86,10 @@ export function parseColorset(rel: string, text: string | undefined): NamedColor
     source: rel,
     reference: `Color("${name}")`,
     kind: "asset",
-    ...(locations.light || locations.dark ? { locations } : {}),
+    ...withLocations({
+      ...(light.location && { light: light.location }),
+      ...(dark !== light && dark?.location && { dark: dark.location }),
+    }),
   };
 }
 

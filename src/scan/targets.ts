@@ -8,14 +8,14 @@
  * Extension`, `Shop Watch App`, `ShopWidgets`, `ShopIntents`, `ShareExtension`, `Shop.appex`. */
 const APPLE_TARGET = new RegExp(
   `(?:${[
-    String.raw`Watch(?:Kit)? ?(?:App|Extension)`,
-    String.raw`(?:watch|tv)OS(?: ?App)?`,
-    String.raw`Widgets?(?: ?Extension)?`,
-    String.raw`Intents(?:UI)? ?Extension`,
-    String.raw`.(?<!^App)Intents(?:UI)?`,
-    String.raw`Notification(?:Content|Service)(?: ?Extension)?`,
-    String.raw`(?:Share|Action|Keyboard|Today|Stickers?|iMessage|FileProvider|Broadcast(?:Upload)?) ?Extension`,
-    String.raw`App ?Clip`,
+    "Watch(?:Kit)? ?(?:App|Extension)",
+    "(?:watch|tv)OS(?: ?App)?",
+    "Widgets?(?: ?Extension)?",
+    "Intents(?:UI)? ?Extension",
+    ".(?<!^App)Intents(?:UI)?",
+    "Notification(?:Content|Service)(?: ?Extension)?",
+    "(?:Share|Action|Keyboard|Today|Stickers?|iMessage|FileProvider|Broadcast(?:Upload)?) ?Extension",
+    "App ?Clip",
     String.raw`\.appex`,
   ].join("|")})$`,
 );

@@ -4,7 +4,7 @@
 import { isOtherTarget } from "../scan/targets.js";
 import type { CodeSpan, ColorLocations, ValueLocation } from "../scan/types.js";
 import { androidHex } from "./compose-color-values.js";
-import { locator } from "./source-text.js";
+import { blankRanges, type Locator, locator } from "./source-text.js";
 import { followNames, through, valueAt } from "./value-locations.js";
 
 export interface ResourceColor {
@@ -19,6 +19,8 @@ export interface ResourceColor {
 export const RESOURCE_FILE = /(?:^|\/)res\/values[\w-]*\/[^/]+\.xml$/;
 const RESOURCE = /<color\s+name\s*=\s*"([\w.]+)"\s*>\s*([^<]*?)\s*<\/color>/g;
 const VALUES_FOLDER = /(?:^|\/)res\/(values[\w-]*)\//;
+/** A colour resource naming another: `@color/brand`. */
+const COLOR_LINK = /^@color\/([\w.]+)$/;
 /** Colours pointing at colours this many times over are a loop, not a palette. */
 const MAX_LINKS = 8;
 
@@ -41,12 +43,7 @@ export interface Written {
 
 /** An element's text, `value` as a pattern read it from `m`, and where it's written: after the element's `>` and any
  * spaces, `m` having matched in the text from `offset` on. */
-export function elementText(
-  m: RegExpMatchArray,
-  value: string,
-  span: (start: number, end: number) => CodeSpan,
-  offset = 0,
-): Written {
+export function elementText(m: RegExpMatchArray, value: string, span: Locator, offset = 0): Written {
   const inner = m[0].slice(m[0].indexOf(">") + 1);
   const start = offset + (m.index ?? 0) + m[0].length - inner.trimStart().length;
   return { value, location: span(start, start + value.length) };
@@ -55,20 +52,18 @@ export function elementText(
 /** XML with its comments blanked, keeping every offset, so a resource commented out isn't read; one left open runs to
  * the end. */
 export function withoutComments(text: string): string {
-  const parts: string[] = [];
-  for (let at = 0; at < text.length; ) {
-    const open = text.indexOf("<!--", at);
-    if (open < 0) {
-      parts.push(text.slice(at));
-      break;
-    }
-    parts.push(text.slice(at, open));
-    const close = text.indexOf("-->", open + 4);
-    at = close < 0 ? text.length : close + 3;
-    parts.push(text.slice(open, at).replace(/[^\n]/g, " "));
+  const comments: [number, number][] = [];
+  for (let open = text.indexOf(COMMENT_OPEN); open >= 0; ) {
+    const close = text.indexOf(COMMENT_CLOSE, open + COMMENT_OPEN.length);
+    const end = close < 0 ? text.length : close + COMMENT_CLOSE.length;
+    comments.push([open, end]);
+    open = text.indexOf(COMMENT_OPEN, end);
   }
-  return parts.join("");
+  return blankRanges(text, comments);
 }
+
+const COMMENT_OPEN = "<!--";
+const COMMENT_CLOSE = "-->";
 
 export function resourceColors(files: { rel: string; text: string }[]): ResourceColor[] {
   const light = new Map<string, Written>();
@@ -114,7 +109,7 @@ function resolve(
   first: Written,
   table: (name: string) => Written | undefined,
 ): { hex: string; location: ValueLocation } | undefined {
-  const link = (at: Written) => at.value.match(/^@color\/([\w.]+)$/)?.[1];
+  const link = (at: Written) => at.value.match(COLOR_LINK)?.[1];
   const found = followNames(
     first,
     (at) => {

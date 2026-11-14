@@ -10,7 +10,7 @@ import {
   eachNode,
   fileName,
   type JsSource,
-  literalSpan,
+  literalLocation,
   objectIn,
   propertyName,
   renderPath,
@@ -107,7 +107,7 @@ function sizesIn(source: JsSource): Found[] {
     else if (isSize(path)) {
       const written = unwrapped(value);
       const size = literalOf(written);
-      const location = literalSpan(source, literalNode(written));
+      const location = literalLocation(source, literalNode(written));
       if (typeof size === "number" && size > 0) found.push({ path, size, ...(location && { location }) });
     }
   };

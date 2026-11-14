@@ -12,8 +12,8 @@ import {
 } from "./android-resources.js";
 import { familyFromFile } from "./compose-fonts.js";
 import { MATERIAL_DEFAULTS, SYSTEM, weightByHundred } from "./material-type.js";
-import { locator } from "./source-text.js";
-import { followNames, through, valueAt } from "./value-locations.js";
+import { type Locator, locator } from "./source-text.js";
+import { followNames, through, valueAt, withLocations } from "./value-locations.js";
 
 /** A size the style sets but that can't be read (`?attr/…`) is undefined, replacing its parent's. */
 interface Font {
@@ -81,7 +81,7 @@ export function textAppearances(files: { rel: string; text: string }[], code: st
         weight: font.weight ?? COMPUTED,
         reference: `R.style.${codeName}`,
         uses: uses.get(codeName) ?? 0,
-        ...(Object.keys(font.locations).length > 0 ? { locations: font.locations } : {}),
+        ...withLocations(font.locations),
       },
     ];
   });
@@ -90,7 +90,7 @@ export function textAppearances(files: { rel: string; text: string }[], code: st
 const isTextAppearance = (name: string, style: StyleResource) =>
   name.startsWith("TextAppearance.") || (style.parent?.startsWith("TextAppearance.") ?? false);
 
-function stylesIn(text: string, span: (start: number, end: number) => CodeSpan): Map<string, StyleResource> {
+function stylesIn(text: string, span: Locator): Map<string, StyleResource> {
   const styles = new Map<string, StyleResource>();
   const opens = [...text.matchAll(STYLE)];
   let close = 0;
@@ -162,12 +162,12 @@ function fontOf(
 const materialRole = (role: string) =>
   role.replace(/^Headline(\d)$/, "h$1").replace(/^\w/, (c) => c.toLowerCase());
 
+/** A style's own font, with which of its values its items set, read or not. */
+type ItemsFont = Font & { set: Set<keyof TypeLocations> };
+
 /** What a style's own items set, where, and which of its values they set, read or not. */
-function itemsFont(
-  items: Map<string, Written>,
-  dimens: Map<string, Written>,
-): Font & { set: Set<keyof TypeLocations> } {
-  const font: Font & { set: Set<keyof TypeLocations> } = { locations: {}, set: new Set() };
+function itemsFont(items: Map<string, Written>, dimens: Map<string, Written>): ItemsFont {
+  const font: ItemsFont = { locations: {}, set: new Set() };
   const place = (key: keyof TypeLocations, location: ValueLocation | undefined) => {
     font.set.add(key);
     if (location) font.locations[key] = location;

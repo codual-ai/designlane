@@ -121,7 +121,6 @@ function baseColor(
   const path = name.replace(/\.copy$/, "");
   const end = at + path.length;
   const system = COMPOSE_COLORS[path.match(/^Color\.(\w+)$/)?.[1] ?? ""];
-  // A platform colour is written as it is; a name of the app's is followed to its value.
   if (system) return { hex: system, location: valueAt(spanIn(source, at, end), "expression"), end };
   const color = known(path, source.rel);
   const location = color && named(source, at, end, color);

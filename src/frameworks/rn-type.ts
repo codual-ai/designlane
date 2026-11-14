@@ -23,6 +23,7 @@ import { familyAndWeight } from "./rn-fonts.js";
 import { countUses, type Font, type Named, StyleIndex, styleLocations, UNKNOWN } from "./rn-named.js";
 import { type Spreads, styleOf } from "./rn-style.js";
 import { Values } from "./rn-values.js";
+import { withLocations } from "./value-locations.js";
 
 export interface RnType extends TypeFindings {
   /** The text styles the app's typography objects name, each with how many times the code reaches it. */
@@ -82,7 +83,6 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
   countUses(read, index, inStyles);
   const styles = named.map((n): TypeStyle => {
     const { family, size, weight } = useOf(n.font);
-    const locations = styleLocations(n.font);
     return {
       name: n.path[n.path.length - 1] ?? "",
       kind: "app",
@@ -91,7 +91,7 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
       weight,
       reference: renderPath(n.path),
       uses: n.uses,
-      ...(locations && { locations }),
+      ...withLocations(styleLocations(n.font)),
     };
   });
   return {

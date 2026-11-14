@@ -5,38 +5,14 @@
  * worked out at run time is `computed`, never guessed.
  */
 
-import { COMPUTED, type TypeUse } from "../scan/type-scale.js";
-import type { TypeLocations, ValueKind } from "../scan/types.js";
+import { COMPUTED } from "../scan/type-scale.js";
 import { type Argument, type ChainLink, chain, type Expression } from "./swift-expressions.js";
+import { changesIn, withChanges } from "./swift-font-changes.js";
 import { fontName, isTextStyle, type TextStyleName, textStyle, WEIGHTS } from "./swift-font-names.js";
+import { type FontValue, fontSpan, numberIn, sized, weightOf } from "./swift-font-values.js";
 
 /** The types fonts are made from: SwiftUI's, UIKit's and AppKit's. */
 export const FONT_TYPES = new Set(["Font", "UIFont", "NSFont"]);
-
-/** A reference to one of the app's own font helpers: `.scaledBody`, `AppFont.title`, `UIFont.dynamicTypeBody`. */
-export interface HelperReference {
-  /** The type it's named on; undefined when written as `.name` and found by the type the context expects. */
-  owner?: string;
-  name: string;
-  args: Argument[];
-  /** Whether it's called, `.brand(size: 24)`, so it names a helper function rather than a property. */
-  called: boolean;
-  /** A weight or size set on the helper's font after it: `.dynamicTypeFootnote.semibold()`, `.withSize(32)`. */
-  weight?: string;
-  size?: number;
-  /** Where the reference starts. */
-  at: number;
-}
-
-/** Where a font's family, size and weight are written in its file, by the token value each is. */
-export type FontSpans = { [K in keyof TypeLocations]?: { start: number; end: number; kind: ValueKind } };
-
-/** A font an expression sets: one written out (with the text style it is, if any, the parameter its size comes
- * straight from, `size: size`, so a helper's call can supply it, and where its values are written), or one of the
- * app's helpers. */
-export type FontValue =
-  | { font: TypeUse; style?: TextStyleName; sizeFrom?: string; spans?: FontSpans }
-  | { helper: HelperReference };
 
 const SYSTEM_SIZED = new Set([
   "systemFont",
@@ -62,8 +38,6 @@ const KEEPS_FONT = new Set([
   // A font's descriptor describes that same font, and is used to make it: `UIFont(descriptor: f.fontDescriptor, …)`.
   "fontDescriptor",
 ]);
-/** Conversions that keep a number as it is: `CGFloat(17)`. */
-const NUMBER_TYPES = new Set(["CGFloat", "Double", "Float", "Int"]);
 /** The labels a font's size is passed with. */
 export const SIZE_LABELS = new Set(["size", "ofSize", "fixedSize"]);
 
@@ -177,13 +151,11 @@ function systemFont(args: Argument[], weight: string): FontValue {
   const weightAt = args.find((a) => a.label === "weight")?.value;
   const sizeAt = numberIn(size);
   const spans = {
-    ...(sizeAt && { fontSize: span(sizeAt.token, "literal") }),
-    ...(weightAt && { fontWeight: span(weightAt, "expression") }),
+    ...(sizeAt && { fontSize: fontSpan(sizeAt.token, "literal") }),
+    ...(weightAt && { fontWeight: fontSpan(weightAt, "expression") }),
   };
   return { font: { kind: "system", family: "System", ...sized(size), weight }, ...sizeSource(size), spans };
 }
-
-const span = ({ start, end }: { start: number; end: number }, kind: ValueKind) => ({ start, end, kind });
 
 /** Where a string literal's text is, without its quotes: `"Inter"`, `#"Inter"#`. */
 function textOf({ token, value }: Expression & { kind: "string" }) {
@@ -198,107 +170,17 @@ function customFont(args: Argument[], familyLabel?: string): FontValue {
   const size = args.find((a) => SIZE_LABELS.has(a.label ?? ""))?.value;
   // A font's name is its family and its weight: `Inter-Bold`, or `Inter` for the regular one.
   const nameAt =
-    family?.kind === "string" && !family.interpolated ? span(textOf(family), "family-name") : undefined;
+    family?.kind === "string" && !family.interpolated ? fontSpan(textOf(family), "family-name") : undefined;
   const sizeAt = numberIn(size);
   const spans = {
     ...(nameAt && { fontFamily: nameAt, fontWeight: nameAt }),
-    ...(sizeAt && { fontSize: span(sizeAt.token, "literal") }),
+    ...(sizeAt && { fontSize: fontSpan(sizeAt.token, "literal") }),
   };
   return {
     font: { kind: "custom", family: named.family, ...sized(size), weight: named.weight },
     ...sizeSource(size),
     spans,
   };
-}
-
-/** A font's weight and size changes, and where each is written. */
-interface Changes {
-  weight?: string;
-  size?: number;
-  /** The last size set is worked out as the app runs (`.withSize(scaled())`), replacing the font's own. */
-  computedSize?: true;
-  spans?: FontSpans;
-}
-
-/** The weight and size changes in a chain of links after a font: `.bold()`, `.weight(.medium)`, `.withSize(32)`. A
- * later `.font(…)` replaces the font, so the changes stop there. */
-export function changesIn(links: ChainLink[]): Changes {
-  let weight: string | undefined;
-  let size: number | undefined;
-  let computedSize = false;
-  const spans: FontSpans = {};
-  for (const link of links) {
-    const { name, args } = link;
-    if (name === "font") break;
-    const argument = args?.[0]?.value;
-    if (name === "bold") {
-      const bold = boldness(args);
-      weight = bold ?? weight;
-      if (bold) spans.fontWeight = span(link, "expression");
-    } else if ((name === "weight" || name === "fontWeight") && args) {
-      weight = weightOf(argument) ?? COMPUTED;
-      if (argument && weight !== COMPUTED) spans.fontWeight = span(argument, "expression");
-    }
-    // UIKit apps add weight methods of their own: `UIFont.dynamicTypeFootnote.semibold()`.
-    else if (WEIGHTS.has(name) && args?.length === 0) {
-      weight = name;
-      spans.fontWeight = span(link, "expression");
-    } else if (name === "withSize" && args) {
-      size = sized(argument).size;
-      computedSize = size === undefined;
-      const sizeAt = numberIn(argument);
-      if (sizeAt) spans.fontSize = span(sizeAt.token, "literal");
-    }
-  }
-  return {
-    ...(weight ? { weight } : {}),
-    ...(size === undefined ? {} : { size }),
-    ...(computedSize && { computedSize: true as const }),
-    ...(Object.keys(spans).length > 0 ? { spans } : {}),
-  };
-}
-
-/** `value` with the given weight and size changes applied. */
-export function withChanges(value: FontValue, { spans, computedSize, ...changes }: Changes): FontValue {
-  if ("helper" in value) return { helper: { ...value.helper, ...changes } };
-  const restyled = value.style && changes.weight ? textStyle(value.style, changes.weight) : value.font;
-  const font = { ...restyled, ...changes };
-  const written = { ...value.spans, ...spans };
-  if (computedSize) {
-    delete font.size;
-    delete written.fontSize;
-  }
-  return { ...value, font, spans: written };
-}
-
-/** `.bold()` is bold, `.bold(true)` too; `.bold(false)` changes nothing; `.bold(isOn)` can't be read. */
-function boldness(args: Argument[] | undefined): string | undefined {
-  const value = args?.[0]?.value;
-  if (!value) return "bold";
-  if (value.kind === "name" && value.name === "true") return "bold";
-  return value.kind === "name" && value.name === "false" ? undefined : COMPUTED;
-}
-
-/** `.bold`, `Font.Weight.bold` or `UIFont.Weight.bold` as a weight; anything else is worked out at run time. */
-function weightOf(value: Expression | undefined): string | undefined {
-  if (!value) return undefined;
-  return value.kind === "member" && WEIGHTS.has(value.name) ? value.name : COMPUTED;
-}
-
-/** A size written as a number, `17` or `CGFloat(17)`; nothing for one worked out at run time (`adaptive(14)`). */
-function sized(value: Expression | undefined): { size?: number } {
-  const number = numberIn(value);
-  return number ? { size: number.value } : {};
-}
-
-/** The number a size is written as: `17`, or `17` in `CGFloat(17)`. */
-function numberIn(value: Expression | undefined): (Expression & { kind: "number" }) | undefined {
-  const converted =
-    value?.kind === "call" && value.callee.kind === "name" && NUMBER_TYPES.has(value.callee.name);
-  // Only an unlabelled conversion keeps the number as it is: `CGFloat(exactly: 17)` may give no number at all.
-  const plain = converted && value.args.length === 1 && value.args[0]?.label === undefined;
-  const number = plain ? value.args[0]?.value : value;
-  return number?.kind === "number" ? number : undefined;
 }
 
 function sizeSource(value: Expression | undefined): { sizeFrom?: string } {

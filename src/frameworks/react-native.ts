@@ -9,7 +9,8 @@ import { rnColors } from "./rn-colors.js";
 import { namedFontSizes } from "./rn-font-sizes.js";
 import { rnType } from "./rn-type.js";
 import { rnViews } from "./rn-views.js";
-import { TAILWIND_CONFIG, tailwindColors } from "./tailwind-colors.js";
+import { tailwindColors } from "./tailwind-colors.js";
+import { TAILWIND_CONFIG } from "./tailwind-config.js";
 import { type TailwindType, tailwindType } from "./tailwind-type.js";
 
 /** Packages a React Native app depends on: React Native itself, or Expo, which brings it. */

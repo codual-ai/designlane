@@ -6,13 +6,15 @@
 
 import { firstAtOrAfter } from "../scan/sorted.js";
 import { COMPUTED, type TypeUse } from "../scan/type-scale.js";
-import type { CodeSpan, TypeLocations } from "../scan/types.js";
+import type { TypeLocations } from "../scan/types.js";
+import type { Locator } from "./source-text.js";
 import { expressionAt } from "./swift-expressions.js";
-import { FONT_TYPES, type FontSpans, type FontValue, fontValues } from "./swift-font-reading.js";
+import { FONT_TYPES, fontValues } from "./swift-font-reading.js";
 import type { FontSite } from "./swift-font-sites.js";
+import type { FontSpans, FontValue } from "./swift-font-values.js";
 import { memberOf, ownerAt, qualifiedOwnerAt } from "./swift-owners.js";
 import { type SwiftTokens, tokenIndexAt } from "./swift-tokens.js";
-import { valueAt } from "./value-locations.js";
+import { valueAt, withLocations } from "./value-locations.js";
 
 export type Range = [start: number, end: number];
 
@@ -42,11 +44,7 @@ const MAX_BODY_TOKENS = 512;
 const MAX_BODY_FONTS = 8;
 
 /** The font helpers declared in `file`, given the fonts found in it; `span` says where offsets of it are. */
-export function fontHelpers(
-  file: SwiftTokens,
-  sites: FontSite[],
-  span: (start: number, end: number) => CodeSpan,
-): FontHelper[] {
+export function fontHelpers(file: SwiftTokens, sites: FontSite[], span: Locator): FontHelper[] {
   const helpers: FontHelper[] = [];
   const ordered = [...sites].sort((a, b) => a.at - b.at);
   const starts = ordered.map((s) => s.at);
@@ -76,7 +74,7 @@ export function fontHelpers(
     const font = shared(fonts.map((v) => v.font));
     // Only a helper returning one font has one place each of its values is written.
     const [only] = all.length === 1 ? fonts : [];
-    const locations = only?.spans ? locationsOf(only.spans, span) : undefined;
+    const locations = only?.spans ? locationsOf(only.spans, span) : {};
     const sizeParameter = fonts.some(
       (v) => v.sizeFrom !== undefined && declaration.parameters.includes(v.sizeFrom),
     );
@@ -89,7 +87,7 @@ export function fontHelpers(
       name: declaration.name,
       owner: ownerAt(file, i),
       isFunction,
-      font: { ...font, kind: "app", style: declaration.name, reference, ...(locations && { locations }) },
+      font: { ...font, kind: "app", style: declaration.name, reference, ...withLocations(locations) },
       body: declaration.body,
       sizeParameter,
       written: fonts.map(({ font, at }) => ({ font, at })),
@@ -98,16 +96,11 @@ export function fontHelpers(
   return helpers;
 }
 
-/** A font's spans as places in its file; none when it has none. */
-function locationsOf(
-  spans: FontSpans,
-  span: (start: number, end: number) => CodeSpan,
-): TypeLocations | undefined {
-  const entries = Object.entries(spans).map(([key, { start, end, kind }]) => [
-    key,
-    valueAt(span(start, end), kind),
-  ]);
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+/** A font's spans as places in its file. */
+function locationsOf(spans: FontSpans, span: Locator): TypeLocations {
+  return Object.fromEntries(
+    Object.entries(spans).map(([key, { start, end, kind }]) => [key, valueAt(span(start, end), kind)]),
+  );
 }
 
 /** The helper declared from the name at `at`: `name(parameters) -> Font {`, `name: UIFont {`, `name = Font.custom(…)`. */

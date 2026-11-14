@@ -38,9 +38,12 @@ export function blankCommentsAndStrings(text: string, endOf: CommentOrStringEnd)
   return out.join("");
 }
 
-/** Turns offsets of `text`, the text of `file`, into spans of it, finding each line by binary search over the line
- * starts, which are found once. */
-export function locator(file: string, text: string): (start: number, end: number) => CodeSpan {
+/** Turns offsets of a file's text into spans of it. */
+export type Locator = (start: number, end: number) => CodeSpan;
+
+/** A `Locator` for `text`, the text of `file`, finding each line by binary search over the line starts, which are
+ * found once. */
+export function locator(file: string, text: string): Locator {
   const lineStarts = [0];
   for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
   return (start, end) => ({ file, line: firstAtOrAfter(lineStarts, start + 1), start, end });

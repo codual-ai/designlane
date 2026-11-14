@@ -10,6 +10,7 @@ import { lineNumbers, locator } from "./source-text.js";
 import { structs } from "./swift-source.js";
 import { type SwiftTokens, tokenIndexAt } from "./swift-tokens.js";
 import { type SwiftSource, tokensOf } from "./swiftui-sources.js";
+import { valueAt, withLocations } from "./value-locations.js";
 
 const PROTOCOL = /\bprotocol\s+([A-Z]\w*)/g;
 /** A protocol's colour: `var tintColor: Color { get set }`. */
@@ -28,7 +29,7 @@ const FIXED_VALUES: Record<string, string> = { white: "#ffffff", black: "#000000
 const MAX_HEADER_TOKENS = 64;
 
 /** A colour value the code writes at an offset of a file, as `#rrggbb[aa]`, and where it ends, when it does. */
-export type ValueAt = (source: SwiftSource, offset: number) => { hex: string; end?: number } | undefined;
+export type ColorReader = (source: SwiftSource, offset: number) => { hex: string; end?: number } | undefined;
 
 /** A colour a theme type sets, and where. */
 interface ThemeValue {
@@ -57,11 +58,11 @@ interface ThemeType {
 
 /** The themes of every colour protocol whose conforming types include a light and a dark one; others, like
  * `PrimaryButton` and `SecondaryButton` sharing `ButtonColors`, are just types with colours. */
-export function swiftThemes(sources: SwiftSource[], valueAt: ValueAt): SwiftThemes {
+export function swiftThemes(sources: SwiftSource[], colorAt: ColorReader): SwiftThemes {
   const protocols = colorProtocols(sources);
   const byProtocol = new Map<string, ThemeType[]>();
   for (const source of sources) {
-    for (const type of themeTypes(source, protocols, valueAt)) {
+    for (const type of themeTypes(source, protocols, colorAt)) {
       const types = byProtocol.get(type.protocol);
       if (types) types.push(type);
       else byProtocol.set(type.protocol, [type]);
@@ -133,7 +134,11 @@ interface Conforming {
 
 /** The structs in `source` conforming to a colour protocol, with the colours they set directly in their body. Each
  * member is read once, and given to the struct whose body it's directly in. */
-function themeTypes(source: SwiftSource, protocols: Map<string, string[]>, valueAt: ValueAt): ThemeType[] {
+function themeTypes(
+  source: SwiftSource,
+  protocols: Map<string, string[]>,
+  colorAt: ColorReader,
+): ThemeType[] {
   const tokens = tokensOf(source);
   const byBody = new Map<number, Conforming>();
   for (const struct of structs(source.code)) {
@@ -156,7 +161,7 @@ function themeTypes(source: SwiftSource, protocols: Map<string, string[]>, value
     const scheme = SCHEME_MEMBER.test(member) ? SCHEME_VALUE.exec(source.code)?.[1] : undefined;
     if (scheme === "light" || scheme === "dark") type.scheme = scheme;
     const read = type.members.has(member)
-      ? (valueAt(source, start) ?? fixedColor(source.code, start))
+      ? (colorAt(source, start) ?? fixedColor(source.code, start))
       : undefined;
     if (!read) continue;
     const value: ThemeValue & { member: string } = {
@@ -164,7 +169,7 @@ function themeTypes(source: SwiftSource, protocols: Map<string, string[]>, value
       hex: read.hex,
       start,
       line: 1,
-      ...(read.end ? { location: { ...span(start, read.end), kind: "expression" as const } } : {}),
+      ...(read.end ? { location: valueAt(span(start, read.end), "expression") } : {}),
     };
     type.found.push(value);
     found.push(value);
@@ -226,7 +231,6 @@ function themeColors(
     const type = lightValue ? light : dark;
     if (!first || !type) return [];
     const darkAt = lightValue && darkValue?.location;
-    const locations = { ...(first.location && { light: first.location }), ...(darkAt && { dark: darkAt }) };
     return [
       {
         name: member,
@@ -236,7 +240,10 @@ function themeColors(
         reference: `${protocol}.${member}`,
         line: first.line,
         kind: "code",
-        ...(locations.light || locations.dark ? { locations } : {}),
+        ...withLocations({
+          ...(first.location && { light: first.location }),
+          ...(darkAt && { dark: darkAt }),
+        }),
       },
     ];
   });

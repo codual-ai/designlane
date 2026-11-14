@@ -16,3 +16,24 @@ export async function scanned(files: Record<string, string>) {
   };
   return { scan, written, tokens };
 }
+
+/** The one of `items` the code reaches by `reference`; throws, listing the references found, when there's none. */
+export function byReference<T extends { reference?: string }>(items: T[], reference: string): T {
+  const found = items.find((item) => item.reference === reference);
+  if (!found) throw new Error(`no ${reference}: ${items.map((item) => item.reference).join(", ")}`);
+  return found;
+}
+
+/** An asset catalog colour set's `Contents.json`, with an entry per colour, each for any appearance or dark. */
+export const colorset = (...entries: { components: Record<string, string>; dark?: boolean }[]) =>
+  JSON.stringify(
+    {
+      colors: entries.map(({ components, dark }) => ({
+        color: { "color-space": "srgb", components },
+        idiom: "universal",
+        ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+      })),
+    },
+    null,
+    2,
+  );

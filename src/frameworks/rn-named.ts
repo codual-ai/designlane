@@ -3,7 +3,7 @@
 import ts from "typescript";
 import type { CodeSpan, TypeLocations } from "../scan/types.js";
 import { accessPath, eachNode, type JsSource } from "./js-sources.js";
-import { through } from "./value-locations.js";
+import { through, valueAt } from "./value-locations.js";
 
 /** Names a typography object is reached through: `theme.typography.title`, `fonts.body`, `textStyles.caption`. */
 const TYPE_WORD = /^(?:typography|fonts?|text(?:Styles?)?)$|[a-z](?:Typography|Fonts?|TextStyles?)$/;
@@ -110,11 +110,9 @@ export function countUses(sources: JsSource[], index: StyleIndex, skip: Set<ts.N
 }
 
 /** Where a named style's values are written, a weight its family's font file names (`Inter-SemiBold`) being written
- * in the family, which is then a font name; none when it writes none. */
-export function styleLocations(font: Font): TypeLocations | undefined {
+ * in the family, which is then a font name. */
+export function styleLocations(font: Font): TypeLocations {
   const { fontFamily } = font.locations ?? {};
-  const name =
-    font.weight === undefined && fontFamily ? { ...fontFamily, kind: "family-name" as const } : undefined;
-  const locations = { ...font.locations, ...(name && { fontFamily: name, fontWeight: name }) };
-  return Object.keys(locations).length > 0 ? locations : undefined;
+  const name = font.weight === undefined && fontFamily ? valueAt(fontFamily, "family-name") : undefined;
+  return { ...font.locations, ...(name && { fontFamily: name, fontWeight: name }) };
 }

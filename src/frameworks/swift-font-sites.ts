@@ -5,7 +5,9 @@
  */
 
 import { argumentsAt, chain, type Expression, expressionAt } from "./swift-expressions.js";
-import { changesIn, FONT_TYPES, type FontValue, fontValues, withChanges } from "./swift-font-reading.js";
+import { type Changes, changesIn, withChanges } from "./swift-font-changes.js";
+import { FONT_TYPES, fontValues } from "./swift-font-reading.js";
+import type { FontValue } from "./swift-font-values.js";
 import { type SwiftTokens, tokenIndexAt } from "./swift-tokens.js";
 
 /** A font set at one place, and the type a `.name` written there would be a member of. */
@@ -26,11 +28,7 @@ const FONT_ROOTS = new Set([...FONT_TYPES, "UIFontMetrics", "SwiftUI"]);
 export function fontSites(file: SwiftTokens): FontSite[] {
   const sites: FontSite[] = [];
   const read: [number, number][] = [];
-  const add = (
-    expression: Expression | undefined,
-    expects?: string,
-    after?: { weight?: string; size?: number },
-  ) => {
+  const add = (expression: Expression | undefined, expects?: string, after?: Changes) => {
     if (!expression) return;
     read.push([expression.start, expression.end]);
     for (const value of fontValues(expression)) {
@@ -72,7 +70,7 @@ export function fontSites(file: SwiftTokens): FontSite[] {
 }
 
 /** The font a `.font(…)` modifier sets, and the weight changes written after it on the same view. */
-function modifier(file: SwiftTokens, open: number): [Expression | undefined, string, { weight?: string }] {
+function modifier(file: SwiftTokens, open: number): [Expression | undefined, string, Changes] {
   const [first] = argumentsAt(file, file.tokens[open]?.start ?? 0) ?? [];
   // `T.font(for: .title)` is an app's own function: `.font(…)` takes one unlabelled argument.
   const font = first && first.label === undefined ? first.value : undefined;

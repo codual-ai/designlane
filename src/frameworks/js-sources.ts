@@ -5,6 +5,7 @@ import ts from "typescript";
 import { isTestPath } from "../scan/test-paths.js";
 import type { CodeSpan, ValueLocation } from "../scan/types.js";
 import type { ScanContext } from "./plugin.js";
+import { valueAt } from "./value-locations.js";
 
 export interface JsSource {
   rel: string;
@@ -61,13 +62,19 @@ export const nodeSpan = (source: JsSource, node: ts.Node): CodeSpan => ({
 
 /** Where a literal's value is written: a string's text without its quotes, a number as it is; none for anything
  * else, a template with substitutions (`\`Brand Neue, ${FALLBACK}\``) included, whose text is only part of it. */
-export function literalSpan(source: JsSource, node: ts.Node): ValueLocation | undefined {
+export function literalLocation(source: JsSource, node: ts.Node): ValueLocation | undefined {
   const span = nodeSpan(source, node);
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    return { ...span, start: span.start + 1, end: span.end - 1, kind: "literal" };
+    return valueAt({ ...span, start: span.start + 1, end: span.end - 1 }, "literal");
   const number =
     ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken ? node.operand : node;
-  return ts.isNumericLiteral(number) ? { ...span, kind: "literal" } : undefined;
+  return ts.isNumericLiteral(number) ? valueAt(span, "literal") : undefined;
+}
+
+/** The text of a string written as it is, `"#fff"` or `\`#fff\``, past parentheses and casts. */
+export function stringValue(node: ts.Expression): string | undefined {
+  const inner = unwrapped(node);
+  return ts.isStringLiteral(inner) || ts.isNoSubstitutionTemplateLiteral(inner) ? inner.text : undefined;
 }
 
 /** The 1-based line `node` starts on. */

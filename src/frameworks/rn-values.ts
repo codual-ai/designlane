@@ -9,7 +9,7 @@ import {
   defaultExport,
   fileName,
   type JsSource,
-  literalSpan,
+  literalLocation,
   nodeSpan,
   objectIn,
   propertyName,
@@ -60,7 +60,7 @@ export class Values {
         const key = at.join("\0");
         if (alias) aliases.set(key, { path: alias, location: nodeSpan(source, value) });
         if (literal === undefined) return;
-        const location = literalSpan(source, literalNode(value));
+        const location = literalLocation(source, literalNode(value));
         const held = { value: literal, ...(location && { location }) };
         own.set(key, held);
         if (at.length > 1) {
@@ -111,12 +111,8 @@ export class Values {
     }
   }
 
-  /** A value as written, or as a constant or object path holds it; undefined when it's worked out as the app runs. */
-  of(node: ts.Expression, source: JsSource): string | number | undefined {
-    return this.read(node, source)?.value;
-  }
-
-  /** A value as `of` reads it, and where it's written, through each name on the way to it. */
+  /** A value as written, or as a constant or object path holds it, and where it's written, through each name on the
+   * way to it; undefined when it's worked out as the app runs. */
   read(
     node: ts.Expression,
     source: JsSource,
@@ -124,7 +120,7 @@ export class Values {
     const inner = unwrapped(node);
     const literal = literalOf(inner);
     if (literal !== undefined) {
-      const location = literalSpan(source, literalNode(inner));
+      const location = literalLocation(source, literalNode(inner));
       return { value: literal, ...(location && { location }) };
     }
     if (ts.isIdentifier(inner) && shadowed(inner)) return undefined;

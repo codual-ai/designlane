@@ -2,7 +2,7 @@ import { isTestPath } from "../scan/test-paths.js";
 import type { CodeSpan } from "../scan/types.js";
 import { kotlinCodeOnly, kotlinWithoutComments } from "./kotlin-source.js";
 import type { ScanContext } from "./plugin.js";
-import { type BracketTree, bracketTree, locator } from "./source-text.js";
+import { type BracketTree, bracketTree, type Locator, locator } from "./source-text.js";
 
 export interface KotlinSource {
   rel: string;
@@ -47,7 +47,7 @@ export function treeOf(source: KotlinSource): BracketTree {
   return tree;
 }
 
-const locators = new WeakMap<KotlinSource, (start: number, end: number) => CodeSpan>();
+const locators = new WeakMap<KotlinSource, Locator>();
 
 /** Where `start` to `end` of `source` is, its lines found once for every reader. */
 export function spanIn(source: KotlinSource, start: number, end: number): CodeSpan {

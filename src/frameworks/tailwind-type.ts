@@ -7,7 +7,8 @@ import ts from "typescript";
 import type { TypeUse } from "../scan/type-scale.js";
 import { type JsSource, lineOf, propertyName, unwrapped } from "./js-sources.js";
 import { familyAndWeight } from "./rn-fonts.js";
-import { eachClassList, type Located, type Resolver, themeGroups } from "./tailwind-colors.js";
+import { eachClassList } from "./tailwind-classes.js";
+import { type Located, type Resolver, themeGroups } from "./tailwind-config.js";
 
 /** Tailwind's text sizes, in points. */
 const FONT_SIZES: Record<string, number> = {

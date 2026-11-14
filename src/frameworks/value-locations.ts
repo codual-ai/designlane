@@ -1,10 +1,14 @@
 /** Where values are written, as every framework's reader records them: a value's span and what it holds, and the
  * names it's reached through. */
 
-import type { CodeSpan, ValueKind, ValueLocation } from "../scan/types.js";
+import type { CodeSpan, ColorLocations, TypeLocations, ValueKind, ValueLocation } from "../scan/types.js";
 
 /** `span` as the place a value of `kind` is written. */
 export const valueAt = (span: CodeSpan, kind: ValueKind): ValueLocation => ({ ...span, kind });
+
+/** `{ locations }` to spread into a token, or nothing when none of its values' places is known. */
+export const withLocations = <T extends ColorLocations | TypeLocations>(locations: T): { locations?: T } =>
+  Object.keys(locations).length > 0 ? { locations } : {};
 
 /** `location` reached through the names written at `names`, the first one reached first. */
 export const through = (location: ValueLocation, names: readonly CodeSpan[]): ValueLocation =>
