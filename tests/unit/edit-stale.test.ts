@@ -113,6 +113,11 @@ describe("refusing a value the code changed around", () => {
     const ink = (code: string) => recolored("colors.ts", code, literal, "#112233", "#de2413");
     expect(await ink("const a = '#112233' + '80';")).toMatch(/the code changed/);
     expect(await ink("const a = '80' + '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = '80' + /* ink */ '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = '80' +\n  '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = '80' + // ink\n  '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = 'http://x' +\n  '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = {\n  // ink\n  b: '#112233' };")).toBe("#DE2413");
     expect(await ink("const a = '#112233'.slice(0, 4);")).toMatch(/the code changed/);
     expect(await ink("const a = '#112233' /* ink */\n  .slice(0, 4);")).toMatch(/the code changed/);
     expect(await ink("const a = '#112233'; // ink")).toBe("#DE2413");

@@ -30,6 +30,8 @@ export interface EditableToken {
   /** How the code refers to it (`Theme.surface`) and, for a text style, its name. */
   names: string[];
   values: TokenValue[];
+  /** The line declaring it, when tokens.json records one. */
+  declared?: { file: string; line: number };
 }
 
 type ColorEntry = z.output<typeof ColorTokenEntry>;
@@ -65,10 +67,11 @@ function located<T extends TokenValue>(value: T, location: ValueLocation | undef
 }
 
 function colorToken(key: string, entry: ColorEntry): EditableToken {
-  const { reference, modes, locations } = entry.$extensions.designmap;
+  const { reference, modes, locations, source, line } = entry.$extensions.designmap;
   const values: TokenValue[] = [located({ property: "light", old: color(entry.$value) }, locations?.light)];
   if (modes) values.push(located({ property: "dark", old: color(modes.dark) }, locations?.dark));
-  return { key, names: reference ? [reference] : [], values };
+  const names = reference ? [reference] : [];
+  return { key, names, values, ...(line ? { declared: { file: source, line } } : {}) };
 }
 
 function typeToken(key: string, entry: TypeEntry): EditableToken {

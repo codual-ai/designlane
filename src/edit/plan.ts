@@ -54,7 +54,14 @@ const NAME = /^[@?]?[A-Za-z_$][\w.$/[\]"'-]*$/;
 /** The last part of a name: `blue0` of `colors.blue0`, `500` of `colors.brand[500]`, `blue600` of `@color/blue600`. */
 const LAST_PART = /([\w$-]+)["'\]]*$/;
 const WORD = /[\w$]/;
-const SPACE = /[ \t]/;
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+/** A value's parts: white space, a string, a number (`0x3366CC`, `0.5f`), a word, or one other character. */
+const PART = /\s+|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\d[\w.]*|[A-Za-z_$][\w$]*|[\s\S]/g;
+/** A string that works a name into it: Swift's `\(alpha)`, Kotlin's and Dart's `$alpha`. */
+const INTERPOLATES = /\\\(|\$/;
+/** Lines one declaration may run over, at most. */
+const MAX_STATEMENT_LINES = 20;
+const CONTINUES = /[=(,[{+\-*/.:?|&]$/;
 const OPERATORS = new Set(["+", "-", "*", "/", "%"]);
 
 const refuse = (reason: string): EditPlan => ({ ok: false, reason });
@@ -85,7 +92,7 @@ export async function planEdit(
   const owner = (span: CodeSpan) => ownerOf(all, span);
   const target = await targetOf(value.location, { key: found.token.key, isColor, read, owner });
   if ("reason" in target) return refuse(target.reason);
-  const others = sharers(all, value, target.span);
+  const others = [...sharers(all, value, target.span), ...(await dependents(all, found.token, read))];
   if (others.length > 0) {
     return refuse(
       `Changing ${what} (${at(target.span)}) would also change ${list(others)}. Give each its own value in the code first, or change it there by hand.`,
@@ -150,7 +157,7 @@ async function targetOf(
   }
   // A literal only compiles in place of a name in the file it's copied from (which has what it needs imported), and
   // only when it doesn't take its type from where it's written (Swift's `.init(hex: …)`).
-  if (own.file !== location.file || text.text.startsWith(".")) {
+  if (own.file !== location.file || text.text.startsWith(".") || !namesNothing(text.text, location.kind)) {
     const from = owner(location) ?? `\`${name.text}\``;
     return {
       reason: `${key} takes its colour from ${from} (${at(own)}), whose value can't be copied there safely. Change ${from}, or give ${key} its own value in the code.`,
@@ -219,12 +226,26 @@ function isOperatorAfter(text: string, end: number): boolean {
   return OPERATORS.has(text[nextCode(text, end)] ?? "");
 }
 
-/** Whether an arithmetic operator comes before `start`, past spaces; the `/` ending a block comment isn't one. */
+/** Whether an arithmetic operator comes before `start`, past white space and comments. A line comment's start can't
+ * be told from `//` in a string going backwards, so an operator before either counts. */
 function isOperatorBefore(text: string, start: number): boolean {
-  let at = start - 1;
-  while (at > 0 && SPACE.test(text[at] ?? "")) at--;
-  const previous = text[at] ?? "";
-  return OPERATORS.has(previous) && !(previous === "/" && text[at - 1] === "*");
+  let at = start;
+  for (;;) {
+    const previous = text[at - 1] ?? "";
+    if (/\s/.test(previous)) {
+      at--;
+      if (previous !== "\n") continue;
+      const lineStart = text.lastIndexOf("\n", at - 1) + 1;
+      const comment = text.slice(lineStart, at).indexOf("//");
+      if (comment === -1) continue;
+      if (OPERATORS.has(text.slice(lineStart, at).trimEnd().at(-1) ?? "")) return true;
+      at = lineStart + comment;
+    } else if (text.startsWith("*/", at - 2)) {
+      const open = text.lastIndexOf("/*", at - 3);
+      if (open === -1) return true;
+      at = open;
+    } else return OPERATORS.has(previous);
+  }
 }
 
 /** Whether each name on the way to a colour still names the next: its last part (`blue0` of `colors.blue0`) is
@@ -276,6 +297,101 @@ function sharers(tokens: EditableToken[], value: TokenValue, span: CodeSpan): st
       .filter(({ location }) => [...(location?.via ?? []), location].some((s) => s && overlaps(s, span)))
       .map((other) => `${token.key}'s ${PROPERTY_NAMES[other.property]}`),
   );
+}
+
+/** Whether a value copied elsewhere names nothing that may not be in scope there: it's a literal, or a call
+ * (`Color(hex: 0x3366CC, opacity: 0.5)`) of numbers and strings, labelled or not, and members its arguments' types
+ * have (`.sRGB`), not `Color(hex: 0x3366CC, opacity: alpha)`. */
+function namesNothing(text: string, kind: ValueKind): boolean {
+  if (kind === "literal") return true;
+  const parts = [...text.matchAll(PART)].map(([part]) => part).filter((part) => part.trim() !== "");
+  let at = parts[0] === "#" ? 1 : 0;
+  while (IDENTIFIER.test(parts[at] ?? "") && parts[at + 1] === ".") at += 2;
+  at = IDENTIFIER.test(parts[at] ?? "") && parts[at + 1] === "(" ? at + 1 : 0;
+  return parts.slice(at).every((part, i, rest) => {
+    if (QUOTES.has(part[0] ?? "")) return !INTERPOLATES.test(part);
+    if (!IDENTIFIER.test(part)) return part !== "`";
+    const [before, after = "", next] = [rest[i - 1], rest[i + 1], rest[i + 2]];
+    const isLabel = after === ":" || (after === "=" && next !== "=");
+    const isMember = before === "." && (rest[i - 2] === "(" || rest[i - 2] === ",");
+    return isLabel || isMember;
+  });
+}
+
+/** The other token values the code works out from `token` by its name (`Faded = Brand.copy(alpha = 0.5f)`), which
+ * an edit to it would change too: those written as an expression naming it, and those tokens.json doesn't say where
+ * are written whose declaration names it. */
+async function dependents(
+  tokens: EditableToken[],
+  token: EditableToken,
+  read: ReadSource,
+): Promise<string[]> {
+  const names = [...token.names, token.key.split("/").at(-1) ?? ""].flatMap((name) => {
+    const part = LAST_PART.exec(name)?.[1];
+    return part && IDENTIFIER.test(part) ? [part] : [];
+  });
+  if (names.length === 0) return [];
+  const found = await Promise.all(
+    tokens
+      .filter((other) => other !== token)
+      .flatMap((other) =>
+        other.values.map(async (value) => {
+          const code = await codeOf(other, value, read);
+          const label = `${other.key}'s ${PROPERTY_NAMES[value.property]}`;
+          if (code === undefined) return [];
+          return code === null || names.some((name) => namesWord(code, name)) ? [label] : [];
+        }),
+      ),
+  );
+  return found.flat();
+}
+
+/** The code working out `value`: its expression, or its token's declaration when tokens.json doesn't say where it's
+ * written, without the token's own name; undefined when it's a literal or there's no telling where it is, and null
+ * when its file can't be read. */
+async function codeOf(
+  token: EditableToken,
+  value: TokenValue,
+  read: ReadSource,
+): Promise<string | null | undefined> {
+  const { location } = value;
+  if (location && location.kind !== "expression") return undefined;
+  const span = location ?? token.declared;
+  if (!span) return undefined;
+  const text = textOf(await read(span.file));
+  if (text === undefined) return null;
+  if (location) return text.slice(location.start, location.end);
+  const statement = statementAt(text, span.line);
+  const own = token.names
+    .map((name) => LAST_PART.exec(name)?.[1] ?? "")
+    .find((name) => name && statement.includes(name));
+  return own ? statement.slice(statement.indexOf(own) + own.length) : statement;
+}
+
+/** The declaration starting on `line`, through the lines it runs on to: while a bracket is open, a line ends in an
+ * operator, or the next starts with a call (`.copy(…)`). */
+function statementAt(text: string, line: number): string {
+  const lines = text.split("\n").slice(line - 1, line - 1 + MAX_STATEMENT_LINES);
+  let depth = 0;
+  let end = 0;
+  while (end < lines.length) {
+    const current = lines[end] ?? "";
+    for (const char of current) depth += "([{".includes(char) ? 1 : ")]}".includes(char) ? -1 : 0;
+    end++;
+    const runsOn = depth > 0 || CONTINUES.test(current.trimEnd()) || /^\s*\??\./.test(lines[end] ?? "");
+    if (!runsOn) break;
+  }
+  return lines.slice(0, end).join("\n");
+}
+
+/** Whether `text` names `name` as a value, not as an argument's label (`primary = …`). */
+function namesWord(text: string, name: string): boolean {
+  for (let at = text.indexOf(name); at !== -1; at = text.indexOf(name, at + 1)) {
+    const after = text.slice(at + name.length);
+    const isWord = !WORD.test(text[at - 1] ?? "") && !WORD.test(after[0] ?? "");
+    if (isWord && !/^\s*(?::|=(?!=))/.test(after)) return true;
+  }
+  return false;
 }
 
 function list(items: string[]): string {

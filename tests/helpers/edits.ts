@@ -25,6 +25,8 @@ export interface ColorSpec {
   light: string;
   dark?: string;
   at?: { light?: At; dark?: At };
+  /** Where it's declared, for one tokens.json doesn't say where the value is written. */
+  declared?: Place;
 }
 
 export interface StyleSpec {
@@ -65,7 +67,7 @@ const colorValue = (hex: string) => ({
 
 const colorGroup = (files: Files, colors: ColorSpec[]) =>
   Object.fromEntries(
-    colors.map(({ key, reference, light, dark, at }) => [
+    colors.map(({ key, reference, light, dark, at, declared }) => [
       key,
       {
         $type: "color",
@@ -73,7 +75,8 @@ const colorGroup = (files: Files, colors: ColorSpec[]) =>
         $extensions: {
           designmap: {
             ...(reference ? { reference } : {}),
-            source: "Theme.swift",
+            source: declared?.file ?? "Theme.swift",
+            ...(declared ? { line: spanOf(files, declared).line } : {}),
             uses: 1,
             ...(dark ? { modes: { dark: colorValue(dark) } } : {}),
             locations: locations(files, at),

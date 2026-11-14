@@ -97,6 +97,27 @@ describe("a colour reached through a name", () => {
     ).toMatch(/^refused: link takes its colour from `P.brand` \(Theme.swift:2\)/);
   });
 
+  it("refuses a literal in place of a name when the literal names something only in scope where it's written", async () => {
+    const swift: Files = {
+      "Theme.swift": [
+        "enum P { static let alpha = 0.5; static let brand = Color(hex: 0x3366CC, opacity: alpha) }",
+        "enum T { static let link = P.brand }",
+      ].join("\n"),
+    };
+    const link = {
+      file: "Theme.swift",
+      text: "Color(hex: 0x3366CC, opacity: alpha)",
+      kind: "expression" as const,
+      via: [{ file: "Theme.swift", text: "P.brand" }],
+    };
+    const tokens = tokensFile(swift, { colors: [{ key: "link", light: "#3366cc80", at: { light: link } }] });
+    expect(
+      outcome(await plan(swift, tokens, { token: "link", property: "light", value: "#de2413" })),
+    ).toMatch(
+      /^refused: link takes its colour from `P.brand` \(Theme.swift:2\), whose value can't be copied/,
+    );
+  });
+
   it("takes a Compose colour in place of the constant a scheme names, and an Android link's", async () => {
     const files: Files = {
       "Color.kt": "val Purple40 = Color(0xFF6650A4)\nval Light = lightColorScheme(primary = Purple40)",
@@ -180,6 +201,38 @@ describe("refusing what can't be rewritten safely", () => {
     expect(outcome(await plan(files, tokens, { token: "muted", property: "light", value: "#de2413" }))).toBe(
       "refused: Changing muted's colour (theme.ts:1) would also change black-muted's colour. Give each its own value in the code first, or change it there by hand.",
     );
+  });
+
+  it("refuses a colour another colour is worked out from by its name", async () => {
+    const files: Files = {
+      "Color.kt": "val Brand = Color(0xFF112233)\nval Faded = Brand.copy(alpha = 0.5f)",
+    };
+    const tokens = tokensFile(files, {
+      colors: [
+        {
+          key: "Brand",
+          reference: "Brand",
+          light: "#112233",
+          at: { light: { file: "Color.kt", text: "Color(0xFF112233)", kind: "expression" } },
+        },
+        {
+          key: "Faded",
+          reference: "Faded",
+          light: "#11223380",
+          declared: { file: "Color.kt", text: "val Faded" },
+        },
+      ],
+    });
+    expect(outcome(await plan(files, tokens, { token: "Brand", property: "light", value: "#de2413" }))).toBe(
+      "refused: Changing Brand's colour (Color.kt:1) would also change Faded's colour. Give each its own value in the code first, or change it there by hand.",
+    );
+    const unrelated = {
+      ...files,
+      "Color.kt": "val Brand = Color(0xFF112233)\nval Faded = Color(0x80112233)",
+    };
+    expect(
+      outcome(await plan(unrelated, tokens, { token: "Brand", property: "light", value: "#de2413" })),
+    ).toBe("Color(0xFFDE2413)");
   });
 
   it("refuses a font's name holding the weight, and a family declared elsewhere", async () => {
