@@ -1,6 +1,6 @@
 {
   "name": "Designmap",
-  "id": "designmap-sync-development",
+  "id": "1703520375574808310",
   "api": "1.0.0",
   "editorType": ["figma"],
   "main": "dist/code.js",
