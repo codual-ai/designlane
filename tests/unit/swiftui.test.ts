@@ -200,6 +200,7 @@ describe("scanning a SwiftUI app", () => {
         line: 2,
         kind: "code",
         uses: 0,
+        locations: { light: expect.objectContaining({ line: 2 }) },
       },
     ]);
   });
@@ -240,6 +241,7 @@ describe("parseColorset", () => {
       source: rel,
       reference: 'Color("Accent")',
       kind: "asset",
+      locations: expect.any(Object),
     });
   });
 
@@ -315,6 +317,7 @@ describe("parseColorset", () => {
       source: rel,
       reference: 'Color("Accent")',
       kind: "asset",
+      locations: expect.any(Object),
     });
   });
 
@@ -349,6 +352,7 @@ describe("parseColorset", () => {
       source: rel,
       reference: 'Color("Accent")',
       kind: "asset",
+      locations: expect.any(Object),
     });
   });
 

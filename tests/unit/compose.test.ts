@@ -336,6 +336,7 @@ describe("Compose type", () => {
       weight: "semibold",
       reference: "HeadingStyle",
       uses: 2,
+      locations: expect.any(Object),
     });
   });
 

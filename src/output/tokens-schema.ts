@@ -1,7 +1,7 @@
 /** The shape of the tokens.json Designmap writes: one schema the writer's output is typed by and a sync reads with. */
 
 import { z } from "zod";
-import { PLATFORMS } from "../scan/types.js";
+import { PLATFORMS, VALUE_KINDS } from "../scan/types.js";
 
 const Dimension = z.object({ value: z.number(), unit: z.literal("px") });
 
@@ -15,12 +15,39 @@ export const ColorValue = z.object({
 /** Where a token comes from in the code, for a tool syncing it elsewhere: how the code refers to it, and its uses. */
 const Origin = z.object({ reference: z.string().optional(), uses: z.number() });
 
+/** A stretch of a file: its line, and its characters as offsets into the file's text in UTF-16 code units, a byte
+ * order mark counted (`end` exclusive). */
+const SpanFields = z
+  .object({
+    file: z.string(),
+    line: z.number().int().min(1),
+    start: z.number().int().min(0),
+    end: z.number().int().min(0),
+  })
+  .strict();
+const isOrdered = (span: { start: number; end: number }) => span.end >= span.start;
+const ENDS_BEFORE_START = "a span ends before it starts";
+
+/** Where a value is written, for a tool changing it in the code: the span is exactly what's replaced, and `kind` what
+ * it holds (see `ValueKind`: a literal's text without its quotes, a whole expression, a font name holding the weight
+ * too, a family's identifier, or an asset's `components`). `via` holds each name on the way to it when the token names
+ * another value (`link: colors.blue0`), the token's own first. Files from before it was recorded have none. */
+const ValueLocation = SpanFields.extend({
+  kind: z.enum(VALUE_KINDS),
+  via: z.array(SpanFields.refine(isOrdered, ENDS_BEFORE_START)).optional(),
+}).refine(isOrdered, ENDS_BEFORE_START);
+
 /** A colour always says which file it comes from, which is part of a file-local constant's identity, and the line,
  * which orders same-named ones in a file. DTCG has no modes yet, so a dark value rides here. */
 const ColorOrigin = Origin.extend({
   source: z.string(),
   line: z.number().int().min(1).optional(),
   modes: z.object({ dark: ColorValue }).optional(),
+  /** Where `$value` and the dark value are written. */
+  locations: z
+    .object({ light: ValueLocation.optional(), dark: ValueLocation.optional() })
+    .strict()
+    .optional(),
 });
 
 export const ColorTokenEntry = z.object({
@@ -37,7 +64,20 @@ const FontFamilyToken = z.object({ $type: z.literal("fontFamily"), $value: z.str
 export const TextStyleGroup = z
   .object({
     $description: z.string().optional(),
-    $extensions: z.object({ designmap: Origin.extend({ name: z.string() }).strict() }),
+    $extensions: z.object({
+      designmap: Origin.extend({
+        name: z.string(),
+        /** Where each value the group holds is written, by the value's key. */
+        locations: z
+          .object({
+            fontFamily: ValueLocation.optional(),
+            fontSize: ValueLocation.optional(),
+            fontWeight: ValueLocation.optional(),
+          })
+          .strict()
+          .optional(),
+      }).strict(),
+    }),
     fontFamily: FontFamilyToken.optional(),
     fontSize: DimensionToken.optional(),
     fontWeight: z.object({ $type: z.literal("fontWeight"), $value: z.number() }).optional(),

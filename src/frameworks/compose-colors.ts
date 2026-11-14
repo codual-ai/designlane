@@ -29,9 +29,12 @@ class Colors {
 
   /** A bare name is the colour declared in the same file first, as Kotlin resolves a private one. */
   readonly known: ColorLookup = (name, file) => {
-    if (name.includes(".")) return (this.byReference.get(name) ?? this.byEnd.get(name))?.light;
     const all = this.byName.get(name) ?? [];
-    return (all.find((c) => c.source === file) ?? this.byReference.get(name) ?? all[0])?.light;
+    const color = name.includes(".")
+      ? (this.byReference.get(name) ?? this.byEnd.get(name))
+      : (all.find((c) => c.source === file) ?? this.byReference.get(name) ?? all[0]);
+    const location = color?.locations?.light;
+    return color && { hex: color.light, ...(location && { location }) };
   };
 
   has = (reference: string) => this.byReference.has(reference);
@@ -91,9 +94,14 @@ function constants(sources: KotlinSource[], colors: Colors): void {
   for (const constant of [...found.filter((c) => !isCopy(c)), ...found.filter(isCopy)]) {
     const { source, at, end, name, reference, line } = constant;
     if (colors.has(reference)) continue;
-    const hex = colorValue(source, at, end, colors.known);
-    if (hex)
-      colors.add({ name, light: hex, source: source.rel, reference, line, kind: "code" }, source, [at, end]);
+    const value = colorValue(source, at, end, colors.known);
+    if (!value) continue;
+    const locations = value.location ? { locations: { light: value.location } } : {};
+    colors.add(
+      { name, light: value.hex, source: source.rel, reference, line, kind: "code", ...locations },
+      source,
+      [at, end],
+    );
   }
 }
 
@@ -143,8 +151,8 @@ function literals(
     for (const m of source.code.matchAll(/(?<![\w.])Color\s*\(/g)) {
       const at = m.index ?? 0;
       if (spans.some((s) => s.contains(at)) || isDeclared(source.code, at)) continue;
-      const hex = colorValue(source, at, expressionEnd(source, at), () => undefined);
-      if (hex) out.push({ hex, file: source.rel });
+      const value = colorValue(source, at, expressionEnd(source, at), () => undefined);
+      if (value) out.push({ hex: value.hex, file: source.rel });
     }
   }
   return out;

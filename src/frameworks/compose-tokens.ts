@@ -2,6 +2,7 @@
 
 import { byNumber, mostCommon } from "../scan/counting.js";
 import { palette } from "../scan/palette.js";
+import { appFirst } from "../scan/targets.js";
 import { typeScale } from "../scan/type-scale.js";
 import type { DesignTokens } from "../scan/types.js";
 import { RESOURCE_FILE, resourceColors } from "./android-resources.js";
@@ -41,7 +42,9 @@ function dpInCalls(sources: KotlinSource[], pattern: RegExp): number[] {
   return mostCommon(values, byNumber).map(({ value }) => value);
 }
 
-export async function composeTokens(ctx: ScanContext, sources: KotlinSource[]): Promise<DesignTokens> {
+export async function composeTokens(ctx: ScanContext, all: KotlinSource[]): Promise<DesignTokens> {
+  // Where a colour or style is declared twice, the app's own copy comes first, over a Wear or TV module's.
+  const sources = appFirst(all, (s) => s.rel);
   const xml: { rel: string; text: string }[] = [];
   for (const f of ctx.files.filter((f) => RESOURCE_FILE.test(f.rel))) {
     const text = await ctx.read(f);

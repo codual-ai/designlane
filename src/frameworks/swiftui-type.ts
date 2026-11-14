@@ -5,6 +5,7 @@
 
 import { firstAtOrAfter } from "../scan/sorted.js";
 import { type TypeFindings, type TypeUse, weightLabel } from "../scan/type-scale.js";
+import { locator } from "./source-text.js";
 import { type Argument, expressionAt } from "./swift-expressions.js";
 import { type FontHelper, fontHelpers, type Range } from "./swift-font-helpers.js";
 import { WEIGHTS } from "./swift-font-names.js";
@@ -23,7 +24,8 @@ export function swiftType(sources: SwiftSource[]): TypeFindings {
   const files = sources.map((source) => {
     const tokens = tokensOf(source);
     const sites = fontSites(tokens);
-    return { source, tokens, sites, helpers: fontHelpers(tokens, sites) };
+    const span = locator(source.rel, source.text);
+    return { source, tokens, sites, span, helpers: fontHelpers(tokens, sites, span) };
   });
   const byKey = new Map<string, FontHelper>();
   for (const helper of files.flatMap((f) => f.helpers)) {
@@ -33,9 +35,13 @@ export function swiftType(sources: SwiftSource[]): TypeFindings {
   const uses: TypeUse[] = [];
   const helperFonts: TypeUse[] = [];
   const helperNames = new Set([...byKey.values()].map((h) => h.name));
-  for (const { source, tokens, sites, helpers } of files) {
+  for (const { source, tokens, sites, span, helpers } of files) {
     const insideHelper = within(helpers.map((h) => h.body));
-    const located = locator(source);
+    const located = (use: TypeUse, at: number): TypeUse => ({
+      ...use,
+      file: source.rel,
+      line: span(at, at).line,
+    });
     for (const site of [...sites, ...qualifiedUses(tokens, sites, helperNames)]) {
       // A helper's own fonts count through its uses, and are kept where they're written.
       if (insideHelper(site.at)) continue;
@@ -104,7 +110,16 @@ function helperUse(helper: FontHelper, reference: HelperReference): TypeUse {
     size === helper.font.size ? undefined : size,
     weight === helper.font.weight ? undefined : weightLabel(weight),
   ].filter((part) => part !== undefined);
-  return { ...helper.font, ...(size === undefined ? {} : { size }), weight, style: name.join(" ") };
+  // A use changing the helper's font is a style of its own whose other values are the helper's, so editing them
+  // would change the helper too; what the use sets is written at the use, one of many.
+  const { locations, ...font } = helper.font;
+  return {
+    ...font,
+    ...(size === undefined ? {} : { size }),
+    weight,
+    style: name.join(" "),
+    ...(name.length === 1 && locations && { locations }),
+  };
 }
 
 /** The size and weight a helper call passes: labelled (`size: 17`, `weight: .bold`) or not (`17`, `.bold`). */
@@ -117,14 +132,6 @@ function callArguments(args: Argument[]): { size?: number; weight?: string } {
     if (weightArgument && value.kind === "member" && WEIGHTS.has(value.name)) found.weight = value.name;
   }
   return found;
-}
-
-/** Adds where a use is in `source` to it, by its offset. */
-function locator(source: SwiftSource): (use: TypeUse, at: number) => TypeUse {
-  const lineStarts = [0];
-  for (let i = source.text.indexOf("\n"); i !== -1; i = source.text.indexOf("\n", i + 1))
-    lineStarts.push(i + 1);
-  return (use, at) => ({ ...use, file: source.rel, line: firstAtOrAfter(lineStarts, at + 1) });
 }
 
 /** Whether an offset falls inside any of `ranges`, by binary search over them merged. */

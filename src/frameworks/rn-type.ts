@@ -8,7 +8,6 @@ import ts from "typescript";
 import type { TypeFindings, TypeUse } from "../scan/type-scale.js";
 import type { TypeStyle } from "../scan/types.js";
 import {
-  accessPath,
   defaultExport,
   dottedName,
   eachNode,
@@ -16,18 +15,14 @@ import {
   type JsSource,
   lineOf,
   objectIn,
-  platformChoice,
   propertyName,
   renderPath,
   unwrapped,
 } from "./js-sources.js";
-import { familyAndWeight, WEIGHTS } from "./rn-fonts.js";
-import { countUses, type Font, type Named, StyleIndex, UNKNOWN } from "./rn-named.js";
+import { familyAndWeight } from "./rn-fonts.js";
+import { countUses, type Font, type Named, StyleIndex, styleLocations, UNKNOWN } from "./rn-named.js";
+import { type Spreads, styleOf } from "./rn-style.js";
 import { Values } from "./rn-values.js";
-
-const SPACING =
-  /^(?:(?:padding|margin)(?:Top|Right|Bottom|Left|Horizontal|Vertical|Start|End|Block|Inline)?|gap|rowGap|columnGap)$/;
-const RADIUS = /^border(?:Top|Bottom)?(?:Left|Right|Start|End)?Radius$/;
 
 export interface RnType extends TypeFindings {
   /** The text styles the app's typography objects name, each with how many times the code reaches it. */
@@ -87,6 +82,7 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
   countUses(read, index, inStyles);
   const styles = named.map((n): TypeStyle => {
     const { family, size, weight } = useOf(n.font);
+    const locations = styleLocations(n.font);
     return {
       name: n.path[n.path.length - 1] ?? "",
       kind: "app",
@@ -95,6 +91,7 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
       weight,
       reference: renderPath(n.path),
       uses: n.uses,
+      ...(locations && { locations }),
     };
   });
   return {
@@ -107,107 +104,6 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
     spacing,
     radii,
   };
-}
-
-/** What a style object sets: its font, if it sets one, and its spacing and radii. */
-interface Style {
-  font?: Font;
-  /** Sets a family or size itself, not only through a named style it spreads. */
-  ownFont: boolean;
-  /** Takes a font from a named style it spreads. */
-  spreadFont: boolean;
-  /** The spread expressions giving it a font. */
-  spreads: ts.Expression[];
-  /** Values read from a named style (`fontSize: typography.title.fontSize`), counted as this style's, not the named
-   * one's. */
-  fromNamed: ts.Expression[];
-  /** The `Platform.select` branches it reads, which aren't styles of their own. */
-  branches: ts.ObjectLiteralExpression[];
-  spacing: number[];
-  radii: number[];
-}
-
-type Spreads = (parts: string[], from: JsSource) => Named | undefined;
-
-function styleOf(
-  object: ts.ObjectLiteralExpression,
-  source: JsSource,
-  values: Values,
-  spreads: Spreads,
-): Style {
-  const style: Style = {
-    ownFont: false,
-    spreadFont: false,
-    spreads: [],
-    fromNamed: [],
-    branches: [],
-    spacing: [],
-    radii: [],
-  };
-  let font: Font = {};
-  let touched = false;
-  for (const property of object.properties) {
-    // A named style spread in (`...fontFamily.EXP_NEUE, fontSize: 15`) gives what it sets; later properties replace it.
-    if (ts.isSpreadAssignment(property)) {
-      // `...Platform.select({ ios: { fontFamily: "Inter" }, android: … })`: iOS's values, as the design shows them.
-      const platform = platformBranch(property.expression);
-      if (platform) {
-        style.branches.push(...platformBranches(property.expression));
-        const inner = styleOf(platform, source, values, spreads);
-        if (inner.font) {
-          font = { ...font, ...inner.font };
-          touched = true;
-          style.ownFont ||= inner.ownFont;
-          style.spreadFont ||= inner.spreadFont;
-        }
-        continue;
-      }
-      const parts = accessPath(property.expression);
-      const base = parts && spreads(parts, source)?.font;
-      if (base) {
-        font = { ...font, ...base };
-        touched = style.spreadFont = true;
-        style.spreads.push(property.expression);
-      } else if (parts?.some((p) => /font|typo|text/i.test(p))) {
-        // A font style the code can't read (`...fontFamilyScale.strong`) leaves family and weight unknown.
-        font = { ...font, family: UNKNOWN, weight: UNKNOWN };
-        touched = true;
-      }
-      continue;
-    }
-    let key: string | undefined;
-    let written: ts.Expression | undefined;
-    if (ts.isShorthandPropertyAssignment(property)) [key, written] = [property.name.text, property.name];
-    else if (ts.isPropertyAssignment(property))
-      [key, written] = [propertyName(property.name), property.initializer];
-    if (key === undefined || written === undefined) continue;
-    let value = values.of(written, source);
-    // `fontSize: typography.title.fontSize`: the named style's own value, a use of this style rather than of it.
-    if (FONT_KEYS.has(key)) {
-      const parts = accessPath(written);
-      const from =
-        parts && parts.length > 2 && parts.at(-1) === key ? spreads(parts.slice(0, -1), source) : undefined;
-      const field = from?.font[key === "fontSize" ? "size" : key === "fontFamily" ? "family" : "weight"];
-      if (from) style.fromNamed.push(written);
-      if (field !== undefined && field !== UNKNOWN && key === "fontWeight") font.weight = field as string;
-      else if (field !== undefined && field !== UNKNOWN) value = field;
-    }
-    if (SPACING.test(key) && typeof value === "number" && value > 0) style.spacing.push(value);
-    else if (RADIUS.test(key) && typeof value === "number" && value > 0) style.radii.push(value);
-    else if (key === "fontSize" || key === "fontFamily") {
-      // A value the code works out replaces one a spread gave.
-      if (key === "fontSize") font.size = typeof value === "number" ? value : UNKNOWN;
-      else font.family = typeof value === "string" ? value : UNKNOWN;
-      touched = style.ownFont = true;
-    } else if (key === "fontWeight") {
-      if (!style.fromNamed.includes(written))
-        font.weight = value === undefined ? UNKNOWN : (WEIGHTS[String(value)] ?? UNKNOWN);
-      touched = true;
-    }
-  }
-  // A weight alone (`{ fontWeight: "bold" }`) changes a style rather than making one.
-  if (touched && (style.ownFont || style.spreadFont)) style.font = font;
-  return style;
 }
 
 /** A font as a use of the type scale: the system font when it names none, an unknown one when the code works it out,
@@ -265,31 +161,6 @@ function namedStyles(
   return out;
 }
 
-const FONT_KEYS = new Set(["fontSize", "fontFamily", "fontWeight"]);
-
-/** A style's `Platform.select({ … })`; a ternary on `Platform.OS` isn't read in styles yet. */
-const selectChoice = (node: ts.Expression) => {
-  const call = unwrapped(node);
-  return ts.isCallExpression(call) && dottedName(call.expression) === "Platform.select"
-    ? platformChoice(call)
-    : undefined;
-};
-
-/** Every branch object of `Platform.select({ ios: { … }, android: { … } })`. */
-function platformBranches(node: ts.Expression): ts.ObjectLiteralExpression[] {
-  return (selectChoice(node)?.all ?? []).flatMap((b) => {
-    const value = unwrapped(b);
-    return ts.isObjectLiteralExpression(value) ? [value] : [];
-  });
-}
-
-/** The branch object of `Platform.select({ … })` that iOS takes. */
-function platformBranch(node: ts.Expression): ts.ObjectLiteralExpression | undefined {
-  const choice = selectChoice(node);
-  const value = choice && unwrapped(choice.ios);
-  return value && ts.isObjectLiteralExpression(value) ? value : undefined;
-}
-
 /** The object `StyleSheet.create({ … })` makes a style sheet of. */
 function sheetIn(node: ts.Expression): ts.ObjectLiteralExpression | undefined {
   const value = unwrapped(node);
@@ -299,7 +170,7 @@ function sheetIn(node: ts.Expression): ts.ObjectLiteralExpression | undefined {
 }
 
 /** One named style per path and font: a platform's copy of a style (`singleFontFamily` and `multiFontFamily` both
- * defining `fontFamily.EXP_NEUE`) is the same style. */
+ * defining `fontFamily.BRAND_SANS`) is the same style. */
 function once(named: Named[]): Named[] {
   const seen = new Set<string>();
   return named.filter((n) => {

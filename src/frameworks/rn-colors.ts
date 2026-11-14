@@ -6,6 +6,7 @@
 import path from "node:path";
 import ts from "typescript";
 import type { ColorFindings, NamedColor } from "../scan/palette.js";
+import type { CodeSpan, ValueLocation } from "../scan/types.js";
 import { CSS_NAMES, colorOf } from "./css-color.js";
 import {
   accessPath,
@@ -14,6 +15,8 @@ import {
   fileName,
   type JsSource,
   lineOf,
+  literalSpan,
+  nodeSpan,
   objectIn,
   platformChoice,
   propertyName,
@@ -23,6 +26,7 @@ import {
 } from "./js-sources.js";
 import { MODE, modeOf, namedColor, THEMES, themesApart } from "./rn-themes.js";
 import { TAILWIND_CONFIG } from "./tailwind-colors.js";
+import { followNames, through, valueAt } from "./value-locations.js";
 
 /** Style properties that take a colour: in a style, a colour there is one the code uses, not one it names. */
 const STYLE_COLOR = new Set([
@@ -68,12 +72,14 @@ interface Entry {
   value?: string;
   /** The path another colour is reached by, for `primary: palette.blue500`. */
   aliasOf?: string[];
+  /** Where its value, or the name of the one it takes, is written. */
+  written: CodeSpan;
   /** Where the code names it, which isn't a use of it. */
   node: ts.Node;
   /** The object literal it's a property of; none for a module-level constant. */
   holder?: ts.ObjectLiteralExpression;
 }
-type Valued = Entry & { value: string };
+type Valued = Entry & { value: string; location: ValueLocation };
 
 /** `tailwind` holds the files whose colours Tailwind names (see tailwind-colors.ts), left out here. */
 export function rnColors(sources: JsSource[], tailwind: Set<string> = new Set()): ColorFindings {
@@ -235,7 +241,8 @@ function collectNamed(
       }
       if (ts.isShorthandPropertyAssignment(property)) {
         const key = property.name.text;
-        own.set(key, [entry(key, at, property, from, object, { aliasOf: [key] })]);
+        const written = nodeSpan(from, property.name);
+        own.set(key, [entry(key, at, property, from, object, { aliasOf: [key], written })]);
         continue;
       }
       if (!ts.isPropertyAssignment(property)) continue;
@@ -256,9 +263,12 @@ function collectNamed(
         own.delete(key);
         continue;
       }
-      own.set(key, [
-        entry(key, at, property, from, object, color ? { value: color } : aliasOf ? { aliasOf } : {}),
-      ]);
+      const held = color
+        ? { value: color, written: valueSpan(from, value) }
+        : aliasOf
+          ? { aliasOf, written: nodeSpan(from, value) }
+          : { written: nodeSpan(from, value) };
+      own.set(key, [entry(key, at, property, from, object, held)]);
     }
     leaves.set(object, values);
     return [...own.values()].flat();
@@ -279,6 +289,7 @@ function collectNamed(
             source,
             line: lineOf(d),
             value: color,
+            written: valueSpan(source, unwrapped(d.initializer)),
             node: d,
           });
       }
@@ -290,6 +301,10 @@ function collectNamed(
   }
   return entries;
 }
+
+/** Where a colour's string is written, without its quotes. */
+const valueSpan = (source: JsSource, node: ts.Expression) =>
+  literalSpan(source, node) ?? nodeSpan(source, node);
 
 /** A string, number or boolean written as it is. */
 const isPlain = (node: ts.Expression) =>
@@ -305,7 +320,7 @@ function entry(
   node: ts.Node,
   source: JsSource,
   holder: ts.ObjectLiteralExpression,
-  held: { value?: string; aliasOf?: string[] },
+  held: { value?: string; aliasOf?: string[]; written: CodeSpan },
 ): Entry {
   // A shade in a scale, `charcoal: { 500: … }`, is named by its scale too: `charcoal-500`.
   const name = /^\d+$/.test(key) && at.length > 0 ? `${at[at.length - 1]}-${key}` : key;
@@ -346,18 +361,21 @@ function resolveAliases(entries: Entry[], modules: Modules): Valued[] {
     const there = imported && byFile.get(imported.source)?.get([imported.root, ...alias.slice(1)].join("\0"));
     return there ?? byEnd.get(alias.join("\0")) ?? undefined;
   };
-  const resolve = (e: Entry): string | undefined => {
-    let current: Entry | undefined = e;
-    for (let hop = 0; current && hop <= MAX_HOPS; hop++) {
-      if (current.value) return current.value;
-      const next: Entry | undefined = current.aliasOf ? target(current, current.aliasOf) : undefined;
-      current = next === current ? undefined : next;
-    }
-    return undefined;
+  const resolve = (e: Entry): { value: string; location: ValueLocation } | undefined => {
+    const next = (at: Entry) => {
+      if (at.value) return null;
+      const to = at.aliasOf ? target(at, at.aliasOf) : undefined;
+      return to === at ? undefined : to;
+    };
+    const found = followNames(e, next, (at) => at.written, MAX_HOPS);
+    const value = found?.target.value;
+    return found && value
+      ? { value, location: through(valueAt(found.target.written, "literal"), found.via) }
+      : undefined;
   };
   return entries.flatMap((e) => {
-    const value = resolve(e);
-    return value ? [{ ...e, value }] : [];
+    const resolved = resolve(e);
+    return resolved ? [{ ...e, ...resolved }] : [];
   });
 }
 
@@ -385,13 +403,9 @@ function pairModes(entries: Valued[]): NamedColor[] {
     const first = light ?? dark;
     if (!first) continue;
     alone.push({
+      ...namedColor(first, light && dark),
       name: at[at.length - 1] ?? first.name,
-      light: first.value,
-      ...(light && dark && dark.value !== light.value ? { dark: dark.value } : {}),
-      source: first.source.rel,
       reference: renderPath(at),
-      line: first.line,
-      kind: "code",
     });
   }
   for (const e of rest) {
@@ -409,7 +423,7 @@ function pairModes(entries: Valued[]): NamedColor[] {
     pairs.set(key, pair);
   }
   const paired = [...pairs.values()].flatMap(({ light, dark }) => {
-    if (light) return [namedColor(light, dark?.value)];
+    if (light) return [namedColor(light, dark)];
     return dark ? [namedColor(dark)] : [];
   });
   return [...paired, ...alone];

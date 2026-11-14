@@ -1,6 +1,7 @@
 import path from "node:path";
 import { byNumber, mostCommon } from "../scan/counting.js";
 import { palette } from "../scan/palette.js";
+import { appFirst } from "../scan/targets.js";
 import { typeScale } from "../scan/type-scale.js";
 import { type JsSource, jsSources } from "./js-sources.js";
 import type { FrameworkPlugin, ScanContext } from "./plugin.js";
@@ -108,11 +109,15 @@ export const reactNative: FrameworkPlugin = {
       .filter((p) => !p.reactNative && p.root !== "" && roots.some((r) => within(`${p.root}/`, [r])))
       .map((p) => p.root)
       .filter((o) => !scripts.some((s) => s.reactNative && within(s.rel, [o])));
-    const sources = scripts.filter(
-      (s) =>
-        within(s.rel, roots) &&
-        !within(s.rel, others) &&
-        (!TOOL_CONFIG.test(s.rel) || TAILWIND_CONFIG.test(s.rel)),
+    // Where a colour or style is declared twice, the app's own copy comes first, over a widget's.
+    const sources = appFirst(
+      scripts.filter(
+        (s) =>
+          within(s.rel, roots) &&
+          !within(s.rel, others) &&
+          (!TOOL_CONFIG.test(s.rel) || TAILWIND_CONFIG.test(s.rel)),
+      ),
+      (s) => s.rel,
     );
     if (!sources.some((s) => s.reactNative)) return undefined;
     const tailwind = await tailwindColors(ctx, sources);

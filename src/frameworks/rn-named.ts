@@ -1,7 +1,9 @@
 /** The text styles a React Native app names, found by the paths the code reaches them by, and counted. */
 
 import ts from "typescript";
+import type { CodeSpan, TypeLocations } from "../scan/types.js";
 import { accessPath, eachNode, type JsSource } from "./js-sources.js";
+import { through } from "./value-locations.js";
 
 /** Names a typography object is reached through: `theme.typography.title`, `fonts.body`, `textStyles.caption`. */
 const TYPE_WORD = /^(?:typography|fonts?|text(?:Styles?)?)$|[a-z](?:Typography|Fonts?|TextStyles?)$/;
@@ -11,8 +13,27 @@ export interface Font {
   family?: string | typeof UNKNOWN;
   size?: number | typeof UNKNOWN;
   weight?: string | typeof UNKNOWN;
+  /** Where each value it sets is written. */
+  locations?: TypeLocations;
 }
 export const UNKNOWN = Symbol("unknown");
+
+/** The field of a font each of a style's font keys sets. */
+export const FONT_FIELD = { fontFamily: "family", fontSize: "size", fontWeight: "weight" } as const;
+export const isFontKey = (key: string): key is keyof typeof FONT_FIELD => key in FONT_FIELD;
+
+/** `locations` once `from`'s values replace a style's (a spread, a platform's branch): where `from` writes each value
+ * it sets, through `via` when it's reached by a name, and none for a value it sets that isn't written anywhere. */
+export function inherit(locations: TypeLocations, from: Font, via?: CodeSpan): TypeLocations {
+  const out = { ...locations };
+  for (const key of Object.keys(FONT_FIELD)) {
+    if (!isFontKey(key) || from[FONT_FIELD[key]] === undefined) continue;
+    const location = from.locations?.[key];
+    if (location) out[key] = through(location, via ? [via] : []);
+    else delete out[key];
+  }
+  return out;
+}
 
 /** A text style the app names, and the object that defines it. */
 export interface Named {
@@ -26,7 +47,7 @@ export interface Named {
 /**
  * The named styles by every end of their paths, for finding the one a chain reaches: the longest end the chain
  * finishes with that only one style has, preferring a style in the chain's own file (`largeTypography.title` is the
- * large title, not the first `title`). A spread may name a style by its name alone (`...platform.EXP_NEUE`).
+ * large title, not the first `title`). A spread may name a style by its name alone (`...platform.BRAND_SANS`).
  */
 export class StyleIndex {
   private readonly byEnd = new Map<string, Named | null>();
@@ -86,4 +107,14 @@ export function countUses(sources: JsSource[], index: StyleIndex, skip: Set<ts.N
       return false;
     });
   }
+}
+
+/** Where a named style's values are written, a weight its family's font file names (`Inter-SemiBold`) being written
+ * in the family, which is then a font name; none when it writes none. */
+export function styleLocations(font: Font): TypeLocations | undefined {
+  const { fontFamily } = font.locations ?? {};
+  const name =
+    font.weight === undefined && fontFamily ? { ...fontFamily, kind: "family-name" as const } : undefined;
+  const locations = { ...font.locations, ...(name && { fontFamily: name, fontWeight: name }) };
+  return Object.keys(locations).length > 0 ? locations : undefined;
 }

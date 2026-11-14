@@ -6,17 +6,22 @@
 import path from "node:path";
 import ts from "typescript";
 import type { ColorFindings, NamedColor } from "../scan/palette.js";
+import { appFirst } from "../scan/targets.js";
+import type { ValueLocation } from "../scan/types.js";
 import { colorOf } from "./css-color.js";
 import {
   accessPath,
   eachNode,
   type JsSource,
   lineOf,
+  literalSpan,
   propertyName,
   renderPath,
   unwrapped,
 } from "./js-sources.js";
 import type { ScanContext } from "./plugin.js";
+import { locator } from "./source-text.js";
+import { valueAt } from "./value-locations.js";
 
 export const TAILWIND_CONFIG = /(?:^|\/)tailwind\.config\.[cm]?[jt]s$/;
 const CSS = /\.css$/;
@@ -206,6 +211,7 @@ function flatten(
     const parts = key === "DEFAULT" ? names : [...names, key];
     const text = stringValue(property.initializer);
     const light = text === undefined ? undefined : colorOf(text, true);
+    const written = literalSpan(object.source, unwrapped(property.initializer));
     const name = parts.join("-");
     if (light && name) {
       out.push({
@@ -215,6 +221,7 @@ function flatten(
         reference: name,
         line: lineOf(property),
         kind: "code",
+        ...(written && { locations: { light: written } }),
       });
       continue;
     }
@@ -320,7 +327,7 @@ const CSS_FONT = /--font-(?:family-)?([\w-]+)\s*:\s*([^;]+);/g;
 async function readCss(ctx: ScanContext): Promise<{ imports: boolean; fonts: Record<string, string> }> {
   let imports = false;
   const fonts: Record<string, string> = {};
-  for (const file of ctx.files.filter((f) => CSS.test(f.rel))) {
+  for (const file of appFirst(ctx.files, (f) => f.rel).filter((f) => CSS.test(f.rel))) {
     const text = (await ctx.read(file))?.replace(/\/\*[\s\S]*?\*\//g, "");
     if (!text) continue;
     if (/@import\s+["']tailwindcss|@tailwind\s/.test(text)) imports = true;
@@ -333,31 +340,46 @@ async function readCss(ctx: ScanContext): Promise<{ imports: boolean; fonts: Rec
  * declarations aren't read. */
 async function cssColors(ctx: ScanContext): Promise<NamedColor[]> {
   const out = new Map<string, NamedColor>();
-  const darkValues = new Map<string, string>();
-  for (const file of ctx.files.filter((f) => CSS.test(f.rel))) {
+  const darkValues = new Map<string, { value: string; location: ValueLocation }>();
+  for (const file of appFirst(ctx.files, (f) => f.rel).filter((f) => CSS.test(f.rel))) {
     const raw = await ctx.read(file);
     if (!raw?.includes("--color-")) continue;
     // Comments blanked to spaces, keeping every offset and line where it was.
     const text = raw.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
     const dark = darkSpans(text);
-    let [line, counted] = [1, 0];
+    const span = locator(file.rel, text);
     for (const m of text.matchAll(CSS_COLOR)) {
       const [name, written] = [m[1] ?? "", m[2] ?? ""];
       const value = colorOf(written, true);
       const at = m.index ?? 0;
-      for (; counted < at; counted++) if (text[counted] === "\n") line++;
       if (!value) continue;
+      // The value runs from after the `:` and its spaces to the `;`, less the spaces before it.
+      const start = at + m[0].length - 1 - written.length;
+      const location = valueAt(span(start, start + written.trimEnd().length), "literal");
       if (dark.some(([open, close]) => at > open && at < close)) {
-        if (!darkValues.has(name)) darkValues.set(name, value);
+        if (!darkValues.has(name)) darkValues.set(name, { value, location });
         continue;
       }
       if (!out.has(name))
-        out.set(name, { name, light: value, source: file.rel, reference: name, line, kind: "code" });
+        out.set(name, {
+          name,
+          light: value,
+          source: file.rel,
+          reference: name,
+          line: location.line,
+          kind: "code",
+          locations: { light: location },
+        });
     }
   }
   return [...out.values()].map((c) => {
     const dark = darkValues.get(c.name);
-    return dark && dark !== c.light ? { ...c, dark } : c;
+    if (!dark) return c;
+    return {
+      ...c,
+      ...(dark.value !== c.light && { dark: dark.value }),
+      locations: { ...c.locations, dark: dark.location },
+    };
   });
 }
 

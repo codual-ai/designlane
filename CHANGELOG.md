@@ -3,6 +3,29 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Where each token's values are written, in tokens.json under `$extensions.designmap.locations` (files without it
+  read as before): for a colour, its light and dark values (file, line, the characters of exactly the text to replace
+  in UTF-16 code units, and `kind`, what that text is: a literal without its quotes, an expression, a font name
+  holding the weight, a family's identifier, or an asset's `components`),
+  from Swift code, asset catalogs, theme sets, Compose constants, Material schemes and colour classes, Android
+  `values` and `values-night` resources, React Native theme objects and palettes, Tailwind configs and CSS `@theme`;
+  for a text style, its family, size and weight, from Swift font helpers, Compose typography and named styles,
+  Android text appearances, and React Native typography objects and named font sizes. A value the code reaches
+  through other names (`link: colors.blue0`, `@color/blue600`, a parent style, a spread style) records each name on
+  the way, under `via`. A value worked out from another (`Brand.copy(alpha = 0.5f)`), or set where a helper is used,
+  records none, as does a style made from a helper (`.small.bold()`), whose values are the helper's, and a family
+  built as a template. Also on the scan's `ColorToken` and `TypeStyle` as `locations`.
+
+### Changed
+
+- A colour or text style written in both the app and another of its targets (a watch app, a widget, an app
+  extension, a Wear, TV or car module, preview assets) is read from the app's own copy, which also takes the plain
+  key in tokens.json.
+
 ## 0.1.0 - 2026-11-14
 
 ### Added

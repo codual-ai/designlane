@@ -5,6 +5,7 @@
  */
 
 import type { NamedColor, ThemeColor, ThemeFindings } from "../scan/palette.js";
+import type { ValueLocation } from "../scan/types.js";
 import { type JsSource, renderPath } from "./js-sources.js";
 
 /** A key or variable naming a colour scheme: `light`, `darkTheme`, `LightColors`, `themeDark`. */
@@ -25,6 +26,8 @@ export interface ThemedEntry {
   source: JsSource;
   line: number;
   value: string;
+  /** Where its value is written, through any names it's given by on the way. */
+  location: ValueLocation;
 }
 
 /** The scheme a path part names (`light` for `lightTheme`), if it names one. */
@@ -34,15 +37,16 @@ export function modeOf(part: string): "light" | "dark" | undefined {
   return mode === "light" || mode === "dark" ? mode : undefined;
 }
 
-/** A colour of the app as the code names it, with its dark value when that differs. */
-export const namedColor = (e: ThemedEntry, dark?: string): NamedColor => ({
+/** A colour of the app as the code names it, with its dark value when that differs, and where each is written. */
+export const namedColor = (e: ThemedEntry, dark?: ThemedEntry): NamedColor => ({
   name: e.name,
   light: e.value,
-  ...(dark && dark !== e.value ? { dark } : {}),
+  ...(dark && dark.value !== e.value ? { dark: dark.value } : {}),
   source: e.source.rel,
   reference: renderPath(e.path),
   line: e.line,
   kind: "code",
+  locations: { light: e.location, ...(dark && { dark: dark.location }) },
 });
 
 /** Where an entry's theme is named in its path: the part under a `themes` parent, or a `light` or `dark` part, which
@@ -192,7 +196,7 @@ function themeColors<T extends ThemedEntry>(
     colors: [...places].flatMap(([key, { light, dark, ownPair }]): ThemeColor[] => {
       const first = light ?? dark;
       if (!first) return [];
-      const paired = namedColor(first, light && dark?.value);
+      const paired = namedColor(first, light && dark);
       const at = first.path.slice(0, -1);
       const color = ownPair
         ? { ...paired, name: at[at.length - 1] ?? paired.name, reference: renderPath(at) }

@@ -1,6 +1,7 @@
 /** What tokens.json and DESIGN.md call each value, worked out once so both files name every token the same way. */
 
 import { byCode } from "../scan/counting.js";
+import { isOtherTarget } from "../scan/targets.js";
 import type { ColorTheme, ColorToken, Platform, TypeStyle } from "../scan/types.js";
 
 /** A token's key: the app's own name, or `hex-33a854` for a colour the code never names. Anything but letters,
@@ -62,7 +63,9 @@ function keysOf<T>(
 export function keyedColors(colors: ColorToken[]): KeyedColor[] {
   const taken = claimed();
   const reference = (c: ColorToken) => c.reference ?? c.name;
-  const identity = (c: ColorToken) => `${reference(c)}|${c.source}|${c.light}`;
+  // Of colours sharing a reference, the app's own copy takes the plain key, before a widget's or a watch app's.
+  const identity = (c: ColorToken) =>
+    `${isOtherTarget(c.source) ? 1 : 0}|${reference(c)}|${c.source}|${c.light}`;
   const keyed = keysOf(colors, (c) => tokenKey(c.name), reference, identity, taken);
   // A dark key is its colour's key, already unique, plus `-dark`; claimed after every light key, it gets a suffix
   // only when the app has a colour named that already.

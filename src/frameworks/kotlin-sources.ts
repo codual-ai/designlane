@@ -1,7 +1,8 @@
 import { isTestPath } from "../scan/test-paths.js";
+import type { CodeSpan } from "../scan/types.js";
 import { kotlinCodeOnly, kotlinWithoutComments } from "./kotlin-source.js";
 import type { ScanContext } from "./plugin.js";
-import { type BracketTree, bracketTree } from "./source-text.js";
+import { type BracketTree, bracketTree, locator } from "./source-text.js";
 
 export interface KotlinSource {
   rel: string;
@@ -44,6 +45,18 @@ export function treeOf(source: KotlinSource): BracketTree {
     trees.set(source, tree);
   }
   return tree;
+}
+
+const locators = new WeakMap<KotlinSource, (start: number, end: number) => CodeSpan>();
+
+/** Where `start` to `end` of `source` is, its lines found once for every reader. */
+export function spanIn(source: KotlinSource, start: number, end: number): CodeSpan {
+  let span = locators.get(source);
+  if (!span) {
+    span = locator(source.rel, source.text);
+    locators.set(source, span);
+  }
+  return span(start, end);
 }
 
 /** The module a file belongs to: its path before `/src/`, so an app's phone, TV and watch apps are told apart. */

@@ -1,10 +1,11 @@
 import { type ColorFindings, type NamedColor, nameKey } from "../scan/palette.js";
 import { normalizeHex, rgbToHex } from "../scan/tokens.js";
-import { lineNumbers } from "./source-text.js";
+import { lineNumbers, locator } from "./source-text.js";
 import { memberOf, ownerAt, qualifiedOwnerAt } from "./swift-owners.js";
 import { tokenIndexAt } from "./swift-tokens.js";
 import { matchesInCode, matchesPerLine, type SwiftSource, tokensOf } from "./swiftui-sources.js";
 import { swiftThemes } from "./swiftui-themes.js";
+import { valueAt } from "./value-locations.js";
 
 // Colour patterns are built from these parts so each reads like the Swift it matches.
 /** `Color(`, its UIKit and AppKit forms, or `.init(` where a colour is declared (`let ink: Color = .init(hex: …)`). */
@@ -115,13 +116,14 @@ export function swiftColors(sources: SwiftSource[], assets: NamedColor[]): Color
   const owners = new Map<string, Set<string>>();
   const values = new Map(sources.map((source) => [source, [...literals(source, opacityFirst)]]));
   const byStart = new Map(
-    [...values].map(([source, found]) => [source, new Map(found.map((value) => [value.start, value.hex]))]),
+    [...values].map(([source, found]) => [source, new Map(found.map((value) => [value.start, value]))]),
   );
   const themes = swiftThemes(sources, (source, offset) => byStart.get(source)?.get(offset));
   for (const source of sources) {
     const declaredHere: { color: NamedColor; start: number }[] = [];
     const inTheme = themes.valueStarts.get(source.rel);
-    for (const { hex, prefix, isInit, start } of values.get(source) ?? []) {
+    const span = locator(source.rel, source.text);
+    for (const { hex, prefix, isInit, start, end } of values.get(source) ?? []) {
       if (inTheme?.has(start)) continue;
       const declared = DECLARED.exec(prefix);
       // `.init(red: …)` is only a colour when declared as one: `let ink: Color = .init(…)`.
@@ -140,7 +142,11 @@ export function swiftColors(sources: SwiftSource[], assets: NamedColor[]): Color
         if (owner) owners.set(owner, (owners.get(owner) ?? new Set()).add(nameKey(name)));
         reference = memberOf(qualifiedOwnerAt(tokens, at), name);
       }
-      declaredHere.push({ color: { name, light: hex, source: source.rel, reference, kind: "code" }, start });
+      const locations = end ? { locations: { light: valueAt(span(start, end), "expression") } } : {};
+      declaredHere.push({
+        color: { name, light: hex, source: source.rel, reference, kind: "code", ...locations },
+        start,
+      });
     }
     // The line each colour is declared on, which orders same-named ones in a file by declaration, not by value.
     declaredHere.sort((a, b) => a.start - b.start);
@@ -204,12 +210,16 @@ function* colorNames(source: SwiftSource) {
   }
 }
 
-/** Colour values anywhere in the file, including calls split over lines, with the text just before each. */
+/** Colour values anywhere in the file, including calls split over lines, with the text just before each and where
+ * the call ends, when it does. */
 function* literals(source: SwiftSource, opacityFirst: boolean) {
+  const tokens = tokensOf(source);
   const at = (m: RegExpMatchArray) => {
     const start = m.index ?? 0;
     const prefix = source.text.slice(Math.max(0, start - DECLARED_CHARS), start);
-    return { prefix, isInit: source.text.startsWith(".init", start), start };
+    const close = tokens.match[tokenIndexAt(tokens, start + m[0].indexOf("("))] ?? -1;
+    const end = tokens.tokens[close]?.end;
+    return { prefix, isInit: source.text.startsWith(".init", start), start, ...(end ? { end } : {}) };
   };
   const channel = (value?: string, per255?: string) => Number(value ?? 0) / (per255 ? 255 : 1);
   const alpha = (value?: string) => (value === undefined ? 1 : Number(value));

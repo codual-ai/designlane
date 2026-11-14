@@ -5,16 +5,19 @@
  */
 
 import type { TypeFindings, TypeUse } from "../scan/type-scale.js";
-import type { TypeStyle } from "../scan/types.js";
+import type { CodeSpan, TypeLocations, TypeStyle, ValueKind, ValueLocation } from "../scan/types.js";
 import { familyOf, fontFamilies } from "./compose-fonts.js";
 import { assignedName, callArguments, declaredIn, isDeclared, prefixesOf, Spans } from "./kotlin-calls.js";
-import type { KotlinSource } from "./kotlin-sources.js";
+import { type KotlinSource, spanIn } from "./kotlin-sources.js";
 import { MATERIAL_DEFAULTS, SYSTEM, sizeOf, weightOf } from "./material-type.js";
+import { through, valueAt } from "./value-locations.js";
 
 interface Style {
   family?: string;
   size?: number;
   weight?: string;
+  /** Where each value is written: in the call, or, through the name of the style it copies, in that style. */
+  locations: TypeLocations;
 }
 
 /** The shared type scale's findings, plus the styles the app names: Material roles and its own. */
@@ -53,38 +56,76 @@ function styleAt(
   const call = source.code.slice(at, at + MAX_CALL_HEAD).match(/^(?:TextStyle|([\w.]+)\.copy)\s*\(/);
   if (!call) return undefined;
   const copied = call[1] ?? "";
-  const base = copied ? (MATERIAL_DEFAULTS[copied.split(".").at(-1) ?? ""] ?? bases.get(copied)) : undefined;
+  const material = copied ? MATERIAL_DEFAULTS[copied.split(".").at(-1) ?? ""] : undefined;
+  const named = copied && !material ? bases.get(copied) : undefined;
   const { args } = callArguments(source, at + call[0].length - 1);
-  const arg = (name: string) => args.find((a) => a.name === name)?.value;
+  const arg = (name: string) => args.find((a) => a.name === name);
   const [family, size, weight] = [arg("fontFamily"), arg("fontSize"), arg("fontWeight")];
-  const points = size ? sizeOf(size) : undefined;
+  const points = size ? sizeOf(size.value) : undefined;
+  const written = (value: { at: number; value: string }, kind: ValueKind) =>
+    valueAt(spanIn(source, value.at, value.at + value.value.length), kind);
+  const inherited = named ? copiedLocations(named.locations, spanIn(source, at, at + copied.length)) : {};
+  // A size the copy sets that can't be read replaces the base's, so the base's place is no longer the style's.
+  if (size && points === undefined) delete inherited.fontSize;
+  const locations: TypeLocations = {
+    ...inherited,
+    ...(family && { fontFamily: written(family, familyKind(family.value)) }),
+    ...(points !== undefined && size && { fontSize: written(size, "expression") }),
+    ...(weight && { fontWeight: written(weight, "expression") }),
+  };
   return {
-    ...base,
-    ...(family && { family: familyOf(family, families) }),
+    ...(material ?? named),
+    ...(family && { family: familyOf(family.value, families) }),
     ...(points !== undefined && { size: points }),
-    ...(weight && { weight: weightOf(weight) }),
+    ...(weight && { weight: weightOf(weight.value) }),
+    locations,
   };
 }
+
+/** Where the values a copy takes from the style it copies are written: in that style, through the name it's copied
+ * by. */
+const copiedLocations = (locations: TypeLocations, name: CodeSpan): TypeLocations =>
+  Object.fromEntries(Object.entries(locations).map(([key, location]) => [key, through(location, [name])]));
+
+/** A family named by the app's own `FontFamily` constant (`Inter`) is an identifier; one written out
+ * (`FontFamily.Serif`, `FontFamily(Font(…))`) is an expression. */
+const familyKind = (written: string): ValueKind =>
+  /^[A-Za-z_]\w*(?:\.\w+)*$/.test(written) && !written.startsWith("FontFamily.")
+    ? "identifier"
+    : "expression";
 
 interface Typography {
   roles: Map<string, TypeStyle>;
   /** `Typography(defaultFontFamily = …)`, which every role it doesn't set takes. */
-  defaultFamily?: string;
+  defaultFamily?: Family;
   /** Where each `Typography(…)` is written, so its styles aren't counted again as written inline. */
   spans: Map<KotlinSource, Spans>;
 }
 
-const roleStyle = (role: string, style: Style, family: string): TypeStyle => ({
-  name: role,
-  kind: "text-style",
-  family: style.family ?? family,
-  ...(style.size !== undefined && { size: style.size }),
-  weight: style.weight ?? "regular",
-  reference: `MaterialTheme.typography.${role}`,
-  uses: 0,
-});
+/** A role as a text style, its family the one the whole typography sets (`defaultFamily`) when it sets none. */
+const roleStyle = (role: string, style: Style, defaultFamily: Family): TypeStyle => {
+  const familyAt = style.locations.fontFamily ?? (style.family ? undefined : defaultFamily.location);
+  const locations = { ...style.locations, ...(familyAt && { fontFamily: familyAt }) };
+  return {
+    name: role,
+    kind: "text-style",
+    family: style.family ?? defaultFamily.name,
+    ...(style.size !== undefined && { size: style.size }),
+    weight: style.weight ?? "regular",
+    reference: `MaterialTheme.typography.${role}`,
+    uses: 0,
+    ...(Object.keys(locations).length > 0 ? { locations } : {}),
+  };
+};
 
-/** The roles each Material `Typography(…)` sets. */
+/** A family a whole type scale takes, and where it's written. */
+interface Family {
+  name: string;
+  location?: ValueLocation;
+}
+
+const SYSTEM_FAMILY: Family = { name: SYSTEM };
+
 /** Every `val Name = TextStyle(…)` the app declares, by how the code refers to it. */
 function namedStyles(sources: KotlinSource[], families: Map<string, string>): Bases {
   const bases: Bases = new Map();
@@ -94,12 +135,15 @@ function namedStyles(sources: KotlinSource[], families: Map<string, string>): Ba
       const name = assignedName(source.code, at);
       const owner = name ? declaredIn(source, at) : undefined;
       const style = owner !== undefined ? styleAt(source, at, families, bases) : undefined;
-      if (name && style) bases.set(owner ? `${owner}.${name}` : name, style);
+      const reference = owner ? `${owner}.${name}` : name;
+      // The first declared is the app's own, as sources come with the app's code first.
+      if (name && reference && style && !bases.has(reference)) bases.set(reference, style);
     }
   }
   return bases;
 }
 
+/** The roles each Material `Typography(…)` sets. */
 function typographyRoles(sources: KotlinSource[], families: Map<string, string>, bases: Bases): Typography {
   const found: Typography = { roles: new Map(), spans: new Map() };
   for (const source of sources) {
@@ -111,12 +155,22 @@ function typographyRoles(sources: KotlinSource[], families: Map<string, string>,
       spans.add(at + 1, close);
       found.spans.set(source, spans);
       const defaultArg = args.find((a) => a.name === "defaultFontFamily");
-      const family = defaultArg ? familyOf(defaultArg.value, families) : SYSTEM;
-      if (defaultArg) found.defaultFamily = family;
+      const family: Family = defaultArg
+        ? {
+            name: familyOf(defaultArg.value, families),
+            location: valueAt(
+              spanIn(source, defaultArg.at, defaultArg.at + defaultArg.value.length),
+              familyKind(defaultArg.value),
+            ),
+          }
+        : SYSTEM_FAMILY;
+      // The first default is the app's own, as sources come with the app's code first.
+      if (defaultArg && !found.defaultFamily) found.defaultFamily = family;
       for (const arg of args) {
         const role = arg.name ?? "";
         const style = role in MATERIAL_DEFAULTS ? styleAt(source, arg.at, families, bases) : undefined;
-        if (style) found.roles.set(role, roleStyle(role, style, family));
+        // The first set is the app's own, as sources come with the app's code first.
+        if (style && !found.roles.has(role)) found.roles.set(role, roleStyle(role, style, family));
       }
     }
   }
@@ -129,7 +183,9 @@ function usedRoles(sources: KotlinSource[], { roles, defaultFamily }: Typography
     for (const m of code.matchAll(/\bMaterialTheme\.typography\.(\w+)\b/g)) {
       const role = m[1] ?? "";
       const defaults = MATERIAL_DEFAULTS[role];
-      const style = roles.get(role) ?? (defaults && roleStyle(role, defaults, defaultFamily ?? SYSTEM));
+      const style =
+        roles.get(role) ??
+        (defaults && roleStyle(role, { ...defaults, locations: {} }, defaultFamily ?? SYSTEM_FAMILY));
       if (!style) continue;
       roles.set(role, style);
       style.uses++;
@@ -177,7 +233,7 @@ function appStyles(bases: Bases): Map<string, TypeStyle> {
   for (const [reference, style] of bases) {
     if (isEmpty(style)) continue;
     const name = reference.split(".").at(-1) ?? reference;
-    styles.set(reference, { ...roleStyle(name, style, SYSTEM), kind: "app", reference });
+    styles.set(reference, { ...roleStyle(name, style, SYSTEM_FAMILY), kind: "app", reference });
   }
   return styles;
 }

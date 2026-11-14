@@ -65,10 +65,10 @@ describe("React Native text styles", () => {
   it("takes a named style's font into a style spreading it, with the style's own values replacing it", async () => {
     const { style } = await app({
       "src/fonts.ts":
-        'export const fontFamily = { EXP_NEUE: { fontFamily: "Expensify Neue", fontWeight: "400" } };',
+        'export const fontFamily = { EXP_NEUE: { fontFamily: "Brand Neue", fontWeight: "400" } };',
       "src/D.tsx": `${RN}export const D = () => <Text style={{ ...fontFamily.EXP_NEUE, fontSize: 15, fontWeight: "700" }} />;`,
     });
-    expect(style("Expensify Neue 15 bold")?.uses).toBe(1);
+    expect(style("Brand Neue 15 bold")?.uses).toBe(1);
   });
 
   it("calls a family the code works out unknown, and a size it works out computed", async () => {
@@ -91,9 +91,9 @@ describe("font families as React Native writes them", () => {
 
   it("reads a font stack written as a template by the family it starts with", async () => {
     const { tokens } = await app({
-      "src/F.tsx": `${RN}const FALLBACK = "sans-serif";\nexport const F = () => <Text style={{ fontFamily: \`Expensify Mono, \${FALLBACK}\`, fontSize: 13 }} />;`,
+      "src/F.tsx": `${RN}const FALLBACK = "sans-serif";\nexport const F = () => <Text style={{ fontFamily: \`Brand Mono, \${FALLBACK}\`, fontSize: 13 }} />;`,
     });
-    expect(tokens?.fonts).toEqual(["Expensify Mono"]);
+    expect(tokens?.fonts).toEqual(["Brand Mono"]);
   });
 });
 
@@ -191,9 +191,8 @@ describe("React Native text styles, read carefully", () => {
       "src/typography.ts":
         'const fontSize = 20;\nexport default { title: { fontSize, fontFamily: "Inter" } };',
       "src/single/fonts.ts":
-        'export const fontFamily = { NEUE: { fontFamily: "Expensify Neue" , fontSize: 15 } };',
-      "src/multi/fonts.ts":
-        'export const fontFamily = { NEUE: { fontFamily: "ExpensifyNeue", fontSize: 15 } };',
+        'export const fontFamily = { NEUE: { fontFamily: "Brand Neue" , fontSize: 15 } };',
+      "src/multi/fonts.ts": 'export const fontFamily = { NEUE: { fontFamily: "BrandNeue", fontSize: 15 } };',
       "src/D.tsx": `${RN}import typography from "./typography";\nexport const D = () => <Text style={typography.title} />;`,
     });
     expect(style("title")).toMatchObject({
@@ -287,8 +286,8 @@ describe("React Native text styles, second look", () => {
   it("counts a style once, not again for its Platform.select branches or a platform copy of a named style", async () => {
     const { tokens } = await app({
       "src/A.tsx": `${RN}const styles = StyleSheet.create({ label: { fontSize: 13, ...Platform.select({ ios: { fontFamily: "Lato-Regular" }, android: { fontFamily: "Lato" } }) } });\nexport const A = () => <Text style={styles.label} />;`,
-      "src/single/fonts.ts": 'export const fontFamily = { NEUE: { fontFamily: "Expensify Neue" } };',
-      "src/multi/fonts.ts": 'export const fontFamily = { NEUE: { fontFamily: "ExpensifyNeue" } };',
+      "src/single/fonts.ts": 'export const fontFamily = { NEUE: { fontFamily: "Brand Neue" } };',
+      "src/multi/fonts.ts": 'export const fontFamily = { NEUE: { fontFamily: "BrandNeue" } };',
     });
     expect(tokens?.typeStyles.map((s) => `${s.name}:${s.uses}`)).toEqual(["Lato 13:1", "NEUE:0"]);
   });

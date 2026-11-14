@@ -3,6 +3,7 @@
 import path from "node:path";
 import ts from "typescript";
 import { isTestPath } from "../scan/test-paths.js";
+import type { CodeSpan, ValueLocation } from "../scan/types.js";
 import type { ScanContext } from "./plugin.js";
 
 export interface JsSource {
@@ -48,6 +49,25 @@ function importsReactNative(file: ts.SourceFile): boolean {
       ts.isStringLiteral(s.moduleSpecifier) &&
       RN_IMPORT.test(s.moduleSpecifier.text),
   );
+}
+
+/** Where `node` is written in `source`, from its first token, leading comments left out. */
+export const nodeSpan = (source: JsSource, node: ts.Node): CodeSpan => ({
+  file: source.rel,
+  line: lineOf(node),
+  start: node.getStart(),
+  end: node.getEnd(),
+});
+
+/** Where a literal's value is written: a string's text without its quotes, a number as it is; none for anything
+ * else, a template with substitutions (`\`Brand Neue, ${FALLBACK}\``) included, whose text is only part of it. */
+export function literalSpan(source: JsSource, node: ts.Node): ValueLocation | undefined {
+  const span = nodeSpan(source, node);
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    return { ...span, start: span.start + 1, end: span.end - 1, kind: "literal" };
+  const number =
+    ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken ? node.operand : node;
+  return ts.isNumericLiteral(number) ? { ...span, kind: "literal" } : undefined;
 }
 
 /** The 1-based line `node` starts on. */
@@ -201,6 +221,29 @@ export function platformChoice(
   if (!equal && !unequal) return undefined;
   const whenIos = (named.text === "ios") === equal ? value.whenTrue : value.whenFalse;
   return { ios: whenIos, all: [value.whenTrue, value.whenFalse] };
+}
+
+/** A style's `Platform.select({ … })`; a ternary on `Platform.OS` isn't read in styles yet. */
+const selectChoice = (node: ts.Expression) => {
+  const call = unwrapped(node);
+  return ts.isCallExpression(call) && dottedName(call.expression) === "Platform.select"
+    ? platformChoice(call)
+    : undefined;
+};
+
+/** Every branch object of `Platform.select({ ios: { … }, android: { … } })`. */
+export function platformBranches(node: ts.Expression): ts.ObjectLiteralExpression[] {
+  return (selectChoice(node)?.all ?? []).flatMap((b) => {
+    const value = unwrapped(b);
+    return ts.isObjectLiteralExpression(value) ? [value] : [];
+  });
+}
+
+/** The branch object of `Platform.select({ … })` that iOS takes. */
+export function platformBranch(node: ts.Expression): ts.ObjectLiteralExpression | undefined {
+  const choice = selectChoice(node);
+  const value = choice && unwrapped(choice.ios);
+  return value && ts.isObjectLiteralExpression(value) ? value : undefined;
 }
 
 /** Whether a name is a local one where it's read, a parameter or a variable of an enclosing function or block, rather

@@ -1,4 +1,5 @@
 import { type NamedColor, palette } from "../scan/palette.js";
+import { appFirst } from "../scan/targets.js";
 import { numbersByFrequency } from "../scan/tokens.js";
 import { typeScale } from "../scan/type-scale.js";
 import type { DesignTokens } from "../scan/types.js";
@@ -12,9 +13,11 @@ const SPACING = /(?:\.padding\((?:\.\w+\s*,\s*|\[[^\]]*\]\s*,\s*)?|spacing:\s*)(
 const RADIUS = /cornerRadius(?::\s*|\(\s*)(\d+(?:\.\d+)?)/g;
 
 /** A SwiftUI app's colours (asset catalog and code), type scale and font families, and common spacing and radii. */
-export async function swiftuiTokens(ctx: ScanContext, sources: SwiftSource[]): Promise<DesignTokens> {
+export async function swiftuiTokens(ctx: ScanContext, all: SwiftSource[]): Promise<DesignTokens> {
+  // Where a colour or font is declared twice, the app's own copy comes first, over a widget's or a watch app's.
+  const sources = appFirst(all, (s) => s.rel);
   const assets: NamedColor[] = [];
-  for (const f of ctx.files.filter((f) => isColorset(f.rel))) {
+  for (const f of appFirst(ctx.files, (f) => f.rel).filter((f) => isColorset(f.rel))) {
     const color = parseColorset(f.rel, await ctx.read(f));
     if (color) assets.push(color);
   }

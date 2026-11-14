@@ -192,10 +192,24 @@ describe("tokens.json for syncing", () => {
     const tokens = toDesignTokens(await shop());
     const color = tokens.color as Record<string, { $extensions: unknown }>;
     expect(color.brand?.$extensions).toEqual({
-      designmap: { reference: "Theme.brand", source: "Shop/Theme.swift", line: 3, uses: 3 },
+      designmap: {
+        reference: "Theme.brand",
+        source: "Shop/Theme.swift",
+        line: 3,
+        uses: 3,
+        locations: { light: expect.objectContaining({ file: "Shop/Theme.swift", line: 3 }) },
+      },
     });
     expect((tokens.typography as Record<string, { $extensions: unknown }>).heading?.$extensions).toEqual({
-      designmap: { name: "heading", reference: "Font.heading", uses: 1 },
+      designmap: {
+        name: "heading",
+        reference: "Font.heading",
+        uses: 1,
+        locations: {
+          fontSize: expect.objectContaining({ file: "Shop/Theme.swift", line: 6 }),
+          fontWeight: expect.objectContaining({ file: "Shop/Theme.swift", line: 6 }),
+        },
+      },
     });
   });
 

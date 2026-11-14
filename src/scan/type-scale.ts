@@ -5,7 +5,7 @@
  */
 
 import { byText, mostCommon } from "./counting.js";
-import type { DesignTokens, TypeStyle } from "./types.js";
+import type { DesignTokens, TypeLocations, TypeStyle } from "./types.js";
 
 /** One place the code sets a font. `style` names a platform text style (`headline`) or an app's own helper. */
 export interface TypeUse {
@@ -19,6 +19,8 @@ export interface TypeUse {
   /** Where the code sets it, when known: the file, and the 1-based line. */
   file?: string;
   line?: number;
+  /** Where its values are written, for one of the app's helpers. */
+  locations?: TypeLocations;
 }
 
 /** A weight the code works out as it runs (`weight: isOn ? .bold : .regular`). */
@@ -48,8 +50,9 @@ export function typeScale({ uses, helperFonts }: TypeFindings): TypeScale {
     };
     const key = [style.kind, style.name, style.family, style.size, style.weight, style.reference].join("|");
     const found = merged.get(key);
+    // Every use of one helper has its places, so the first use's are the style's.
     if (found) found.uses++;
-    else merged.set(key, { ...style, uses: 1 });
+    else merged.set(key, { ...style, uses: 1, ...(use.locations ? { locations: use.locations } : {}) });
   }
   const ranked = [...merged.values()].sort((a, b) => b.uses - a.uses || a.name.localeCompare(b.name));
   // Custom families by use, then those written only inside the app's helpers.

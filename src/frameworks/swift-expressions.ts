@@ -31,20 +31,26 @@ export function argumentsAt(file: SwiftTokens, offset: number): Argument[] | und
   return new Reader(file, index, file.tokens.length).argumentList(index);
 }
 
+/** One link of a member chain, `.weight(.bold)`, and where it's written, from its `.`. */
+export interface ChainLink {
+  name: string;
+  args?: Argument[];
+  start: number;
+  end: number;
+}
+
 /** A member chain from its root: `Font.system(size: 17).weight(.bold)` is `Font`, then `system(…)`, then
  * `weight(…)`; `.title.bold()` has no root. */
-export function chain(expression: Expression): {
-  root?: Expression;
-  links: { name: string; args?: Argument[] }[];
-} {
-  const links: { name: string; args?: Argument[] }[] = [];
+export function chain(expression: Expression): { root?: Expression; links: ChainLink[] } {
+  const links: ChainLink[] = [];
   let at: Expression | undefined = expression;
   while (at) {
     if (at.kind === "call" && at.callee.kind === "member") {
-      links.unshift({ name: at.callee.name, args: at.args });
-      at = at.callee.base;
+      const base: Expression | undefined = at.callee.base;
+      links.unshift({ name: at.callee.name, args: at.args, start: at.callee.dot, end: at.end });
+      at = base;
     } else if (at.kind === "member") {
-      links.unshift({ name: at.name });
+      links.unshift({ name: at.name, start: at.dot, end: at.end });
       at = at.base;
     } else return { root: at, links };
   }

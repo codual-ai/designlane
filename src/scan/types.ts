@@ -60,6 +60,50 @@ export interface ScreenLink {
   via?: string;
 }
 
+/** A stretch of a file: its 1-based line, and its characters as offsets into the file's text in UTF-16 code units,
+ * a byte order mark counted (`start` inclusive, `end` exclusive). */
+export interface CodeSpan {
+  /** Relative to the project root, with forward slashes. */
+  file: string;
+  line: number;
+  start: number;
+  end: number;
+}
+
+/**
+ * What a value's span holds, so a tool changing the value knows what to write in its place. Each span is exactly
+ * what is replaced: never a string's quotes, and nothing beside the value.
+ * - `literal`: a literal's own text, without its quotes: `#3366CC`, `Inter`, `17`; in resource XML and CSS, the value
+ *   as written (`14sp`).
+ * - `expression`: the whole expression making the value: `Color(0xFF6650A4)`, `.white`, `.semibold`, `22.sp`.
+ * - `family-name`: a font's name, which holds its weight too (`Inter-SemiBold`, `sans-serif-medium`), so changing the
+ *   family or the weight rewrites the name.
+ * - `identifier`: the name of a font family declared elsewhere (`Inter`, `@font/inter`), not the family's own name.
+ * - `components`: an asset catalog colour's whole `components` object.
+ */
+export const VALUE_KINDS = ["literal", "expression", "family-name", "identifier", "components"] as const;
+export type ValueKind = (typeof VALUE_KINDS)[number];
+
+/** Where a value is written, and, when the token names another value instead (`link: colors.blue0`), `via`, each
+ * name on the way to it, the token's own first. A value reached through a name may be another token's too. */
+export interface ValueLocation extends CodeSpan {
+  kind: ValueKind;
+  via?: CodeSpan[];
+}
+
+/** Where a colour's values are written: `light` is the one it shows by default, `dark` one written for dark mode. */
+export interface ColorLocations {
+  light?: ValueLocation;
+  dark?: ValueLocation;
+}
+
+/** Where a text style's family, size and weight are written. */
+export interface TypeLocations {
+  fontFamily?: ValueLocation;
+  fontSize?: ValueLocation;
+  fontWeight?: ValueLocation;
+}
+
 export interface ColorToken {
   /** The app's name for it, or its hex value when the code never names it. */
   name: string;
@@ -76,6 +120,9 @@ export interface ColorToken {
   kind: "asset" | "code" | "inline";
   /** How many places in the code use it, not counting its definition; pasted copies of its value count. */
   uses: number;
+  /** Where its values are written, for a value written as it is or reached through names; missing for one worked
+   * out from another (`Brand.copy(alpha = 0.5f)`). */
+  locations?: ColorLocations;
 }
 
 /** A platform colour the app uses (`.red`, `.systemBackground`), which adapts to the platform's own palette. */
@@ -97,6 +144,8 @@ export interface TypeStyle {
   /** The app's own helper the code calls for it (`Font.brandTitle`); missing for a font written in place. */
   reference?: string;
   uses: number;
+  /** Where a named style's values are written, each one the style sets in one place. */
+  locations?: TypeLocations;
 }
 
 /** One of the app's themes beside its default one (`Desert` beside `Ocean`): the same colours, each with its own

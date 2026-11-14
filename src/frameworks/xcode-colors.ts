@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { NamedColor } from "../scan/palette.js";
 import { rgbToHex } from "../scan/tokens.js";
+import type { ValueLocation } from "../scan/types.js";
+import { locator } from "./source-text.js";
+import { valueAt } from "./value-locations.js";
 
 const COLORSET = /([^/]+)\.colorset\/Contents\.json$/;
 
@@ -56,27 +59,78 @@ export function parseColorset(rel: string, text: string | undefined): NamedColor
   if (!parsed.success) return undefined;
   // Xcode's "Any, Light, Dark" appearances give a colour for any appearance plus explicit light and dark ones. The
   // app shows the explicit one for its mode, and the "any" one where there's none. Each takes its first readable entry.
-  let anyAppearance: string | undefined;
-  let explicitLight: string | undefined;
-  let dark: string | undefined;
-  for (const entry of parsed.data.colors ?? []) {
+  const entries = (parsed.data.colors ?? []).filter((entry) => entry.color?.components);
+  // Each entry's components are where its value is written, when every one of them was found in the text.
+  const found = componentSpans(text);
+  const spans = found.length === entries.length ? found : [];
+  const span = locator(rel, text);
+  const written = new Map<"any" | "light" | "dark", { hex: string; location?: ValueLocation }>();
+  for (const [i, entry] of entries.entries()) {
     const components = entry.color?.components;
+    if (!components) continue;
+    const at = spans[i];
     const appearances = entry.appearances ?? [];
-    if (!components || appearances.some((a) => a.value !== "dark" && a.value !== "light")) continue;
+    if (appearances.some((a) => a.value !== "dark" && a.value !== "light")) continue;
     const luminosity = appearances.find((a) => a.appearance === "luminosity")?.value;
-    if (luminosity === "dark") dark ??= componentsToHex(components);
-    else if (luminosity === "light") explicitLight ??= componentsToHex(components);
-    else anyAppearance ??= componentsToHex(components);
+    const mode = luminosity === "dark" || luminosity === "light" ? luminosity : "any";
+    const hex = written.has(mode) ? undefined : componentsToHex(components);
+    if (hex) written.set(mode, { hex, ...(at ? { location: valueAt(span(...at), "components") } : {}) });
   }
-  const light = explicitLight ?? anyAppearance;
+  const light = written.get("light") ?? written.get("any");
   if (!light) return undefined;
-  const darkMode = dark ?? anyAppearance;
+  const dark = written.get("dark") ?? written.get("any");
+  const locations = {
+    ...(light.location && { light: light.location }),
+    ...(dark !== light && dark?.location && { dark: dark.location }),
+  };
   return {
     name,
-    light,
-    ...(darkMode && darkMode !== light ? { dark: darkMode } : {}),
+    light: light.hex,
+    ...(dark && dark.hex !== light.hex ? { dark: dark.hex } : {}),
     source: rel,
     reference: `Color("${name}")`,
     kind: "asset",
+    ...(locations.light || locations.dark ? { locations } : {}),
   };
+}
+
+/** The spans of every `"components"` object in a colour set, in the order they're written, each from its `{` to just
+ * after its `}`; none when a string or brace never closes. */
+function componentSpans(text: string): [number, number][] {
+  const spans: [number, number][] = [];
+  let open = -1;
+  let depth = 0;
+  let openDepth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      const close = stringEnd(text, i);
+      if (close === -1) return [];
+      if (open === -1 && text.slice(i, close + 1) === '"components"') open = COMPONENTS_PENDING;
+      i = close;
+    } else if (c === "{") {
+      depth++;
+      if (open === COMPONENTS_PENDING) [open, openDepth] = [i, depth];
+    } else if (c === "}") {
+      if (open >= 0 && depth === openDepth) {
+        spans.push([open, i + 1]);
+        open = -1;
+      }
+      depth--;
+    } else if (open === COMPONENTS_PENDING && c !== ":" && !SPACE.test(c ?? "")) open = -1;
+  }
+  return open === -1 ? spans : [];
+}
+
+/** `open` once a `"components"` key is read and before its object starts. */
+const COMPONENTS_PENDING = -2;
+const SPACE = /\s/;
+
+/** The index of the quote closing the JSON string opened at `start`, or -1 when it never closes. */
+function stringEnd(text: string, start: number): number {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === '"') return i;
+  }
+  return -1;
 }

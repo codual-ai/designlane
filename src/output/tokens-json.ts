@@ -14,9 +14,17 @@ import {
   type FrameworkScan,
   type Platform,
   type ScanResult,
+  type TypeLocations,
   type TypeStyle,
 } from "../scan/types.js";
-import { isNamedStyle, keyedColors, keyedStyles, keyedThemes, tokenKey } from "./token-names.js";
+import {
+  isNamedStyle,
+  keyedColors,
+  keyedStyles,
+  keyedThemes,
+  type TypeValues,
+  tokenKey,
+} from "./token-names.js";
 import type { ColorTokenEntry, ColorValue, DesignTokensFile } from "./tokens-schema.js";
 
 /** A group of the file, as the schema types it. */
@@ -52,6 +60,7 @@ function colorEntry(color: ColorToken): z.input<typeof ColorTokenEntry> {
         ...(color.line ? { line: color.line } : {}),
         uses: color.uses,
         ...(color.dark ? { modes: { dark: colorValue(color.dark) } } : {}),
+        ...(color.locations?.light || color.locations?.dark ? { locations: color.locations } : {}),
       },
     },
   };
@@ -87,6 +96,7 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
   for (const { style, key, values } of keyedStyles(all, platform)) {
     const { fontFamily, fontSize, fontWeight } = values;
     if (!isNamedStyle(style) || (!fontFamily && fontSize === undefined && fontWeight === undefined)) continue;
+    const locations = locationsOf(style, values);
     group[key] = {
       $description: `${style.name}, ${uses(style.uses)}`,
       $extensions: {
@@ -94,6 +104,7 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
           name: style.name,
           ...(style.reference ? { reference: style.reference } : {}),
           uses: style.uses,
+          ...(locations ? { locations } : {}),
         },
       },
       ...(fontFamily ? { fontFamily: { $type: "fontFamily", $value: fontFamily } } : {}),
@@ -102,6 +113,12 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
     };
   }
   return group;
+}
+
+/** Where the values a text style's group holds are written: none for a value the group leaves out. */
+function locationsOf(style: TypeStyle, values: TypeValues): TypeLocations | undefined {
+  const held = Object.entries(style.locations ?? {}).filter(([key]) => key in values);
+  return held.length > 0 ? Object.fromEntries(held) : undefined;
 }
 
 /**

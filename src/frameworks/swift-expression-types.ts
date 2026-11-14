@@ -8,10 +8,11 @@ interface Span {
 export type Expression = Span &
   (
     | { kind: "name"; name: string }
-    | { kind: "number"; value: number }
-    | { kind: "string"; value: string; interpolated: boolean }
-    /** `base.name`, or `.name` with no base: an implicit member like `.headline`. */
-    | { kind: "member"; base?: Expression; name: string }
+    /** `token` is where the literal itself is written; the span grows to take in parentheses, `(17)`. */
+    | { kind: "number"; value: number; token: Span }
+    | { kind: "string"; value: string; interpolated: boolean; token: Span }
+    /** `base.name`, or `.name` with no base: an implicit member like `.headline`. `dot` is where its `.` is. */
+    | { kind: "member"; base?: Expression; name: string; dot: number }
     | { kind: "call"; callee: Expression; args: Argument[] }
     | { kind: "subscript"; base: Expression; args: Argument[] }
     | { kind: "ternary"; condition: Expression; then: Expression; otherwise: Expression }

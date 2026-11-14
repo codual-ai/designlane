@@ -60,7 +60,11 @@ Real output, run on a small SwiftUI shop app:
 ![designmap run on a SwiftUI app: it finds 5 colours and 2 text styles and writes tokens.json and DESIGN.md](.github/assets/cli.gif)
 
 Each colour in `tokens.json` records how the code refers to it and where it's declared, so the plugin can show it
-and find it again after any rename:
+and find it again after any rename, and exactly where each of its values is written: the file, line and characters
+of its light and dark values (offsets in UTF-16 code units, each span exactly the text to replace, never a string's
+quotes), what the span holds (`kind`: a `literal`, an `expression`, a `family-name` holding the weight too, a family's
+`identifier`, or an asset's `components`), and each name on the way when the code reaches the value through another
+(`via`). Each text style records the same for its family, size and weight:
 
 ```json
 "Brand": {
@@ -70,7 +74,11 @@ and find it again after any rename:
     "designmap": {
       "reference": "Color(\"Brand\")",
       "source": "Shop/Assets.xcassets/Brand.colorset/Contents.json",
-      "modes": { "dark": { "colorSpace": "srgb", "components": [1, 0.333, 0.4], "hex": "#ff5566" } }
+      "modes": { "dark": { "colorSpace": "srgb", "components": [1, 0.333, 0.4], "hex": "#ff5566" } },
+      "locations": {
+        "light": { "file": "Shop/Assets.xcassets/Brand.colorset/Contents.json", "line": 6, "start": 92, "end": 160, "kind": "components" },
+        "dark": { "file": "Shop/Assets.xcassets/Brand.colorset/Contents.json", "line": 14, "start": 352, "end": 420, "kind": "components" }
+      }
     }
   }
 }

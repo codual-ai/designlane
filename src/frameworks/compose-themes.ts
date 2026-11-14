@@ -101,16 +101,21 @@ function paletteColors(
     return arg && palette ? colorValue(palette.source, arg.at, arg.at + arg.value.length, known) : undefined;
   };
   return fields.flatMap((field) => {
-    const hex = colorIn(light, field);
-    if (!hex) return [];
+    const day = colorIn(light, field);
+    if (!day) return [];
     const night = colorIn(dark, field);
+    const locations = {
+      ...(day.location && { light: day.location }),
+      ...(night?.location && { dark: night.location }),
+    };
     const color: NamedColor = {
       name: field,
-      light: hex,
-      ...(night && night !== hex && { dark: night }),
+      light: day.hex,
+      ...(night && night.hex !== day.hex && { dark: night.hex }),
       source: light.source.rel,
       reference: `${access}.${field}`,
       kind: "code",
+      ...((locations.light || locations.dark) && { locations }),
     };
     return [{ color, source: light.source }];
   });

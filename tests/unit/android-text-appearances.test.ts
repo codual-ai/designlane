@@ -33,6 +33,7 @@ describe("Android text appearances", () => {
       weight: "bold",
       reference: "R.style.TextAppearance_App_Title",
       uses: 0,
+      locations: expect.any(Object),
     });
   });
 

@@ -3,20 +3,21 @@
 
 import ts from "typescript";
 import { COMPUTED } from "../scan/type-scale.js";
-import type { TypeStyle } from "../scan/types.js";
+import type { TypeStyle, ValueLocation } from "../scan/types.js";
 import {
   accessPath,
   defaultExport,
   eachNode,
   fileName,
   type JsSource,
+  literalSpan,
   objectIn,
   propertyName,
   renderPath,
   shadowed,
   unwrapped,
 } from "./js-sources.js";
-import { literalOf } from "./rn-values.js";
+import { literalNode, literalOf } from "./rn-values.js";
 
 /** `fontSizeLarge`, `headerFontSize`, `FONT_SIZE_SMALL`; not a style's own `fontSize`. */
 const SIZE_NAME = /font_?size./i;
@@ -29,6 +30,7 @@ const NOT_SIZE = /height|ratio|scale|multiplier|width|spacing/i;
 interface Found {
   path: string[];
   size: number;
+  location?: ValueLocation;
 }
 
 export function namedFontSizes(sources: JsSource[]): TypeStyle[] {
@@ -51,7 +53,7 @@ export function namedFontSizes(sources: JsSource[]): TypeStyle[] {
       }
       return true;
     });
-  return [...sizes].map(([key, { path, size }]) => ({
+  return [...sizes].map(([key, { path, size, location }]) => ({
     name: path.at(-1) ?? "",
     kind: "app",
     family: "",
@@ -59,6 +61,7 @@ export function namedFontSizes(sources: JsSource[]): TypeStyle[] {
     weight: COMPUTED,
     reference: renderPath(path),
     uses: uses.get(key) ?? 0,
+    ...(location && { locations: { fontSize: location } }),
   }));
 }
 
@@ -102,8 +105,10 @@ function sizesIn(source: JsSource): Found[] {
     const object = objectIn(value);
     if (object) objects.push({ object, path });
     else if (isSize(path)) {
-      const size = literalOf(unwrapped(value));
-      if (typeof size === "number" && size > 0) found.push({ path, size });
+      const written = unwrapped(value);
+      const size = literalOf(written);
+      const location = literalSpan(source, literalNode(written));
+      if (typeof size === "number" && size > 0) found.push({ path, size, ...(location && { location }) });
     }
   };
   for (const statement of source.file.statements) {

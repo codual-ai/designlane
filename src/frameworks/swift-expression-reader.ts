@@ -113,17 +113,18 @@ export class Reader extends TokenCursor {
     if (token.kind === "name" && (token.text === "if" || token.text === "switch")) return this.branching(at);
     this.advance();
     if (token.kind === "name") return { kind: "name", name: token.text, start: token.start, end: token.end };
+    const literal = { start: token.start, end: token.end };
     if (token.kind === "number") {
       const value = Number(token.text.replace(/_/g, ""));
       // A hexadecimal float (`0x1p3`) isn't read; it stays whole rather than becoming a wrong number.
       if (!Number.isFinite(value)) return this.opaqueBetweenTokens(at, this.at);
-      return { kind: "number", value, start: token.start, end: token.end };
+      return { kind: "number", value, token: literal, ...literal };
     }
     if (token.kind === "string")
-      return { kind: "string", ...stringValue(token.text), start: token.start, end: token.end };
+      return { kind: "string", ...stringValue(token.text), token: literal, ...literal };
     if (token.text === "." && this.peek()?.kind === "name") {
       const name = this.take();
-      return { kind: "member", name: name.text, start: token.start, end: name.end };
+      return { kind: "member", name: name.text, dot: token.start, start: token.start, end: name.end };
     }
     if (token.text === "#" && this.peek()?.kind === "name" && !this.peek()?.spaceBefore) {
       // `#if` and the like start a directive, not an expression.
@@ -185,7 +186,7 @@ export class Reader extends TokenCursor {
       ) {
         this.advance();
         const name = this.take();
-        e = { kind: "member", base: e, name: name.text, start: e.start, end: name.end };
+        e = { kind: "member", base: e, name: name.text, dot: token.start, start: e.start, end: name.end };
         closures = false;
       } else if (token.text === "(" && sameLine && !token.spaceBefore) {
         const open = this.at;

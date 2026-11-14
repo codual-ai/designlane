@@ -4,6 +4,9 @@
  * comments and strings end.
  */
 
+import { firstAtOrAfter } from "../scan/sorted.js";
+import type { CodeSpan } from "../scan/types.js";
+
 /** `code` with each `[start, end)` of `ranges` replaced by spaces, keeping newlines and offsets. */
 export function blankRanges(code: string, ranges: Iterable<readonly [number, number]>): string {
   const out = code.split("");
@@ -33,6 +36,14 @@ export function blankCommentsAndStrings(text: string, endOf: CommentOrStringEnd)
     i = end;
   }
   return out.join("");
+}
+
+/** Turns offsets of `text`, the text of `file`, into spans of it, finding each line by binary search over the line
+ * starts, which are found once. */
+export function locator(file: string, text: string): (start: number, end: number) => CodeSpan {
+  const lineStarts = [0];
+  for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
+  return (start, end) => ({ file, line: firstAtOrAfter(lineStarts, start + 1), start, end });
 }
 
 /** 1-based line numbers of ascending offsets, in one pass over the text. */

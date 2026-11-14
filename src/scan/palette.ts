@@ -5,7 +5,7 @@
  */
 
 import { byText, mostCommon } from "./counting.js";
-import type { ColorToken, DesignTokens } from "./types.js";
+import type { ColorLocations, ColorToken, DesignTokens } from "./types.js";
 
 /** A colour the app gives a name: an asset catalog entry or a constant in code. */
 export interface NamedColor {
@@ -19,6 +19,7 @@ export interface NamedColor {
   /** The line it's declared on, for a colour declared in code. */
   line?: number;
   kind: "asset" | "code";
+  locations?: ColorLocations;
 }
 
 export interface ColorFindings {

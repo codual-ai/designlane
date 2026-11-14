@@ -114,6 +114,7 @@ describe("named colours and references", () => {
         line: 2,
         kind: "code",
         uses: 3,
+        locations: { light: expect.objectContaining({ line: 2 }) },
       },
     ]);
   });
@@ -478,8 +479,8 @@ describe("selectable themes", () => {
     const { colors, themes } = await tokens("", {
       "App/ColorSet.swift": [
         ...colorSet,
-        set("IceCubeDark", "dark", rgb, ".init(hex: 0x101523)", ".white"),
-        set("IceCubeLight", "light", rgb, "Color.white", ".black"),
+        set("OceanDark", "dark", rgb, ".init(hex: 0x101523)", ".white"),
+        set("OceanLight", "light", rgb, "Color.white", ".black"),
         set("DesertDark", "dark", ".init(hex: 0xDF915E)", ".init(hex: 0x433744)", ".white"),
         set("DesertLight", "light", ".init(hex: 0xDF915E)", ".init(hex: 0xFCF2EB)", ".clear"),
       ].join("\n"),
