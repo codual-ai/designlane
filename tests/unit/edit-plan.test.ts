@@ -32,8 +32,69 @@ describe("a colour reached through a name", () => {
     });
     const planned = await plan(PALETTE, tokens, { token: "link", property: "light", value: "#de2413" });
     expect(edited(PALETTE, planned)).toContain("light: { link: '#DE2413', surface: colors.blue0 }");
-    const palette = await plan(PALETTE, tokens, { token: "blue0", property: "light", value: "#de2413" });
-    expect(edited(PALETTE, palette)).toContain("blue0: '#DE2413'");
+  });
+
+  it("refuses a palette colour other tokens take their value from, naming them", async () => {
+    const tokens = tokensFile(PALETTE, {
+      colors: [
+        { key: "link", light: "#bfe1ff", at: { light: linkAt(0) } },
+        { key: "surface", light: "#bfe1ff", at: { light: linkAt(1) } },
+        {
+          key: "blue0",
+          light: "#bfe1ff",
+          at: { light: { file: "src/colors.ts", text: "#BFE1FF", kind: "literal" } },
+        },
+      ],
+    });
+    expect(
+      outcome(await plan(PALETTE, tokens, { token: "blue0", property: "light", value: "#de2413" })),
+    ).toBe(
+      "refused: Changing blue0's colour (src/colors.ts:1) would also change link's colour and surface's colour. Give each its own value in the code first, or change it there by hand.",
+    );
+  });
+
+  it("refuses a literal in place of a name in another file, or one taking its type from where it's written", async () => {
+    const compose: Files = {
+      "Color.kt": "val Purple40 = Color(0xFF6650A4)",
+      "Theme.kt": "val Light = lightColorScheme(primary = Purple40)",
+    };
+    const primary = {
+      file: "Color.kt",
+      text: "Color(0xFF6650A4)",
+      kind: "expression" as const,
+      via: [{ file: "Theme.kt", text: "Purple40" }],
+    };
+    const composeTokens = tokensFile(compose, {
+      colors: [
+        { key: "primary", light: "#6650a4", at: { light: primary } },
+        {
+          key: "Purple40",
+          light: "#6650a4",
+          at: { light: { file: "Color.kt", text: "Color(0xFF6650A4)", kind: "expression" } },
+        },
+      ],
+    });
+    expect(
+      outcome(await plan(compose, composeTokens, { token: "primary", property: "light", value: "#de2413" })),
+    ).toBe(
+      "refused: primary takes its colour from Purple40 (Theme.kt:1), whose value can't be copied there safely. Change Purple40, or give primary its own value in the code.",
+    );
+    const swift: Files = {
+      "Theme.swift":
+        "enum P { static let brand: Color = .init(hex: 0x3366CC) }\nenum T { static let link = P.brand }",
+    };
+    const link = {
+      file: "Theme.swift",
+      text: ".init(hex: 0x3366CC)",
+      kind: "expression" as const,
+      via: [{ file: "Theme.swift", text: "P.brand" }],
+    };
+    const swiftTokens = tokensFile(swift, {
+      colors: [{ key: "link", light: "#3366cc", at: { light: link } }],
+    });
+    expect(
+      outcome(await plan(swift, swiftTokens, { token: "link", property: "light", value: "#de2413" })),
+    ).toMatch(/^refused: link takes its colour from `P.brand` \(Theme.swift:2\)/);
   });
 
   it("takes a Compose colour in place of the constant a scheme names, and an Android link's", async () => {
@@ -76,7 +137,7 @@ describe("a colour reached through a name", () => {
     expect(edited(files, accent)).toContain('<color name="accent">#DE2413</color>');
   });
 
-  it("refuses a name in another language from its value", async () => {
+  it("refuses a name in another file and language from its value", async () => {
     const files: Files = {
       "res/values/colors.xml": '<color name="accent">#3366CC</color>',
       "Theme.kt": "val Light = lightColorScheme(tertiary = colorResource(R.color.accent))",
@@ -86,7 +147,7 @@ describe("a colour reached through a name", () => {
     const tokens = tokensFile(files, { colors: [{ key: "tertiary", light: "#3366cc", at: { light: at } }] });
     expect(
       outcome(await plan(files, tokens, { token: "tertiary", property: "light", value: "#de2413" })),
-    ).toMatch(/refused: .*another language/);
+    ).toMatch(/refused: tertiary takes its colour from `R.color.accent`/);
   });
 
   it("refuses a text style's value that comes from a style it builds on", async () => {
@@ -117,7 +178,7 @@ describe("refusing what can't be rewritten safely", () => {
       ],
     });
     expect(outcome(await plan(files, tokens, { token: "muted", property: "light", value: "#de2413" }))).toBe(
-      "refused: muted's colour is written where black-muted's colour is (theme.ts:1), so changing it changes both. Give it its own value in the code first, or change it there by hand.",
+      "refused: Changing muted's colour (theme.ts:1) would also change black-muted's colour. Give each its own value in the code first, or change it there by hand.",
     );
   });
 

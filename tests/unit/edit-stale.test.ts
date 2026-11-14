@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { planEdit } from "../../src/edit/plan.js";
 import {
   type Files,
   linkAt,
@@ -105,6 +106,37 @@ describe("refusing a value the code changed around", () => {
     expect(await size("const t = { fontSize: base + 17 };")).toMatch(/the code changed/);
     expect(await size("const t = { fontSize: 17 // body\n};")).toBe("24");
     expect(await size("const t = { fontSize: /* body */ 17 };")).toBe("24");
+  });
+
+  it("refuses a quoted value the code works out, or calls something on", async () => {
+    const literal = { text: "#112233", kind: "literal" as const };
+    const ink = (code: string) => recolored("colors.ts", code, literal, "#112233", "#de2413");
+    expect(await ink("const a = '#112233' + '80';")).toMatch(/the code changed/);
+    expect(await ink("const a = '80' + '#112233';")).toMatch(/the code changed/);
+    expect(await ink("const a = '#112233'.slice(0, 4);")).toMatch(/the code changed/);
+    expect(await ink("const a = '#112233' /* ink */\n  .slice(0, 4);")).toMatch(/the code changed/);
+    expect(await ink("const a = '#112233'; // ink")).toBe("#DE2413");
+  });
+
+  it("says when a file is too large to read, rather than gone", async () => {
+    const tokens = tokensFile(
+      { "colors.ts": "const a = '#3366CC';" },
+      {
+        colors: [
+          {
+            key: "Brand",
+            light: "#3366cc",
+            at: { light: { file: "colors.ts", text: "#3366CC", kind: "literal" } },
+          },
+        ],
+      },
+    );
+    const planned = await planEdit(tokens, async () => ({ unreadable: "it's over 512 KB" }), {
+      token: "Brand",
+      property: "light",
+      value: "#de2413",
+    });
+    expect(outcome(planned)).toBe("refused: Designmap can't read colors.ts: it's over 512 KB.");
   });
 
   it("refuses a size too large to write", async () => {

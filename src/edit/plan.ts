@@ -18,8 +18,9 @@ import {
 import { COLOR_EDITOR, FAMILY_EDITOR, SIZE_EDITOR, type ValueEditor, WEIGHT_EDITOR } from "./editors.js";
 import { languageOf, MAX_VALUE_LENGTH, QUOTES, type SpanText, spliced } from "./notation.js";
 
-/** A file's text by its path relative to the app's root, or undefined when there's no such file. */
-export type ReadSource = (file: string) => Promise<string | undefined>;
+/** A file's text by its path relative to the app's root: undefined when there's no such file, or why it can't be
+ * read (`it's over 512 KB`). */
+export type ReadSource = (file: string) => Promise<string | { unreadable: string } | undefined>;
 
 export interface TokenChange {
   /** The token's key in tokens.json, or how the code refers to it (`Theme.surface`). */
@@ -55,11 +56,7 @@ const LAST_PART = /([\w$-]+)["'\]]*$/;
 const WORD = /[\w$]/;
 const SPACE = /[ \t]/;
 const OPERATORS = new Set(["+", "-", "*", "/", "%"]);
-/** What follows a `/` that starts a comment. */
-const COMMENT_SECOND = new Set(["/", "*"]);
 
-/** The span where a token writes its own value: the first name on its way to the value, or the value itself. */
-const ownSpan = (location: ValueLocation): CodeSpan => location.via?.[0] ?? location;
 const refuse = (reason: string): EditPlan => ({ ok: false, reason });
 const at = (span: CodeSpan) => `${span.file}:${span.line}`;
 
@@ -84,12 +81,14 @@ export async function planEdit(
   }
   const kindRefusal = KIND_REFUSALS[value.location.kind];
   if (kindRefusal) return refuse(`${what} can't be changed on its own: ${kindRefusal}.`);
-  const target = await targetOf(value.location, isColor, read);
+  const all = [...colors, ...textStyles];
+  const owner = (span: CodeSpan) => ownerOf(all, span);
+  const target = await targetOf(value.location, { key: found.token.key, isColor, read, owner });
   if ("reason" in target) return refuse(target.reason);
-  const other = sharer([...colors, ...textStyles], value, target.span);
-  if (other) {
+  const others = sharers(all, value, target.span);
+  if (others.length > 0) {
     return refuse(
-      `${what} is written where ${other} is (${at(target.span)}), so changing it changes both. Give it its own value in the code first, or change it there by hand.`,
+      `Changing ${what} (${at(target.span)}) would also change ${list(others)}. Give each its own value in the code first, or change it there by hand.`,
     );
   }
   return rewrite(what, value, change.value, target);
@@ -112,39 +111,91 @@ interface Target {
   quote: string;
 }
 
+interface TargetContext {
+  /** The key of the token being changed. */
+  key: string;
+  isColor: boolean;
+  read: ReadSource;
+  /** The key of the token whose own value is written at a span, if any. */
+  owner: (span: CodeSpan) => string | undefined;
+}
+
 /** Where the edit goes. A colour reaching its value through a name (`link: colors.blue0`) gets its own value in place
  * of the name, so the colours sharing the name keep theirs; a text style's names are styles it builds on, which it
  * can't take a value in place of. */
 async function targetOf(
   location: ValueLocation,
-  isColor: boolean,
-  read: ReadSource,
+  { key, isColor, read, owner }: TargetContext,
 ): Promise<Target | { reason: string }> {
-  const fileText = await read(location.file);
+  const file = await sourceOf(read, location.file);
   const language = languageOf(location.file);
-  if (fileText === undefined) return { reason: `${location.file} isn't in the app any more.` };
+  if ("reason" in file) return file;
   if (!language) return { reason: `Designmap doesn't edit ${location.file}'s kind of file.` };
+  const fileText = file.source;
   const text = spanText(fileText, location);
   if ("reason" in text) return text;
-  // A value with a call after it (`.opacity(0.5)`) is no longer the value tokens.json has.
-  if (fileText[location.end] === ".") return { reason: changedSince(location, text) };
+  // A value with a call after it (`.opacity(0.5)`, `'#112233'.slice(0, 4)`) is no longer the value tokens.json has.
+  if (fileText[nextCode(fileText, quotedSpan(fileText, location).end)] === ".") {
+    return { reason: changedSince(location, text) };
+  }
   const value = { text: text.text, kind: location.kind, language, fileText, span: location };
   const own = location.via?.[0];
   if (!own) return { value, span: location, before: text.text, quote: "" };
-  const ownText = await read(own.file);
-  const name = ownText === undefined ? undefined : spanText(ownText, own);
-  if (!name || "reason" in name || !NAME.test(name.text)) return { reason: changedSince(own, name) };
+  const ownFile = await sourceOf(read, own.file);
+  if ("reason" in ownFile) return ownFile;
+  const name = spanText(ownFile.source, own);
+  if ("reason" in name || !NAME.test(name.text)) return { reason: changedSince(own, name) };
   if (!isColor) {
     return { reason: `it comes from \`${name.text}\` (${at(own)}), which other styles may build on too.` };
   }
-  if (languageOf(own.file) !== language) {
-    return { reason: `it names \`${name.text}\` (${at(own)}), whose value is written in another language.` };
+  // A literal only compiles in place of a name in the file it's copied from (which has what it needs imported), and
+  // only when it doesn't take its type from where it's written (Swift's `.init(hex: …)`).
+  if (own.file !== location.file || text.text.startsWith(".")) {
+    const from = owner(location) ?? `\`${name.text}\``;
+    return {
+      reason: `${key} takes its colour from ${from} (${at(own)}), whose value can't be copied there safely. Change ${from}, or give ${key} its own value in the code.`,
+    };
   }
   const broken = await namesHold(location, read);
   if (broken) return { reason: changedSince(broken) };
   const opening = fileText[location.start - 1] ?? "";
   const quoted = location.kind === "literal" && QUOTES.has(opening) && fileText[location.end] === opening;
   return { value, span: own, before: name.text, quote: quoted ? opening : "" };
+}
+
+/** The text of `file`, or why there's none to edit. */
+async function sourceOf(read: ReadSource, file: string): Promise<{ source: string } | { reason: string }> {
+  const got = await read(file);
+  if (got === undefined) return { reason: `${file} isn't in the app any more.` };
+  if (typeof got !== "string") return { reason: `Designmap can't read ${file}: ${got.unreadable}.` };
+  return { source: got };
+}
+
+/** `span` with the quotes around it when it's a quoted literal's contents. */
+function quotedSpan(text: string, span: CodeSpan): { start: number; end: number } {
+  const opening = text[span.start - 1] ?? "";
+  return QUOTES.has(opening) && text[span.end] === opening
+    ? { start: span.start - 1, end: span.end + 1 }
+    : span;
+}
+
+/** The index of the first character at or after `from` that isn't white space or in a comment. */
+function nextCode(text: string, from: number): number {
+  let at = from;
+  while (at < text.length) {
+    if (/\s/.test(text[at] ?? "")) at++;
+    else if (text.startsWith("//", at)) at = lineEnd(text, at);
+    else if (text.startsWith("/*", at)) {
+      const close = text.indexOf("*/", at + 2);
+      at = close === -1 ? text.length : close + 2;
+    } else break;
+  }
+  return at;
+}
+
+function lineEnd(text: string, from: number): number {
+  const end = text.indexOf("\n", from);
+  return end === -1 ? text.length : end;
 }
 
 /** The text at `span`, when the file still has it where tokens.json says and it's still a whole name or value: one
@@ -158,16 +209,14 @@ function spanText(fileText: string, span: CodeSpan): { text: string } | { reason
   const text = fileText.slice(span.start, span.end);
   const runsOn = WORD.test(fileText[span.end] ?? "");
   const runsIn = !text.startsWith(".") && WORD.test(fileText[span.start - 1] ?? "");
-  const isComputed = isOperatorAfter(fileText, span.end) || isOperatorBefore(fileText, span.start);
+  const outer = quotedSpan(fileText, span);
+  const isComputed = isOperatorAfter(fileText, outer.end) || isOperatorBefore(fileText, outer.start);
   return runsOn || runsIn || isComputed ? { reason: changedSince(span, { text }) } : { text };
 }
 
-/** Whether an arithmetic operator follows `end`, past spaces; `//` and `/*` start a comment instead. */
+/** Whether an arithmetic operator follows `end`, past white space and comments. */
 function isOperatorAfter(text: string, end: number): boolean {
-  let at = end;
-  while (at < text.length && SPACE.test(text[at] ?? "")) at++;
-  const next = text[at] ?? "";
-  return OPERATORS.has(next) && !(next === "/" && COMMENT_SECOND.has(text[at + 1] ?? ""));
+  return OPERATORS.has(text[nextCode(text, end)] ?? "");
 }
 
 /** Whether an arithmetic operator comes before `start`, past spaces; the `/` ending a block comment isn't one. */
@@ -184,7 +233,7 @@ async function namesHold(location: ValueLocation, read: ReadSource): Promise<Cod
   const chain = [...(location.via ?? []), location];
   for (const [i, name] of chain.slice(0, -1).entries()) {
     const next = chain[i + 1];
-    const [nameText, nextText] = await Promise.all([read(name.file), next && read(next.file)]);
+    const [nameText, nextText] = (await Promise.all([read(name.file), next && read(next.file)])).map(textOf);
     const part = LAST_PART.exec(nameText?.slice(name.start, name.end) ?? "")?.[1];
     if (!next || nextText === undefined || !part) return name;
     const declaration = nextText.slice(nextText.lastIndexOf("\n", next.start - 1) + 1, next.start);
@@ -192,6 +241,9 @@ async function namesHold(location: ValueLocation, read: ReadSource): Promise<Cod
   }
   return undefined;
 }
+
+const textOf = (got: string | { unreadable: string } | undefined) =>
+  typeof got === "string" ? got : undefined;
 
 function hasWord(text: string, word: string): boolean {
   for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
@@ -205,18 +257,29 @@ function changedSince(span: CodeSpan, found?: { text: string } | { reason: strin
   return `${at(span)}${now}: the code changed since designmap last ran. Run designmap again.`;
 }
 
-/** Another token value written at `span` too, which an edit there would change as well. */
-function sharer(tokens: EditableToken[], value: TokenValue, span: CodeSpan): string | undefined {
-  for (const token of tokens) {
-    for (const other of token.values) {
-      if (other === value || !other.location) continue;
-      const own = ownSpan(other.location);
-      if (own.file === span.file && own.start < span.end && span.start < own.end) {
-        return `${token.key}'s ${PROPERTY_NAMES[other.property]}`;
-      }
-    }
-  }
-  return undefined;
+const overlaps = (a: CodeSpan, b: CodeSpan) => a.file === b.file && a.start < b.end && b.start < a.end;
+
+/** The key of the token whose own value is written at `span`, when there's one. */
+function ownerOf(tokens: EditableToken[], span: CodeSpan): string | undefined {
+  const owners = tokens.filter((token) =>
+    token.values.some((v) => v.location && !v.location.via?.length && overlaps(v.location, span)),
+  );
+  const [only] = owners;
+  return owners.length === 1 ? only?.key : undefined;
+}
+
+/** The other token values an edit at `span` would change too: those written there, and those whose names lead there. */
+function sharers(tokens: EditableToken[], value: TokenValue, span: CodeSpan): string[] {
+  return tokens.flatMap((token) =>
+    token.values
+      .filter((other) => other !== value && other.location)
+      .filter(({ location }) => [...(location?.via ?? []), location].some((s) => s && overlaps(s, span)))
+      .map((other) => `${token.key}'s ${PROPERTY_NAMES[other.property]}`),
+  );
+}
+
+function list(items: string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 function rewrite(what: string, value: TokenValue, input: string, target: Target): EditPlan {

@@ -24,8 +24,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
   length, `0xFF…` ARGB, `Color(red:green:blue:)` with the same decimals or `/ 255`, `rgb()`, asset catalog
   components, `22.sp`, `.semibold`, `FontWeight.SemiBold`, `"600"`), and prints the diff; `--dry-run` writes
   nothing. A colour reached through a name gets its own value in place of the name, so the name's other users keep
-  theirs. It refuses, with the reason, whatever it can't change safely: a value the code changed since the scan, a
-  named or computed colour, a font's name holding its weight, a value another token writes in the same place, or a
+  theirs, when that value is in the same file and stands on its own there. It refuses, with the reason, whatever it can't change safely: a value the code changed since the scan, a
+  named or computed colour, a font's name holding its weight, a change that would also change another token (written
+  in the same place or reaching it through names), a value that can't be copied in place of a name safely, or a
   text style's value from a style it builds on. `planEdit` and `applyEdit` are exported for other tools.
 
 ### Changed

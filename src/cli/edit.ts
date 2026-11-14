@@ -7,15 +7,15 @@ import { editDiff } from "../edit/diff.js";
 import { COLOR_PROPERTIES, type EditProperty, TYPE_PROPERTIES } from "../edit/edit-tokens.js";
 import { applyEdit, planEdit, type ReadSource } from "../edit/plan.js";
 import { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "../output/write.js";
-import { isFolder, readText } from "../scan/files.js";
+import { isFolder, isTooLarge, MAX_FILE_BYTES, readText } from "../scan/files.js";
 import { type Output, UsageError } from "./command.js";
 
 export const EDIT_USAGE = `  designmap edit <token> <property> <value> [--dir <app>] [--dry-run] [--tokens <file>]
                     Change a token in the code where tokens.json says its value is written, written the way the
                     code writes it, and print the diff. <token> is its key or how the code refers to it;
                     <property> is light, dark, family, size or weight; <value> is #rrggbb, a number or a name.
-                    --dry-run prints the diff and writes nothing; --tokens names the tokens file of an app in a
-                    repo with two`;
+                    --dry-run prints the diff and writes nothing; --tokens names the tokens file (relative to --dir) of
+                    an app in a repo with two`;
 
 const PROPERTIES: readonly EditProperty[] = [...COLOR_PROPERTIES, ...TYPE_PROPERTIES];
 const isProperty = (word: string): word is EditProperty => PROPERTIES.some((property) => property === word);
@@ -32,9 +32,14 @@ export async function edit(argv: string[], { out, error }: Output): Promise<numb
   }
   const root = path.resolve(values.dir ?? ".");
   if (!(await isFolder(root))) throw new UsageError(`not a folder: ${root}`, 1);
-  const tokens = await readTokens(values.tokens ? path.resolve(values.tokens) : await tokensFileIn(root));
+  const tokens = await readTokens(
+    values.tokens ? path.resolve(root, values.tokens) : await tokensFileIn(root),
+  );
   const read: ReadSource = async (file) => {
     const real = await realPathInside(root, file);
+    if (real && (await isTooLarge(real))) {
+      return { unreadable: `it's over ${MAX_FILE_BYTES / 1024} KB, more than it reads as source` };
+    }
     return real && readText(real);
   };
   const plan = await planEdit(tokens, read, { token, property, value }).catch((e: unknown) => {

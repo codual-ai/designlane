@@ -159,11 +159,14 @@ Name the token by its key in tokens.json or how the code refers to it, and the p
 `family`, `size` or `weight`. Without `--dry-run` it writes the file. The new value keeps the code's notation: hex
 case and length, Compose's `0xFF…`, Swift's `/ 255` or its decimals, `rgb()`, an asset catalog's components (with more decimals only when the code's can't hold the new value), `22.sp`,
 `.semibold` or `FontWeight.SemiBold`. A colour the code gives as another name (`link: colors.blue0`) gets its own value
-in place of that name, so everything else using `colors.blue0` keeps it.
+in place of that name, so everything else using `colors.blue0` keeps it, when the value is written in the same file and
+can stand on its own there.
 
 When it can't be sure, it changes nothing and says why: the code changed since designmap last ran (run it again), the
 colour is a named or computed one (`.white`, `Brand.copy(alpha = 0.5f)`), the weight is part of a font's name
-(`Inter-Bold`), another token is written in the same place, or a text style's value comes from a style it builds on.
+(`Inter-Bold`), the change would also change another token (one written in the same place, or one whose name leads
+there), a value can't be copied in place of a name safely (it's in another file, or Swift's `.init(…)`), or a text
+style's value comes from a style it builds on. `--tokens` is read relative to `--dir`.
 
 ## Supported
 

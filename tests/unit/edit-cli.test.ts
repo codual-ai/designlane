@@ -1,4 +1,4 @@
-import { readFile, symlink } from "node:fs/promises";
+import { readFile, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { run } from "../../src/cli/run.js";
@@ -100,6 +100,28 @@ describe("designmap edit", () => {
       "--dry-run",
     );
     expect(chosen.out).toBe(DIFF);
+    const relative = await designmap(
+      "edit",
+      "brand",
+      "light",
+      "#de2413",
+      "--dir",
+      two,
+      "--tokens",
+      "designmap/tokens.ios.json",
+      "--dry-run",
+    );
+    expect(relative.out).toBe(DIFF);
+  });
+
+  it("says when a file is too large to read", async () => {
+    const root = await app();
+    await writeFile(path.join(root, THEME), `${APP[THEME]}\n${"// padding\n".repeat(60_000)}`);
+    const { code, error } = await designmap("edit", "brand", "light", "#de2413", "--dir", root);
+    expect(code).toBe(1);
+    expect(error).toBe(
+      `designmap: Designmap can't read ${THEME}: it's over 512 KB, more than it reads as source.`,
+    );
   });
 
   it("never reads a file outside the app, through a symlink or a path", async () => {

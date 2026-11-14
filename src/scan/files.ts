@@ -16,7 +16,7 @@ const IGNORED_DIRS = new Set([
 
 const MAX_FILES = 20_000;
 /** Larger files are generated or data, not hand-written UI. */
-const MAX_FILE_BYTES = 512 * 1024;
+export const MAX_FILE_BYTES = 512 * 1024;
 
 export interface SourceFile {
   /** Relative to the project root, with forward slashes on every platform. */
@@ -82,10 +82,19 @@ export async function listFiles(root: string): Promise<FileList> {
 /** A file's text, or undefined when it's missing, unreadable or too large to be source. */
 export async function readText(abs: string): Promise<string | undefined> {
   try {
-    if ((await stat(abs)).size > MAX_FILE_BYTES) return undefined;
+    if (await isTooLarge(abs)) return undefined;
     return await readFile(abs, "utf8");
   } catch {
     return undefined;
+  }
+}
+
+/** Whether `abs` is a file too large for Designmap to read as source. */
+export async function isTooLarge(abs: string): Promise<boolean> {
+  try {
+    return (await stat(abs)).size > MAX_FILE_BYTES;
+  } catch {
+    return false;
   }
 }
 
