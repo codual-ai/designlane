@@ -1,6 +1,13 @@
+import { MAX_FILE_BYTES } from "../scan/file-limits.js";
+
 /** A file's text by its path relative to the app's root: undefined when there's no such file, or why it can't be
  * read (`it's over 512 KB`). */
 export type ReadSource = (file: string) => Promise<string | { unreadable: string } | undefined>;
+
+/** Why a file too large to be hand-written source isn't read. */
+export const TOO_LARGE = {
+  unreadable: `it's over ${MAX_FILE_BYTES / 1024} KB, more than it reads as source`,
+};
 
 /** The text of `file`, or why there's none to edit. */
 export async function sourceOf(

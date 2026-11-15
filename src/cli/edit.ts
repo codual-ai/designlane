@@ -4,11 +4,11 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { editDiff } from "../edit/diff.js";
-import { COLOR_PROPERTIES, type EditProperty, TYPE_PROPERTIES } from "../edit/edit-tokens.js";
+import { EDIT_PROPERTIES, type EditProperty } from "../edit/edit-tokens.js";
 import { applyEdit, planEdit } from "../edit/plan.js";
-import type { ReadSource } from "../edit/read-source.js";
-import { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "../output/write.js";
-import { isFolder, isTooLarge, MAX_FILE_BYTES, readText } from "../scan/files.js";
+import { type ReadSource, TOO_LARGE } from "../edit/read-source.js";
+import { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "../output/output-files.js";
+import { isFolder, isTooLarge, readText } from "../scan/files.js";
 import { type Output, UsageError } from "./command.js";
 
 export const EDIT_USAGE = `  designmap edit <token> <property> <value> [--dir <app>] [--dry-run] [--tokens <file>]
@@ -18,8 +18,8 @@ export const EDIT_USAGE = `  designmap edit <token> <property> <value> [--dir <a
                     --dry-run prints the diff and writes nothing; --tokens names the tokens file (relative to --dir) of
                     an app in a repo with two`;
 
-const PROPERTIES: readonly EditProperty[] = [...COLOR_PROPERTIES, ...TYPE_PROPERTIES];
-const isProperty = (word: string): word is EditProperty => PROPERTIES.some((property) => property === word);
+const isProperty = (word: string): word is EditProperty =>
+  EDIT_PROPERTIES.some((property) => property === word);
 
 /** Runs `designmap edit` with `argv` (the words after `edit`), and returns the exit code. */
 export async function edit(argv: string[], { out, error }: Output): Promise<number> {
@@ -29,7 +29,7 @@ export async function edit(argv: string[], { out, error }: Output): Promise<numb
     throw new UsageError(`expected a token, a property and a value\n\n${EDIT_USAGE}`, 2);
   }
   if (!isProperty(property)) {
-    throw new UsageError(`${property} isn't a property: use ${PROPERTIES.join(", ")}`, 2);
+    throw new UsageError(`${property} isn't a property: use ${EDIT_PROPERTIES.join(", ")}`, 2);
   }
   const root = path.resolve(values.dir ?? ".");
   if (!(await isFolder(root))) throw new UsageError(`not a folder: ${root}`, 1);
@@ -38,9 +38,7 @@ export async function edit(argv: string[], { out, error }: Output): Promise<numb
   );
   const read: ReadSource = async (file) => {
     const real = await realPathInside(root, file);
-    if (real && (await isTooLarge(real))) {
-      return { unreadable: `it's over ${MAX_FILE_BYTES / 1024} KB, more than it reads as source` };
-    }
+    if (real && (await isTooLarge(real))) return TOO_LARGE;
     return real && readText(real);
   };
   const plan = await planEdit(tokens, read, { token, property, value }).catch((e: unknown) => {

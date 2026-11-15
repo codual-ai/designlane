@@ -8,9 +8,10 @@ export {
 } from "./edit/plan.js";
 export type { ReadSource } from "./edit/read-source.js";
 export { toDesignMd } from "./output/design-md.js";
+export { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "./output/output-files.js";
 export { toDesignTokens } from "./output/tokens-json.js";
 export type { DesignTokensFile } from "./output/tokens-schema.js";
-export { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE, writeOutputs } from "./output/write.js";
+export { writeOutputs } from "./output/write.js";
 export { scanRepo } from "./scan/index.js";
 export type * from "./scan/types.js";
 export {

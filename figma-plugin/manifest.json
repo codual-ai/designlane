@@ -8,6 +8,6 @@
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": ["https://api.github.com"],
-    "reasoning": "Reads the app's tokens.json from its GitHub repo, with a read-only token the designer gives."
+    "reasoning": "Reads the app's tokens.json and code from its GitHub repo, and opens pull requests with design changes, with tokens the designer gives."
   }
 }

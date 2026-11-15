@@ -35,7 +35,7 @@ export async function dependents(
   token: EditableToken,
   read: ReadSource,
 ): Promise<string[]> {
-  const names = [...token.names, token.key.split("/").at(-1) ?? ""].flatMap((name) => {
+  const names = [...token.names, token.key.slice(token.key.lastIndexOf("/") + 1)].flatMap((name) => {
     const part = LAST_PART.exec(name)?.[1];
     return part && IDENTIFIER.test(part) ? [part] : [];
   });

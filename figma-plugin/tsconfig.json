@@ -5,6 +5,18 @@
     "types": ["@figma/plugin-typings"],
     "noEmit": true
   },
-  "include": ["src", "../tests/figma", "../tests/helpers/figma-plugin.ts"],
-  "exclude": ["src/ui.ts", "../tests/figma/ui.test.ts"]
+  "include": [
+    "src",
+    "../tests/figma",
+    "../tests/helpers/figma-plugin.ts",
+    "../tests/helpers/fake-github.ts",
+    "../tests/helpers/shop-repo.ts"
+  ],
+  "exclude": [
+    "src/ui.ts",
+    "src/ui-design-to-code.ts",
+    "../tests/figma/ui.test.ts",
+    "../tests/figma/ui-design-to-code.test.ts",
+    "../tests/figma/design-to-code.e2e.test.ts"
+  ]
 }

@@ -57,7 +57,7 @@ export function isOperatorBefore(text: string, start: number): boolean {
       const lineStart = text.lastIndexOf("\n", at - 1) + 1;
       const comment = text.slice(lineStart, at).indexOf("//");
       if (comment === -1) continue;
-      if (OPERATORS.has(text.slice(lineStart, at).trimEnd().at(-1) ?? "")) return true;
+      if (OPERATORS.has(text.slice(lineStart, at).trimEnd().slice(-1))) return true;
       at = lineStart + comment;
     } else if (text.startsWith("*/", at - 2)) {
       const open = text.lastIndexOf("/*", at - 3);

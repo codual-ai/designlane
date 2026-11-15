@@ -19,6 +19,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
   the way, under `via`. A value worked out from another (`Brand.copy(alpha = 0.5f)`), or set where a helper is used,
   records none, as does a style made from a helper (`.small.bold()`), whose values are the helper's, and a family
   built as a template. Also on the scan's `ColorToken` and `TypeStyle` as `locations`.
+- Design to code from Figma: the plugin lists each synced colour (Light and Dark, in every theme) and text style
+  (size, weight, font) a designer changed in Figma, as "Changed in Figma, not in code", told apart from a code change
+  Figma hasn't taken by the value the two last had alike, kept on each variable and style (renames don't count). The
+  changes ticked get their code edits planned with `planEdit` against the connected branch's latest commit, each shown
+  as file, line, before and after, or why it can't be made; those ticked then open a pull request: one commit on a new
+  `designmap/figma-<date>-<hash>` branch, titled "Design changes from Figma: <n> values", listing each change. It needs
+  a second fine-grained token with Contents and Pull requests set to Read and write, asked for the first time and kept
+  on this computer per repo; the read-only token stays for syncing.
 - `designmap edit <token> <property> <value>`: changes a colour's light or dark value, or a text style's family, size
   or weight, in the code where tokens.json says it's written, written the way the code writes it (hex case and
   length, `0xFF…` ARGB, `Color(red:green:blue:)` with the same decimals or `/ 255`, `rgb()`, asset catalog
@@ -30,6 +38,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   text style's value from a style it builds on. `planEdit` and `applyEdit` are exported for other tools.
 
 ### Changed
+
+- Library: `SyncTheme` has the theme's `key` in tokens.json, which a code edit names its colours by.
 
 - A colour or text style written in both the app and another of its targets (a watch app, a widget, an app
   extension, a Wear, TV or car module, preview assets) is read from the app's own copy, which also takes the plain

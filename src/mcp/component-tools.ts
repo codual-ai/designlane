@@ -5,8 +5,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CATEGORIES, type ComponentInfo, firstLines, inventory } from "../catalog/components.js";
 import { readSources } from "../catalog/sources.js";
+import { OUTPUT_DIR } from "../output/output-files.js";
 import { writeCatalog } from "../output/reports.js";
-import { OUTPUT_DIR } from "../output/write.js";
 import {
   loadPreviews,
   PREVIEW_RULES,

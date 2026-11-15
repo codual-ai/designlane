@@ -17,6 +17,9 @@ export const KEYS = {
   darkMode: "darkMode",
   darkUnavailable: "darkUnavailable",
   identity: "identity",
+  /** On a synced variable or text style, the values it and the code last had alike, which tells a designer's change
+   * from the code's. */
+  agreed: "agreed",
   deprecated: "deprecated",
   descriptionBefore: "descriptionBefore",
   hiddenBefore: "hiddenBefore",

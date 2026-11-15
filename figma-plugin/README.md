@@ -67,3 +67,27 @@ On each sync:
   Apply tries to add the Dark mode again.
 - Text styles whose font this file doesn't have are left out, and named in the plan.
 - Variables and styles a designer made are left alone, and so are descriptions and publishing choices a designer set.
+
+## Changes made in Figma
+
+When a designer changes a synced colour (Light or Dark, in any theme's collection) or a text style's size, weight or
+font in Figma, the plan lists it apart from the code's changes: **Changed in Figma, not in code: color/brand #ff1a2e →
+#de2413**. Designmap tells these from code changes Figma hasn't taken yet by the value the file and the code last had
+alike, which it keeps on each variable and style. A file synced before this starts keeping it on its next check.
+Renaming a variable or style isn't a change; only values are. Apply sets these values back to the code's, so to keep
+them, open a pull request instead:
+
+1. Tick the changes to keep and press **Plan code edits**. Designmap reads tokens.json and the code from the connected
+   branch's latest commit, and shows each edit as file, line and the text before and after, written the way the code
+   already writes it. An edit it can't make safely says why in plain words and can't be ticked: where tokens.json
+   doesn't say where the value is written, a value shared with another token, a file over 512 KB or not UTF-8 text, a
+   value the code changed too since the last sync, and the other reasons `designmap edit` gives.
+2. Press **Open pull request**. Designmap makes one commit with the ticked edits on a new branch
+   (`designmap/figma-2026-11-14-1a2b3c4`) from that commit, and opens a pull request titled "Design changes from Figma:
+   2 values" that lists each change and where it's written. The window links to it.
+
+Opening a pull request needs more than the read-only token you connected with. The first time, Designmap asks for a
+second fine-grained token, for this repo only, with **Contents** and **Pull requests** both set to **Read and write**,
+and links to GitHub's form for one. It's kept on this computer for that repo, like the first, and both are only ever
+sent to `api.github.com`. If GitHub refuses it, Designmap forgets it and asks again. Syncing keeps using the read-only
+token. Connecting a repo is needed: a picked tokens.json can't open a pull request.

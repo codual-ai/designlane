@@ -13,6 +13,7 @@ const summary = {
   renamesSkipped: false,
   darkLeftOut: false,
   applicable: true,
+  figmaChanges: [],
 };
 
 describe("messages to the plugin window", () => {

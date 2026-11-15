@@ -2,7 +2,7 @@
  * exactly the plan the designer saw. */
 
 import { type Plan, planSync, type SyncPlan } from "../../src/sync/plan.js";
-import { readTokensFile, type SyncColor, type SyncTokens } from "../../src/sync/tokens-file.js";
+import { readTokensFile, type SyncTokens } from "../../src/sync/tokens-file.js";
 import { type ApplyOptions, applyPlan } from "./apply.js";
 import {
   type Connection,
@@ -12,45 +12,39 @@ import {
   saveConnection,
   savedConnection,
 } from "./connection.js";
-import {
-  availableFontStyles,
-  type DarkUnavailable,
-  darkUnavailable,
-  readDesignFile,
-  textStyleFonts,
-} from "./design-file.js";
+import { darkUnavailable, readDesignFile } from "./design-file.js";
+import { createDesignToCode } from "./design-to-code.js";
+import { figmaChanges, pairsOf, readAgreed, recordAgreements } from "./figma-changes.js";
+import { darkLeftOutOf, type MissingFont, withDarkWhereRoom, withoutMissingFonts } from "./fitted-plan.js";
 import { fetchTokensFile } from "./github.js";
 import { type PlanSummary, type RepoSource, type ToWindow, toPlugin } from "./messages.js";
 import {
   darkModeAdded,
   invalidJson,
+  messageOf,
   missingFont,
   type Origin,
   pageNotRedrawn,
   stoppedPartway,
 } from "./notes.js";
 import { drawDesignSystemPage } from "./page.js";
-import { describeFont, type FontValue, fontFor, hasOwnDark } from "./values.js";
 
 interface Pending {
   id: number;
   plan: SyncPlan;
   options: ApplyOptions;
   origin: Origin;
+  /** The code's tokens, which the file agrees with once the plan is applied. */
+  inCode: SyncTokens;
   /** Styles left out of the plan for want of their font, still to be named once it's applied. */
   missingFonts: MissingFont[];
-}
-
-/** A text style left out of a sync, and the font this file doesn't have for it. */
-interface MissingFont {
-  name: string;
-  font: string;
 }
 
 /** Answers each message from the window in turn, replying through `send`. */
 export function createSession(send: (message: ToWindow) => void): (data: unknown) => Promise<void> {
   let pending: Pending | undefined;
   let queue = Promise.resolve();
+  const designToCode = createDesignToCode(send);
 
   /** Runs `step` after any already running, so a file picked during an apply is planned against its result. */
   const inTurn = (step: () => Promise<void>): Promise<void> => {
@@ -67,7 +61,13 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
     const leftOut = darkLeftOutOf(inCode, await darkUnavailable());
     const darkLeftOut = leftOut.main || leftOut.themes.size > 0;
     const tokens = withDarkWhereRoom(inCode, leftOut);
-    const { plan, missingFonts } = await withoutMissingFonts(planSync(tokens, await readDesignFile()));
+    const file = await readDesignFile();
+    const { plan, missingFonts } = await withoutMissingFonts(planSync(tokens, file));
+    const pairs = pairsOf(inCode, file);
+    const agreed = await readAgreed(pairs);
+    const changedInFigma = figmaChanges(pairs, agreed);
+    await recordAgreements(pairs, agreed);
+    designToCode.found(id, origin, json, changedInFigma);
     pending = {
       id,
       plan,
@@ -77,6 +77,7 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
         ...(tokens.platform ? { platform: tokens.platform } : {}),
       },
       origin,
+      inCode,
       missingFonts,
     };
     const summary = summarize(plan, !tokens.complete);
@@ -86,17 +87,25 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
     send({
       type: "plan",
       id,
-      summary: { ...summary, missingFonts: missingFontNames, darkLeftOut, applicable },
+      summary: {
+        ...summary,
+        missingFonts: missingFontNames,
+        darkLeftOut,
+        applicable,
+        figmaChanges: changedInFigma,
+      },
     });
   }
 
   async function apply(id: number): Promise<void> {
     if (!pending) throw new Error("There's no plan to apply yet.");
     if (pending.id !== id) throw new Error("The plan changed. Look it over, then press Apply again.");
-    const { plan, options, origin, missingFonts } = pending;
+    const { plan, options, origin, inCode, missingFonts } = pending;
     pending = undefined;
     try {
       const { notes, darkValuesPending } = await applyPlan(plan, options);
+      const pairs = pairsOf(inCode, await readDesignFile());
+      await recordAgreements(pairs, await readAgreed(pairs));
       const pageNotes = await drawDesignSystemPage(options.app).then(
         () => [],
         (error: unknown) => [pageNotRedrawn(messageOf(error))],
@@ -163,6 +172,10 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
         return inTurn(() => plan(message.id, message.json, "file"));
       case "apply":
         return inTurn(() => apply(message.id));
+      case "planEdits":
+        return inTurn(() => designToCode.planEdits(message.id, message.changes));
+      case "openPullRequest":
+        return inTurn(() => designToCode.openPullRequest(message.id, message.changes, message.token));
       // Closing waits its turn too, so it never cuts an apply short.
       case "close":
         return inTurn(async () => figma.closePlugin());
@@ -172,83 +185,12 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
 
 const repoOf = ({ repo, branch, path }: Connection): RepoSource => ({ repo, branch, path });
 
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 function parseJson(text: string, origin: Origin): unknown {
   try {
     return JSON.parse(text);
   } catch {
     throw new Error(invalidJson(origin));
   }
-}
-
-const lightOnly = ({ dark: _, ...color }: SyncColor): SyncColor => color;
-const hasDarkValues = (colors: SyncColor[]) => colors.some((color) => hasOwnDark(color.light, color.dark));
-
-/** The collections whose dark values are left out: those that couldn't take a Dark mode and have dark values to
- * write, each on its own, so one theme's full collection doesn't take the others' dark values. */
-function darkLeftOutOf(tokens: SyncTokens, full: DarkUnavailable): DarkUnavailable {
-  const themes = (tokens.themes ?? []).filter((t) => full.themes.has(t.name) && hasDarkValues(t.colors));
-  return { main: full.main && hasDarkValues(tokens.colors), themes: new Set(themes.map((t) => t.name)) };
-}
-
-/** The code's tokens as a file holds them: no dark values in a collection that can't have a Dark mode, so they
- * don't show as changed on every sync, and elsewhere a dark value only where it differs from the light one. */
-function withDarkWhereRoom(tokens: SyncTokens, leftOut: DarkUnavailable): SyncTokens {
-  const own = (color: SyncColor) => (hasOwnDark(color.light, color.dark) ? color : lightOnly(color));
-  const change = (isLeftOut: boolean) => (isLeftOut ? lightOnly : own);
-  return {
-    ...tokens,
-    colors: tokens.colors.map(change(leftOut.main)),
-    ...(tokens.themes
-      ? {
-          themes: tokens.themes.map((theme) => ({
-            ...theme,
-            colors: theme.colors.map(change(leftOut.themes.has(theme.name))),
-          })),
-        }
-      : {}),
-  };
-}
-
-/** The plan without the text styles whose font this file doesn't have, which no sync could make, so they'd otherwise
- * show as new or changed every time; and their names, with the font they need. */
-async function withoutMissingFonts(plan: SyncPlan): Promise<{ plan: SyncPlan; missingFonts: MissingFont[] }> {
-  const fontStyles = await availableFontStyles();
-  const currentFonts = await textStyleFonts();
-  const fontOfNew = (entry: { value: FontValue }) => ({ value: entry.value, current: undefined });
-  const fontOfExisting = (entry: { id: string; token: { value: FontValue } }) => ({
-    value: entry.token.value,
-    current: currentFonts.get(entry.id),
-  });
-  const { textStyles } = plan;
-  const create = splitByFont(textStyles.create, fontOfNew, fontStyles);
-  const update = splitByFont(textStyles.update, fontOfExisting, fontStyles);
-  const rename = splitByFont(textStyles.rename, fontOfExisting, fontStyles);
-  return {
-    plan: {
-      ...plan,
-      textStyles: { ...textStyles, create: create.kept, update: update.kept, rename: rename.kept },
-    },
-    missingFonts: [...create.missing, ...update.missing, ...rename.missing],
-  };
-}
-
-/** `entries` split into those whose font this file has, and the rest with the font they need. */
-function splitByFont<T extends { name: string }>(
-  entries: T[],
-  fontOf: (entry: T) => { value: FontValue; current: FontName | undefined },
-  fontStyles: Map<string, string[]>,
-): { kept: T[]; missing: MissingFont[] } {
-  const kept: T[] = [];
-  const missing: MissingFont[] = [];
-  for (const entry of entries) {
-    const { value, current } = fontOf(entry);
-    const { family, style } = fontFor(value, current, fontStyles);
-    if (style) kept.push(entry);
-    else missing.push({ name: entry.name, font: describeFont(family, value.weight) });
-  }
-  return { kept, missing };
 }
 
 /** Every plan a sync makes, each with what its names are shown after: a theme's name (`Desert: color/tint`), since
@@ -264,7 +206,7 @@ function plansOf({ variables, textStyles, themes }: SyncPlan): { label: string; 
 function summarize(
   plan: SyncPlan,
   partial: boolean,
-): Omit<PlanSummary, "missingFonts" | "darkLeftOut" | "applicable"> {
+): Omit<PlanSummary, "missingFonts" | "darkLeftOut" | "applicable" | "figmaChanges"> {
   const plans = plansOf(plan);
   const each = <T>(list: (p: Plan<unknown>) => T[]) =>
     plans.flatMap(({ label, plan }) => list(plan).map((entry) => ({ label, entry })));

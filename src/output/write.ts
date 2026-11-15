@@ -1,24 +1,11 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import type { FrameworkId, ScanResult } from "../scan/types.js";
+import type { ScanResult } from "../scan/types.js";
 import { toDesignMd } from "./design-md.js";
+import { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "./output-files.js";
 import { writeReports } from "./reports.js";
 import { toDesignTokens } from "./tokens-json.js";
-
-/** Where the outputs go inside the app, unless told otherwise. */
-export const OUTPUT_DIR = "designmap";
-
-/** The tokens file of an app that's alone in its repo. */
-export const TOKENS_FILE = "tokens.json";
-
-/** Each app's tokens file when a repo holds more than one (an iPhone and an Android app), so each Figma file connects
- * to its own. Files beside each other rather than folders, which `--out .` would mix up with the apps' own. */
-export const APP_TOKENS_FILES: Record<FrameworkId, string> = {
-  swiftui: "tokens.ios.json",
-  compose: "tokens.android.json",
-  "react-native": "tokens.react-native.json",
-};
 
 /**
  * Writes the tokens, DESIGN.md, catalog.html and drift.md into `outDir` (by default `designmap/` in the app) and

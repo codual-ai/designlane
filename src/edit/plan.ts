@@ -175,7 +175,9 @@ function changedSince(span: CodeSpan, found?: { text: string } | { reason: strin
 }
 
 function list(items: string[]): string {
-  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+  return items.length <= 1
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 function rewrite(what: string, value: TokenValue, input: string, target: Target): EditPlan {

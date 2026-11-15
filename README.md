@@ -48,6 +48,8 @@ Then keep your design file in step:
 2. **Install the Figma plugin** and connect your repo, with a token that can only read it
    ([plugin](figma-plugin/README.md)).
 3. **Apply.** After each push the plugin shows what changed in the code. Read the plan and press Apply.
+4. **Changed something in Figma?** The plugin lists it, and opens a pull request with the exact code edit
+   ([how](figma-plugin/README.md#changes-made-in-figma)).
 
 **One tool, three platforms.** SwiftUI, Jetpack Compose and React Native, on macOS, Linux and Windows.
 
@@ -174,7 +176,7 @@ style's value comes from a style it builds on. `--tokens` is read relative to `-
 |---|---|---|
 | **Code** | SwiftUI, Jetpack Compose, React Native | more to come |
 | **Design tools** | Figma | Penpot, Sketch |
-| **Direction** | code to design; design to code with `designmap edit` | design to code from Figma: a change there opens the code edit as a pull request |
+| **Direction** | code to design; design to code, from Figma as a pull request ([plugin](figma-plugin/README.md#changes-made-in-figma)) or with `designmap edit` | |
 | **Token formats** | W3C design tokens (Tokens Studio, Style Dictionary) | |
 
 ## What it reads
@@ -220,7 +222,7 @@ outside the app. Add Designmap to the library's repo instead, and connect your d
 | Requirement | Minimum | Check |
 |---|---|---|
 | Node.js | 22 | `node --version` |
-| A GitHub token for the plugin | read-only access to the app's repo contents | GitHub → Settings → Developer settings → Fine-grained tokens |
+| A GitHub token for the plugin | read-only access to the app's repo contents; to open pull requests from Figma, a second one with Contents and Pull requests set to Read and write | GitHub → Settings → Developer settings → Fine-grained tokens |
 
 ## Documentation
 

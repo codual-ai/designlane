@@ -90,7 +90,7 @@ export function bracketTree(code: string): BracketTree {
   const stack: number[] = [];
   for (let j = 0; j < code.length; j++) {
     const c = code[j];
-    enclosing[j] = stack.at(-1) ?? -1;
+    enclosing[j] = stack[stack.length - 1] ?? -1;
     if (c === "(" || c === "{") {
       stack.push(j);
     } else if (c === ")" || c === "}") {

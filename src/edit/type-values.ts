@@ -3,7 +3,7 @@
 
 import { COMPOSE_WEIGHTS, weightByHundred, weightOf } from "../frameworks/material-type.js";
 import { WEIGHT_NUMBERS } from "../output/token-names.js";
-import type { SpanText, Written } from "./notation.js";
+import { hasOwn, type SpanText, type Written } from "./notation.js";
 
 const SIZE = /^(\d+(?:\.(\d+))?)(\.sp|\.dp|sp|dp|pt|px|[fF])?$/;
 const WEIGHT_NUMBER = /^[1-9]00$/;
@@ -35,7 +35,7 @@ export function sizeReadings({ text, kind }: SpanText): Written<number>[] {
 export function weightReadings({ text, kind, language }: SpanText): Written<number>[] {
   if (kind !== "literal" && kind !== "expression") return [];
   if (WEIGHT_NUMBER.test(text)) return [{ value: Number(text), write: String }];
-  if (language === "js" && Object.hasOwn(WEIGHT_WORDS, text)) {
+  if (language === "js" && hasOwn(WEIGHT_WORDS, text)) {
     const word = (to: number) => Object.keys(WEIGHT_WORDS).find((w) => WEIGHT_WORDS[w] === to) ?? String(to);
     return [{ value: WEIGHT_WORDS[text] ?? 0, write: word }];
   }
@@ -45,7 +45,7 @@ export function weightReadings({ text, kind, language }: SpanText): Written<numb
 
 function swiftWeight(text: string): Written<number>[] {
   const [, qualifier, name = ""] = SWIFT_WEIGHT.exec(text) ?? [];
-  const value = Object.hasOwn(WEIGHT_NUMBERS, name) ? WEIGHT_NUMBERS[name] : undefined;
+  const value = hasOwn(WEIGHT_NUMBERS, name) ? WEIGHT_NUMBERS[name] : undefined;
   return value === undefined ? [] : [{ value, write: (to) => `${qualifier}${weightByHundred(to)}` }];
 }
 

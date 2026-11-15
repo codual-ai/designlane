@@ -1,6 +1,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { MAX_FILE_BYTES } from "./file-limits.js";
 
 const IGNORED_DIRS = new Set([
   "node_modules",
@@ -15,8 +16,6 @@ const IGNORED_DIRS = new Set([
 ]);
 
 const MAX_FILES = 20_000;
-/** Larger files are generated or data, not hand-written UI. */
-export const MAX_FILE_BYTES = 512 * 1024;
 
 export interface SourceFile {
   /** Relative to the project root, with forward slashes on every platform. */

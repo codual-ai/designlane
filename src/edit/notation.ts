@@ -23,7 +23,7 @@ const LANGUAGES: Record<string, Language> = {
 
 export function languageOf(file: string): Language | undefined {
   const extension = file.slice(file.lastIndexOf(".") + 1).toLowerCase();
-  return Object.hasOwn(LANGUAGES, extension) ? LANGUAGES[extension] : undefined;
+  return hasOwn(LANGUAGES, extension) ? LANGUAGES[extension] : undefined;
 }
 
 /** A value's text as it's written, and what's around it. */
@@ -44,6 +44,10 @@ export interface Written<T> {
 
 /** Longer values are no single literal or call. */
 export const MAX_VALUE_LENGTH = 2000;
+
+/** Whether `record` has `key` of its own, not one every object inherits (`constructor`). */
+export const hasOwn = (record: object, key: string) =>
+  Object.getOwnPropertyDescriptor(record, key) !== undefined;
 
 export interface Argument {
   /** `red` in Swift's `red: 0.2` or Kotlin's `red = 0.2f`. */

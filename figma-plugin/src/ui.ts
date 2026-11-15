@@ -2,6 +2,7 @@
  * side to apply it. */
 
 import { type PlanSummary, type RepoSource, type ToPlugin, toWindow } from "./messages.js";
+import { designToCode, isDesignToCode } from "./ui-design-to-code.js";
 
 /** The window's element with `id`, which ui.html must have, of the kind expected. */
 function element<T extends HTMLElement>(id: string, kind: new () => T): T {
@@ -27,6 +28,8 @@ let requested = 0;
 let shown: number | undefined;
 /** The repo connected, named in the window's status lines. */
 let connectedRepo: string | undefined;
+/** The design-to-code part of the plan on screen, if it found changes made in Figma. */
+let changedInFigma: ReturnType<typeof designToCode> | undefined;
 
 /** A heading and a list, built from text only so a token's name can never be read as markup. */
 function section(title: string, items: readonly string[]): HTMLElement {
@@ -52,6 +55,8 @@ function paragraph(text: string, className = ""): HTMLElement {
 
 function showPlan(id: number, summary: PlanSummary): void {
   shown = id;
+  changedInFigma =
+    summary.figmaChanges.length > 0 ? designToCode(id, summary.figmaChanges, connectedRepo, send) : undefined;
   const blocks = [
     ["New", summary.create],
     ["Changed", summary.update],
@@ -72,6 +77,7 @@ function showPlan(id: number, summary: PlanSummary): void {
     ...blocks.filter(([, items]) => items.length > 0).map(([title, items]) => section(title, items)),
     paragraph(`${summary.unchanged} unchanged.`),
     ...notes.filter(([shows]) => shows).map(([, text]) => paragraph(text, "note")),
+    ...(changedInFigma ? [changedInFigma.section] : []),
   );
   apply.disabled = !summary.applicable;
 }
@@ -79,6 +85,7 @@ function showPlan(id: number, summary: PlanSummary): void {
 /** Starts a new plan: what was on screen can no longer be applied. */
 function nextPlan(status: string): number {
   shown = undefined;
+  changedInFigma = undefined;
   apply.disabled = true;
   result.replaceChildren(paragraph(status));
   return ++requested;
@@ -149,15 +156,17 @@ window.onmessage = (event: MessageEvent<unknown>) => {
   );
   if (!message) return;
   if (message.type === "connection") return showConnection(message.repo, message.saved);
+  if (isDesignToCode(message)) return changedInFigma?.receive(message);
   if (message.type === "plan" && message.id !== requested) return;
   setApplying(false);
+  if (message.type !== "plan") changedInFigma = undefined;
   if (message.type === "plan") showPlan(message.id, message.summary);
   else if (message.type === "applied") {
     const done = message.notes.length
       ? "Synced, with the notes below."
       : "Synced. Your variables and text styles now match the code.";
     result.replaceChildren(paragraph(done), ...message.notes.map((note) => paragraph(note, "note")));
-  } else {
+  } else if (message.type === "error") {
     shown = undefined;
     apply.disabled = true;
     result.replaceChildren(paragraph(message.message, "error"));

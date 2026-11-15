@@ -31,7 +31,7 @@
   },
   "scripts": {
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p figma-plugin/tsconfig.json && tsc -p figma-plugin/tsconfig.ui.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p figma-plugin/tsconfig.json && tsc -p figma-plugin/tsconfig.ui.json && tsc -p figma-plugin/tsconfig.e2e.json",
     "test": "vitest run -t \"^(?!.*speed:)\" && vitest run -t \"speed:\" --no-file-parallelism",
     "lint": "biome check --error-on-warnings .",
     "format": "biome format --write .",

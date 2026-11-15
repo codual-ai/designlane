@@ -40,6 +40,7 @@ export const MATERIAL_DEFAULTS: Record<string, Default> = {
 };
 
 /** Weights by the hundred, 100 to 900. */
+const UNDERSCORES = /_/g;
 const BY_HUNDRED = ["thin", "ultraLight", "light", "regular", "medium", "semibold", "bold", "heavy", "black"];
 /** Compose's named weights (`FontWeight.SemiBold`), each as the name Designmap gives it. */
 export const COMPOSE_WEIGHTS: Record<string, string> = {
@@ -74,5 +75,5 @@ export function weightByHundred(number: number): string {
 /** `16.sp` or `1_000.sp` as a number, or undefined when it's worked out as the app runs. */
 export function sizeOf(expression: string): number | undefined {
   const m = expression.match(/^(\d[\d_]*(?:\.\d+)?)\.sp$/);
-  return m?.[1] ? Number(m[1].replaceAll("_", "")) : undefined;
+  return m?.[1] ? Number(m[1].replace(UNDERSCORES, "")) : undefined;
 }

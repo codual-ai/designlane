@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { colorOf } from "../frameworks/css-color.js";
-import { OUTPUT_DIR } from "../output/write.js";
+import { OUTPUT_DIR } from "../output/output-files.js";
 import { listFiles, readText } from "./files.js";
 import type { ColorToken, FrameworkScan, ScanResult } from "./types.js";
 

@@ -32,6 +32,8 @@ export interface SyncColor {
 /** One of the app's themes beside its default one, known by its name. */
 export interface SyncTheme {
   name: string;
+  /** Its key in tokens.json, which a code edit names its colours by (`<key>/<colour key>`). */
+  key: string;
   colors: SyncColor[];
 }
 
@@ -80,8 +82,9 @@ export function readTokensFile(json: unknown): SyncTokens {
   }));
   // A theme with no colours holds nothing to sync, and mustn't make an empty file look full.
   const themes = tokensIn(file.data.theme)
-    .map(([, theme]) => ({
+    .map(([key, theme]) => ({
       name: theme.$extensions.designmap.name,
+      key,
       colors: distinct(tokensIn(theme.color).map(([key, token]) => syncColor(key, token))),
     }))
     .filter((theme) => theme.colors.length > 0);

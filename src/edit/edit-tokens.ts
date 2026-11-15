@@ -12,7 +12,8 @@ import { type Color, rgbOf } from "./color-value.js";
 
 export const COLOR_PROPERTIES = ["light", "dark"] as const;
 export const TYPE_PROPERTIES = ["family", "size", "weight"] as const;
-export type EditProperty = (typeof COLOR_PROPERTIES)[number] | (typeof TYPE_PROPERTIES)[number];
+export const EDIT_PROPERTIES = [...COLOR_PROPERTIES, ...TYPE_PROPERTIES] as const;
+export type EditProperty = (typeof EDIT_PROPERTIES)[number];
 
 export const PROPERTY_NAMES: Record<EditProperty, string> = {
   light: "colour",
