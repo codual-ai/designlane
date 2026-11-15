@@ -6,15 +6,13 @@ import { applyEdit, type EditPlan, planEdit, type TextEdit } from "../../src/edi
 import { type ReadSource, sourceOf } from "../../src/edit/read-source.js";
 import type { FigmaChange } from "./messages.js";
 
-const IN_CODE_TOO =
-  "The code changed this too since Figma and the code last agreed. Press Apply to take the code's value, or change it in the code by hand.";
-
 /** How the designer knows a change: `color/brand`, or `color/brand's dark colour`. */
 export const changeLabel = ({ name, property }: FigmaChange) =>
   property === "light" ? name : `${name}'s ${PROPERTY_NAMES[property]}`;
 
-/** Each change's edit, from `tokensFile` and the files `read` gives, or why there's none. No two edits overlap: the
- * engine refuses an edit wherever another token's value is written. */
+/** Each change's edit, from `tokensFile` and the files `read` gives, or why there's none: from the code's value now,
+ * also for a value the code changed too. No two edits overlap: the engine refuses an edit wherever another token's
+ * value is written. */
 export async function planCodeEdits(
   tokensFile: unknown,
   read: ReadSource,
@@ -23,12 +21,7 @@ export async function planCodeEdits(
   const plans = new Map<FigmaChange, EditPlan>();
   for (const change of changes) {
     const { token, property, to: value } = change;
-    plans.set(
-      change,
-      change.inCodeToo
-        ? { ok: false, reason: IN_CODE_TOO }
-        : await planEdit(tokensFile, read, { token, property, value }),
-    );
+    plans.set(change, await planEdit(tokensFile, read, { token, property, value }));
   }
   return plans;
 }

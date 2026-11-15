@@ -6,7 +6,7 @@ Keeps a Figma file's variables and text styles in sync with an app's code.
 2. Run `pnpm build:plugin`.
 3. In Figma: **Plugins → Development → Import plugin from manifest…** and pick `figma-plugin/manifest.json`.
 4. Run **Designmap** and connect the app's GitHub repo, with a fine-grained token that can only read this repo's
-   contents. The token stays on your computer.
+   contents, and its pull requests if you open some from Figma (below). The token stays on your computer.
 5. From then on, opening Designmap shows what changed in the code. Read the plan and press **Apply**.
 
 You can also pick a `tokens.json` file instead of connecting a repo.
@@ -74,17 +74,27 @@ When a designer changes a synced colour (Light or Dark, in any theme's collectio
 font in Figma, the plan lists it apart from the code's changes: **Changed in Figma, not in code: color/brand #ff1a2e →
 #de2413**. Designmap tells these from code changes Figma hasn't taken yet by the value the file and the code last had
 alike, which it keeps on each variable and style. A file synced before this starts keeping it on its next check.
-Renaming a variable or style isn't a change; only values are. Apply sets these values back to the code's, so to keep
-them, open a pull request instead:
+Renaming a variable or style isn't a change; only values are. Apply keeps these values as you changed them, and still
+applies everything else, until the code has them; to get them into the code, open a pull request:
 
 1. Tick the changes to keep and press **Plan code edits**. Designmap reads tokens.json and the code from the connected
    branch's latest commit, and shows each edit as file, line and the text before and after, written the way the code
    already writes it. An edit it can't make safely says why in plain words and can't be ticked: where tokens.json
-   doesn't say where the value is written, a value shared with another token, a file over 512 KB or not UTF-8 text, a
-   value the code changed too since the last sync, and the other reasons `designmap edit` gives.
+   doesn't say where the value is written, a value shared with another token, a file over 512 KB or not UTF-8 text,
+   and the other reasons `designmap edit` gives.
 2. Press **Open pull request**. Designmap makes one commit with the ticked edits on a new branch
    (`designmap/figma-2026-11-14-1a2b3c4`) from that commit, and opens a pull request titled "Design changes from Figma:
    2 values" that lists each change and where it's written. The window links to it.
+
+Once the pull request is merged and tokens.json written again, the code has the values and they leave the list.
+Until then, each check finds Designmap's open pull requests into the connected branch (read with the read-only token,
+from a marker in each one's description), and a change already in one shows **Pull request open** with its link
+instead of a box to tick. If the token can't read pull requests, the changes show as before, with a note saying so.
+
+When the code changed the same value too since the two last agreed, the list shows both, **Code: #1565c0 · Yours:
+#de2413**, and two choices. **Keep the code's** lets Apply set it to the code's value. **Use mine** lets it be ticked
+and planned like any other change, the edit going from the code's value now to yours. Until you choose, Apply keeps
+yours.
 
 Opening a pull request needs more than the read-only token you connected with. The first time, Designmap asks for a
 second fine-grained token, for this repo only, with **Contents** and **Pull requests** both set to **Read and write**,

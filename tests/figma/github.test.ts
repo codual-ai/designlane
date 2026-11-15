@@ -18,6 +18,10 @@ function github(status: number, body = "", headers: Record<string, string> = {})
   return fetch;
 }
 
+/** The requests for a file's contents, apart from the listing of open pull requests each check makes too. */
+const contentsReads = (fetch: ReturnType<typeof github>) =>
+  fetch.mock.calls.filter(([url]) => url.includes("/contents/"));
+
 const lastError = (app: ReturnType<typeof plugin>) => {
   const message = app.last();
   return message?.type === "error" ? message.message : `no error: ${JSON.stringify(message)}`;
@@ -72,7 +76,7 @@ describe("syncing from a GitHub repo", () => {
     app.fake.root.setPluginData("connection", iosFile);
     await app.session({ type: "ready", id: 3 });
     expect(app.sent[app.sent.length - 2]).toEqual({ type: "connection", repo: { ...repo, path: ios.path } });
-    expect(String(fetch.mock.calls[fetch.mock.calls.length - 1]?.[0])).toContain("tokens.ios.json");
+    expect(String(contentsReads(fetch).pop()?.[0])).toContain("tokens.ios.json");
     expect(JSON.stringify([...app.fake.stored.values()])).not.toContain("tokens.ios.json");
   });
 
@@ -319,7 +323,7 @@ describe("syncing from a GitHub repo", () => {
     const fetch = github(200, tokensJson({ spacing: [8] }));
     await app.session({ type: "connect", id: 1, ...connection });
     await app.session({ type: "fetch", id: 2 });
-    expect(fetch.mock.calls).toHaveLength(2);
+    expect(contentsReads(fetch)).toHaveLength(2);
     expect(fetch.mock.calls.every(([, init]) => init?.cache === "no-store")).toBe(true);
   });
 });

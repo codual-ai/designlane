@@ -29,3 +29,7 @@ export const invalidJson = (origin: Origin) =>
 /** The note for a sync that worked but couldn't redraw its design system page. */
 export const pageNotRedrawn = (reason: string) =>
   `The variables and text styles are synced, but the design system page couldn't be redrawn. (${reason})`;
+
+/** The note for the values Apply left as a designer changed them in Figma, by how the designer knows each. */
+export const keptAsChanged = (labels: readonly string[]) =>
+  `Kept as you changed ${labels.length === 1 ? "it" : "them"} in Figma, until the code has ${labels.length === 1 ? "it" : "them"}: ${labels.join(", ")}.`;

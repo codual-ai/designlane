@@ -4,6 +4,6 @@
     "types": ["@figma/plugin-typings", "node"],
     "noEmit": true
   },
-  "include": ["../tests/figma/design-to-code.e2e.test.ts"],
+  "include": ["../tests/figma/design-to-code.e2e.test.ts", "../tests/figma/pending-changes.e2e.test.ts"],
   "exclude": []
 }

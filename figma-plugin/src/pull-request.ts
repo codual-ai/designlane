@@ -7,12 +7,11 @@ import { changeLabel } from "./code-edits.js";
 import { encodedPath, GitHubRefusal, type RepoApi } from "./github.js";
 import type { FigmaChange } from "./messages.js";
 import { messageOf } from "./notes.js";
+import { BRANCH_PREFIX, markerOf, PullRequestPage } from "./open-pull-requests.js";
 
 const Created = z.object({ sha: z.string().regex(/^[0-9a-f]{40}$/) });
-const Pull = z.object({ html_url: z.url().startsWith("https://github.com/") });
+const Pull = z.object({ html_url: PullRequestPage });
 const SHORT_HASH = 7;
-/** Branch names Designmap makes, apart from anyone's own. */
-const BRANCH_PREFIX = "designmap/figma-";
 const BACKTICKS = /`/g;
 
 /** Where the edits were planned: the branch connected, and its head commit and that commit's tree. */
@@ -111,5 +110,7 @@ function pullRequestBody(changes: MadeChange[]): string {
     ...lines,
     "",
     "The app's tokens.json catches up the next time designmap runs.",
+    "",
+    markerOf(changes.map(({ change }) => change)),
   ].join("\n");
 }

@@ -4,10 +4,10 @@
 import { cp, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect } from "vitest";
-import type { FigmaChange, PlannedEdit, ToWindow } from "../../figma-plugin/src/messages.js";
+import type { FigmaChange, PlannedEdit, PlanSummary, ToWindow } from "../../figma-plugin/src/messages.js";
 import { run } from "../../src/cli/run.js";
 import { useGitHubServer } from "./figma-fetch.js";
-import { plugin } from "./figma-plugin.js";
+import { plugin, recolor } from "./figma-plugin.js";
 import { type Access, type GitHubServer, startGitHubServer } from "./github-server.js";
 import { tempDir } from "./temp.js";
 
@@ -102,16 +102,20 @@ export async function connectedShop() {
   expect(await reply(connect)).toMatchObject({ type: "plan", id });
   expect(await reply({ type: "apply", id })).toMatchObject({ type: "applied" });
 
-  return {
+  const shop = {
     app,
     server,
     fake: figma.fake,
-    /** Checks the repo again: the changes made in Figma the plan found. */
-    async check(): Promise<FigmaChange[]> {
+    /** Checks the repo again: the plan, with the changes made in Figma it found. */
+    async plan(): Promise<PlanSummary> {
       const plan = await reply({ type: "fetch", id: ++id });
       if (plan.type !== "plan") throw new Error(`expected a plan, got ${JSON.stringify(plan)}`);
-      return plan.summary.figmaChanges;
+      return plan.summary;
     },
+    /** Checks the repo again: the changes made in Figma the plan found. */
+    check: async (): Promise<FigmaChange[]> => (await shop.plan()).figmaChanges,
+    /** Presses Apply on the plan on screen, with the changes whose code value the designer chose. */
+    apply: (keepCode: string[] = []) => reply({ type: "apply", id, keepCode }),
     async planEdits(changes: FigmaChange[]): Promise<PlannedEdit[]> {
       const edits = await reply({ type: "planEdits", id, changes: changes.map((change) => change.id) });
       if (edits.type !== "edits") throw new Error(`expected edits, got ${JSON.stringify(edits)}`);
@@ -127,6 +131,58 @@ export async function connectedShop() {
     /** What the plugin asked GitHub to write, after the first `from` requests. */
     writesSince: (from = 0) => server.requests.slice(from).filter((request) => request.method !== "GET"),
   };
+  return shop;
 }
 
 export type ConnectedShop = Awaited<ReturnType<typeof connectedShop>>;
+
+/** `text` with `before` replaced by `after` where it's written on line `line`, and nowhere else. */
+export function withSpanReplaced(
+  text: string,
+  { line, before, after }: { line: number; before: string; after: string },
+) {
+  const lines = text.split("\n");
+  const original = lines[line - 1] ?? "";
+  const at = original.indexOf(before);
+  expect(at, `line ${line} writes ${before}`).toBeGreaterThanOrEqual(0);
+  expect(original.indexOf(before, at + 1), `line ${line} writes ${before} once`).toBe(-1);
+  lines[line - 1] = original.slice(0, at) + after + original.slice(at + before.length);
+  return lines.join("\n");
+}
+
+/** The files the head commit of `branch` changed from its parent's. */
+export function changedOn(shop: ConnectedShop, branch: string): Map<string, string> {
+  const { git, refs } = shop.server;
+  const commit = git.commits.get(refs.get(branch) ?? "");
+  const parent = git.commits.get(commit?.parents[0] ?? "");
+  const before = parent ? git.filesIn(parent.tree) : new Map<string, string>();
+  const after = commit ? git.filesIn(commit.tree) : new Map<string, string>();
+  return new Map([...after].filter(([file, text]) => before.get(file) !== text));
+}
+
+/** The connected branch's files changed by `edit`, scanned by designmap again, and pushed: a developer's change, or a
+ * pull request merged, with CI writing tokens.json. */
+export async function pushScanned(shop: ConnectedShop, edit: (app: string) => Promise<void>): Promise<void> {
+  const app = await copyOf(shop.app, shop.server.filesOn(BRANCH));
+  await edit(app);
+  await designmap(app);
+  const onMain = shop.server.filesOn(BRANCH);
+  shop.server.push(new Map([...(await filesIn(app))].filter(([file, text]) => onMain.get(file) !== text)));
+}
+
+/** The brand colour's Light value in the Figma file. */
+export const brandLightIn = (shop: ConnectedShop) => {
+  const collection = [...shop.fake.collections.values()].find((c) => c.name === COLLECTION);
+  const light = collection?.modes.find((mode) => mode.name === "Light")?.modeId ?? "";
+  const brand = [...shop.fake.variables.values()].find((variable) => variable.name === "color/Brand");
+  return brand?.valuesByMode[light];
+};
+
+/** The Shop with its brand colour's light value changed in Figma, and its edit planned. */
+export async function brandChanged() {
+  const shop = await connectedShop();
+  recolor(shop.fake, "color/Brand", "Light", "#de2413", COLLECTION);
+  const changes = await shop.check();
+  await shop.planEdits(changes);
+  return { shop, changes };
+}

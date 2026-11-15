@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FigmaChange } from "../../figma-plugin/src/messages.js";
+import type { FigmaChange, PlanSummary } from "../../figma-plugin/src/messages.js";
 import { openWindow, summary } from "../helpers/plugin-window.js";
 
 const brand: FigmaChange = {
@@ -31,14 +31,14 @@ const ink: FigmaChange = {
 };
 
 /** The window connected to octo/app, showing a plan whose Figma changes are `changes`. */
-async function withChanges(changes: FigmaChange[], connected = true) {
+async function withChanges(changes: FigmaChange[], connected = true, more: Partial<PlanSummary> = {}) {
   const ui = await openWindow();
   if (connected)
     ui.receive({
       type: "connection",
       repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
     });
-  ui.receive({ type: "plan", id: 1, summary: { ...summary, figmaChanges: changes } });
+  ui.receive({ type: "plan", id: 1, summary: { ...summary, ...more, figmaChanges: changes } });
   const button = (name: string) => {
     const found = [...ui.result.querySelectorAll("button")].find(
       (candidate) => candidate.textContent === name,
@@ -67,7 +67,8 @@ describe("the window's changes made in Figma", () => {
     expect(text).toContain("Changed in Figma, not in code (2)");
     expect(text).toContain("color/brand #ff1a2e → #de2413");
     expect(text).toContain("Text/body size 17 → 20");
-    expect(text).toContain("Apply sets these back to the code's values.");
+    expect(text).toContain("Apply keeps these as you changed them until their pull request is merged.");
+    expect(text).not.toContain("Couldn't check GitHub");
   });
 
   it("plans edits for the changes ticked, only once one is", async () => {
@@ -79,10 +80,50 @@ describe("the window's changes made in Figma", () => {
     expect(ui.result.textContent).toContain("Reading the code from octo/app…");
   });
 
-  it("can't tick a change the code made too, and says why", async () => {
-    const ui = await withChanges([ink]);
+  it("shows both values of a change the code made too, to tick once the designer picks Use mine", async () => {
+    const ui = await withChanges([ink, brand]);
+    expect(ui.result.textContent).toContain("color/ink dark Code: #ff1a2e · Yours: #de2413");
     expect(ui.box("color/ink").disabled).toBe(true);
-    expect(ui.result.textContent).toContain("The code changed this too, so it can't be opened as an edit.");
+    ui.box("Use mine").click();
+    expect(ui.box("color/ink").disabled).toBe(false);
+    ui.tick("color/ink");
+    ui.button("Plan code edits").click();
+    expect(ui.sent.at(-1)).toEqual({ type: "planEdits", id: 1, changes: [ink.id] });
+    ui.box("Keep the code's").click();
+    expect([ui.box("color/ink").disabled, ui.box("color/ink").checked]).toEqual([true, false]);
+    expect(ui.button("Plan code edits").disabled).toBe(true);
+  });
+
+  it("tells Apply which changes made in the code too the designer keeps the code's value for", async () => {
+    const sky = { ...ink, id: "V:4 light", name: "color/sky", property: "light" as const };
+    const ui = await withChanges([ink, sky]);
+    const radios = [...ui.result.querySelectorAll<HTMLInputElement>("input[type=radio]")];
+    expect(radios.map((radio) => radio.closest("label")?.textContent?.trim())).toEqual([
+      "Keep the code's",
+      "Use mine",
+      "Keep the code's",
+      "Use mine",
+    ]);
+    radios[0]?.click();
+    radios[3]?.click();
+    ui.apply.click();
+    expect(ui.sent.at(-1)).toEqual({ type: "apply", id: 1, keepCode: [ink.id] });
+  });
+
+  it("shows a change already in an open pull request with its link, and nothing to tick", async () => {
+    const url = "https://github.com/octo/app/pull/3";
+    const ui = await withChanges([{ ...brand, pullRequest: url }]);
+    expect(ui.result.textContent).toContain("color/brand #ff1a2e → #de2413: Pull request open: " + url);
+    expect(ui.result.querySelector("a")?.getAttribute("href")).toBe(url);
+    expect(ui.result.querySelectorAll("input")).toHaveLength(0);
+  });
+
+  it("says quietly when GitHub couldn't list the open pull requests, and still offers the changes", async () => {
+    const ui = await withChanges([brand], true, { pullRequestsUnlisted: true });
+    expect(ui.result.textContent).toContain(
+      "Couldn't check GitHub for open pull requests, so one of these may be in one already.",
+    );
+    expect(ui.box("color/brand").disabled).toBe(false);
   });
 
   it("asks for a connected repo instead of offering edits from a picked file", async () => {

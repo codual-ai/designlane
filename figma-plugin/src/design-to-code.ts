@@ -63,7 +63,8 @@ export function createDesignToCode(send: (message: ToWindow) => void) {
       );
     }
     const read = readingOnce((file) => snapshot.read(inRoot(root, file)));
-    const ticked = found.changes.filter((change) => ids.includes(change.id));
+    // A change already in an open pull request isn't offered again, so a second one never has it.
+    const ticked = found.changes.filter((change) => ids.includes(change.id) && !change.pullRequest);
     const plans = await planCodeEdits(JSON.parse(json), read, ticked);
     planned = { id, repo: connection.repo, branch: connection.branch, snapshot, root, read, plans };
     send({ type: "edits", id, edits: [...plans].map(([change, plan]) => plannedEdit(change, plan)) });

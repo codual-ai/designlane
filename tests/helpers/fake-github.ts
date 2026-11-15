@@ -34,7 +34,17 @@ interface Refusal {
   headers: Record<string, string>;
 }
 
+/** A pull request opened, as its request's body has it; `repo` for one opened from a fork. */
+export interface PullBody {
+  title: string;
+  head: string;
+  base: string;
+  body: string | null;
+  repo?: string;
+}
+
 const PLAIN_FILE = "100644";
+const BASE = /(?:^|&)base=([^&]*)/;
 const SPREAD = 2654435761;
 const BYTE_ORDER_MARK = /^\uFEFF/;
 const ESCAPED_BYTE = /%[0-9A-F]{2}/g;
@@ -68,7 +78,9 @@ export function fakeGitHub({
   const trees = new Map<string, { entries: TreeEntry[]; files: Map<string, Stored> }>();
   const commits = new Map<string, { tree: string; message?: string; parents?: string[] }>();
   const refs = new Map<string, string>();
-  const pulls: unknown[] = [];
+  const pulls: PullBody[] = [];
+  /** The pull requests closed, by number. */
+  const closed = new Set<number>();
   const requests: SentRequest[] = [];
   const refusals: Refusal[] = [];
   let reachable = true;
@@ -170,8 +182,20 @@ export function fakeGitHub({
       refs.set(name, String(body.sha));
       return answer(201, { ref: body.ref });
     }
+    if (method === "GET" && route === "pulls") {
+      const base = decodeURIComponent(BASE.exec(query)?.[1] ?? "");
+      const open = pulls.flatMap((pull, index) =>
+        closed.has(index + 1) || pull.base !== base ? [] : [listedPull(pull, index + 1)],
+      );
+      return answer(200, open);
+    }
     if (method === "POST" && route === "pulls") {
-      pulls.push(body);
+      pulls.push({
+        title: String(body.title),
+        head: String(body.head),
+        base: String(body.base),
+        body: String(body.body),
+      });
       return answer(201, {
         html_url: `${pullUrl}/${repo}/pull/${pulls.length}`,
         number: pulls.length,
@@ -183,6 +207,15 @@ export function fakeGitHub({
     }
     return answer(404);
   }
+
+  /** A pull request as GitHub lists it; `repo` is where its branch is, another one's for a fork's. */
+  const listedPull = (pull: PullBody, number: number) => ({
+    number,
+    html_url: `${pullUrl}/${repo}/pull/${number}`,
+    head: { ref: pull.head, repo: { full_name: pull.repo ?? repo } },
+    base: { ref: pull.base },
+    body: pull.body,
+  });
 
   /** A tree from `base_tree` with the files `tree` lists put in. */
   function newTree(body: Record<string, unknown>): string {
@@ -213,6 +246,7 @@ export function fakeGitHub({
     fetch,
     requests,
     pulls,
+    closed,
     refs,
     commits,
     filesOn,

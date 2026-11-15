@@ -56,7 +56,7 @@ function paragraph(text: string, className = ""): HTMLElement {
 function showPlan(id: number, summary: PlanSummary): void {
   shown = id;
   changedInFigma =
-    summary.figmaChanges.length > 0 ? designToCode(id, summary.figmaChanges, connectedRepo, send) : undefined;
+    summary.figmaChanges.length > 0 ? designToCode(id, summary, connectedRepo, send) : undefined;
   const blocks = [
     ["New", summary.create],
     ["Changed", summary.update],
@@ -144,7 +144,7 @@ apply.addEventListener("click", () => {
   if (shown === undefined) return;
   apply.disabled = true;
   setApplying(true);
-  send({ type: "apply", id: shown });
+  send({ type: "apply", id: shown, keepCode: changedInFigma?.keepCode() ?? [] });
   shown = undefined;
 });
 element("close", HTMLButtonElement).addEventListener("click", () => send({ type: "close" }));

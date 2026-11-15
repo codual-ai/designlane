@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recolor, restyle } from "../helpers/figma-plugin.js";
 import {
   BRANCH,
+  brandChanged,
   COLLECTION,
   type ConnectedShop,
   closeServers,
@@ -16,6 +17,7 @@ import {
   REPO,
   TOKENS_PATH,
   WRITE_TOKEN,
+  withSpanReplaced,
 } from "../helpers/scanned-shop.js";
 
 const NOW = new Date("2026-11-14T10:00:00Z");
@@ -84,31 +86,8 @@ const valueAt = (json: unknown, keys: string[]): unknown =>
     json,
   );
 
-/** `text` with `before` replaced by `after` where it's written on line `line`, and nowhere else. */
-function withSpanReplaced(
-  text: string,
-  { line, before, after }: { line: number; before: string; after: string },
-) {
-  const lines = text.split("\n");
-  const original = lines[line - 1] ?? "";
-  const at = original.indexOf(before);
-  expect(at, `line ${line} writes ${before}`).toBeGreaterThanOrEqual(0);
-  expect(original.indexOf(before, at + 1), `line ${line} writes ${before} once`).toBe(-1);
-  lines[line - 1] = original.slice(0, at) + after + original.slice(at + before.length);
-  return lines.join("\n");
-}
-
 const routes = (shop: ConnectedShop, from?: number) =>
   shop.writesSince(from).map(({ method, path }) => `${method} ${path.replace(BRANCH_IN_PATH, "figma-…")}`);
-
-/** The Shop with its brand colour's light value changed in Figma, and its edit planned. */
-async function brandChanged() {
-  const shop = await connectedShop();
-  recolor(shop.fake, "color/Brand", "Light", "#de2413", COLLECTION);
-  const changes = await shop.check();
-  await shop.planEdits(changes);
-  return { shop, changes };
-}
 
 describe("design to code, end to end, against GitHub's API on a local server", () => {
   beforeEach(() => {

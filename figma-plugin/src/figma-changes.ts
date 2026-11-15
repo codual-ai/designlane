@@ -7,7 +7,7 @@ import { EDIT_PROPERTIES, type EditProperty } from "../../src/edit/edit-tokens.j
 import type { DesignFile, DesignFileEntry, VariableValue } from "../../src/sync/plan.js";
 import type { Rgba, SyncColor, SyncTokens, TextValue } from "../../src/sync/tokens-file.js";
 import { parsedJson } from "./connection.js";
-import { KEYS, NAMESPACE } from "./design-file.js";
+import { type DarkUnavailable, KEYS, NAMESPACE } from "./design-file.js";
 import type { FigmaChange } from "./messages.js";
 
 /** A token's values by property, as a code edit takes them: `#rrggbb` or `#rrggbbaa`, a number, a family's name. A
@@ -30,13 +30,20 @@ interface Pair {
 }
 
 /** Every synced variable and text style the code still has, paired with its token. A designer's own entries aren't
- * synced, and a copy a designer made of a synced one is left alone, as a sync leaves it. */
-export function pairsOf(tokens: SyncTokens, file: DesignFile): Pair[] {
+ * synced, and a copy a designer made of a synced one is left alone, as a sync leaves it. A collection `withoutDark`,
+ * which has no Dark mode, has no dark values to compare. */
+export function pairsOf(tokens: SyncTokens, file: DesignFile, withoutDark: DarkUnavailable): Pair[] {
   const groups = [
-    { label: "", tokens: tokens.colors.map((c) => colorToken(c.key, c)), entries: file.variables },
+    {
+      label: "",
+      tokens: tokens.colors.map((c) => colorToken(c.key, c, withoutDark.main)),
+      entries: file.variables,
+    },
     ...(tokens.themes ?? []).map((theme) => ({
       label: `${theme.name}: `,
-      tokens: theme.colors.map((c) => colorToken(`${theme.key}/${c.key}`, c)),
+      tokens: theme.colors.map((c) =>
+        colorToken(`${theme.key}/${c.key}`, c, withoutDark.themes.has(theme.name)),
+      ),
       entries: file.themes?.find((t) => t.theme === theme.name)?.variables ?? [],
     })),
   ];
@@ -66,9 +73,7 @@ function paired<V>(
   kind: Pair["kind"],
   label: string,
 ): Pair[] {
-  const synced = new Map<string, DesignFileEntry<V>>();
-  for (const entry of entries)
-    if (entry.identity && !synced.has(entry.identity)) synced.set(entry.identity, entry);
+  const synced = syncedByIdentity(entries);
   return tokens.flatMap((token) => {
     const entry = synced.get(token.identity);
     const figma = entry && valuesOf(entry.value);
@@ -77,10 +82,21 @@ function paired<V>(
   });
 }
 
-const colorToken = (key: string, color: SyncColor): Token => ({
+/** The entries a sync made, by the identity each records; a copy a designer made keeps it too, so the first wins. */
+export function syncedByIdentity<V>(entries: DesignFileEntry<V>[]): Map<string, DesignFileEntry<V>> {
+  const synced = new Map<string, DesignFileEntry<V>>();
+  for (const entry of entries)
+    if (entry.identity && !synced.has(entry.identity)) synced.set(entry.identity, entry);
+  return synced;
+}
+
+/** A change's id, which the designer ticks: the variable or style, and which of its values. */
+export const changeIdOf = (entryId: string, property: EditProperty) => `${entryId} ${property}`;
+
+const colorToken = (key: string, color: SyncColor, isLightOnly: boolean): Token => ({
   identity: color.identity,
   key,
-  values: colorValues(color.light, color.dark),
+  values: colorValues(color.light, isLightOnly ? undefined : color.dark),
 });
 
 const hexOf = ({ hex, alpha }: Rgba) => {
@@ -125,7 +141,7 @@ export function figmaChanges(pairs: Pair[], agreed: Map<string, Values>): FigmaC
       const { id, name, token } = pair;
       return [
         {
-          id: `${id} ${property}`,
+          id: changeIdOf(id, property),
           name,
           token,
           property,

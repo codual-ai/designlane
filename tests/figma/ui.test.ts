@@ -34,7 +34,7 @@ describe("the plugin window", () => {
     const id = await ui.pick("{}");
     ui.receive({ type: "plan", id, summary });
     ui.apply.click();
-    expect(ui.sent.at(-1)).toEqual({ type: "apply", id });
+    expect(ui.sent.at(-1)).toEqual({ type: "apply", id, keepCode: [] });
   });
 
   it("keeps Apply off for a plan with nothing to do", async () => {

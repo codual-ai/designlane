@@ -21,6 +21,7 @@ export const summary: PlanSummary = {
   darkLeftOut: false,
   applicable: true,
   figmaChanges: [],
+  pullRequestsUnlisted: false,
 };
 
 /** The plugin window, freshly loaded, with what it sends to the Figma side. */

@@ -80,6 +80,8 @@ describe("opening a pull request with the code edits", () => {
           "- `Text/body's font size`: `17` → `20`, in `src/theme.ts:4`",
           "",
           "The app's tokens.json catches up the next time designmap runs.",
+          "",
+          '<!-- designmap-figma-changes [{"token":"brand","property":"light","value":"#de2413"},{"token":"body","property":"size","value":"20"}] -->',
         ].join("\n"),
       },
     ]);

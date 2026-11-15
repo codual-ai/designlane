@@ -107,6 +107,11 @@ export async function syncedShop({ root = "", files = SHOP } = {}) {
     restyle: (name: string, change: StyleChange) => restyle(fake, name, change),
     /** What the plugin sent last, for the plan on screen. */
     last: (): ToWindow | undefined => app.last(),
+    /** Presses Apply on the plan on screen, with the changes whose code value the designer chose. */
+    async apply(keepCode: string[] = []) {
+      await app.session({ type: "apply", id: plans, keepCode });
+      return app.last();
+    },
     async planEdits(changes: string[]) {
       await app.session({ type: "planEdits", id: plans, changes });
       return app.last();

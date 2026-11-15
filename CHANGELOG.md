@@ -27,6 +27,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   `designmap/figma-<date>-<hash>` branch, titled "Design changes from Figma: <n> values", listing each change. It needs
   a second fine-grained token with Contents and Pull requests set to Read and write, asked for the first time and kept
   on this computer per repo; the read-only token stays for syncing.
+  Apply keeps the values changed in Figma as they are, applying everything else, until the code has them. A change
+  already in an open Designmap pull request into the connected branch, found by a marker in its description, shows
+  "Pull request open" with its link instead of a box to tick (if the read-only token can't list pull requests, the
+  changes show as before with a note). A value the code changed too shows both values, "Code: … · Yours: …", with
+  **Keep the code's**, which Apply sets, or **Use mine**, which is planned from the code's value now.
 - `designmap edit <token> <property> <value>`: changes a colour's light or dark value, or a text style's family, size
   or weight, in the code where tokens.json says it's written, written the way the code writes it (hex case and
   length, `0xFF…` ARGB, `Color(red:green:blue:)` with the same decimals or `/ 255`, `rgb()`, asset catalog

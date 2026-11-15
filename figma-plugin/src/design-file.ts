@@ -89,14 +89,22 @@ export interface DarkUnavailable {
   themes: Set<string>;
 }
 
+async function collectionsWhere(test: (collection: VariableCollection) => boolean): Promise<DarkUnavailable> {
+  const main = await syncedCollection();
+  const themes = [...(await themeCollections())].filter(([, collection]) => test(collection));
+  return { main: main ? test(main) : false, themes: new Set(themes.map(([theme]) => theme)) };
+}
+
 /** Which collections couldn't take a Dark mode, so the code's dark values for them are left out until one can be
  * added. */
-export async function darkUnavailable(): Promise<DarkUnavailable> {
-  const full = (collection: VariableCollection | undefined) =>
-    collection?.getSharedPluginData(NAMESPACE, KEYS.darkUnavailable) === "true";
-  const themes = [...(await themeCollections())].filter(([, collection]) => full(collection));
-  return { main: full(await syncedCollection()), themes: new Set(themes.map(([theme]) => theme)) };
-}
+export const darkUnavailable = () =>
+  collectionsWhere(
+    (collection) => collection.getSharedPluginData(NAMESPACE, KEYS.darkUnavailable) === "true",
+  );
+
+/** Which collections have no Dark mode of Designmap's now: not added yet, out of room, or deleted by a designer. */
+export const withoutDarkMode = () =>
+  collectionsWhere((collection) => syncModes(collection).dark === undefined);
 
 /** Each text style's font, by the style's id. */
 export async function textStyleFonts(): Promise<Map<string, FontName>> {

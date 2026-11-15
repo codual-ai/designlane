@@ -118,7 +118,7 @@ describe("planning the code edits for changes made in Figma", () => {
     });
   });
 
-  it("refuses a change the code made too, without planning it", async () => {
+  it("plans a change the code made too from the code's value now, once the designer uses theirs", async () => {
     const shop = await syncedShop();
     const tokens = shopTokens({ brandLight: "#0055ff" });
     shop.github.push({
@@ -126,13 +126,10 @@ describe("planning the code edits for changes made in Figma", () => {
       [TOKENS_PATH]: JSON.stringify(tokens),
     });
     shop.recolor("color/brand", "Light", "#de2413");
-    expect(await shop.planEdits(ids(await shop.check()))).toMatchObject({
-      edits: [
-        {
-          ok: false,
-          reason: expect.stringMatching(/^The code changed this too since Figma and the code last agreed/),
-        },
-      ],
+    const changes = await shop.check();
+    expect(changes).toMatchObject([{ from: "#0055ff", to: "#de2413", inCodeToo: true }]);
+    expect(await shop.planEdits(ids(changes))).toMatchObject({
+      edits: [{ ok: true, file: THEME, line: 1, before: "#0055FF", after: "#DE2413" }],
     });
   });
 

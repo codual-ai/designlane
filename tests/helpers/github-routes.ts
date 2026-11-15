@@ -35,7 +35,8 @@ const TreeBody = z.object({
 const CommitBody = z.object({ message: z.string(), tree: z.string(), parents: z.array(z.string()) });
 const RefBody = z.object({ ref: z.string().startsWith(HEADS), sha: z.string() });
 const PullBody = z.object({ title: z.string(), head: z.string(), base: z.string(), body: z.string() });
-export type PullRequest = z.infer<typeof PullBody>;
+/** A pull request opened, and whether it's still open. */
+export type PullRequest = z.infer<typeof PullBody> & { state: "open" | "closed" };
 
 export interface RepoState {
   git: GitObjects;
@@ -127,12 +128,36 @@ export function reads(state: RepoState, route: string, query: string, accept: st
     if (query.includes("recursive")) return failure(400, "Unexpected recursive listing");
     return ok(answer.tree(tail("git/trees/")));
   }
+  if (route === "pulls") return openPulls(state, new URLSearchParams(query));
   if (route.startsWith("git/blobs/")) {
     const sha = tail("git/blobs/");
     const blob = git.blobs.get(sha);
     return blob ? answer.contents(blob, accept, { sha, url: at(`git/blobs/${sha}`) }) : NOT_FOUND;
   }
   return NOT_FOUND;
+}
+
+/** The pull requests `query` asks for, as GitHub lists them: open ones only, into its `base` when it names one. */
+function openPulls({ pulls, repo, at }: RepoState, query: URLSearchParams): Answer {
+  if (query.get("state") !== "open") return failure(400, "Unexpected listing of closed pull requests");
+  const base = query.get("base");
+  const listed = pulls.flatMap((pull, index) => {
+    if (pull.state !== "open" || (base !== null && pull.base !== base)) return [];
+    const number = index + 1;
+    return [
+      {
+        number,
+        state: pull.state,
+        title: pull.title,
+        body: pull.body,
+        url: at(`pulls/${number}`),
+        html_url: `https://github.com/${repo}/pull/${number}`,
+        head: { ref: pull.head, repo: { full_name: repo } },
+        base: { ref: pull.base, repo: { full_name: repo } },
+      },
+    ];
+  });
+  return { status: 200, json: listed };
 }
 
 const INVALID = failure(422, "Invalid request.");
@@ -181,7 +206,7 @@ export function writes(state: RepoState, method: string, route: string, body: un
   if (route === "pulls") {
     const pull = PullBody.safeParse(body).data;
     if (!pull || !refs.has(pull.head) || !refs.has(pull.base)) return failure(422, "Validation Failed");
-    pulls.push(pull);
+    pulls.push({ ...pull, state: "open" });
     const number = pulls.length;
     return ok(
       { number, state: "open", title: pull.title, html_url: `https://github.com/${repo}/pull/${number}` },

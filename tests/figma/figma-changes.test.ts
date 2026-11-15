@@ -74,15 +74,13 @@ describe("what a designer changed in Figma", () => {
     expect(brief(await shop.check())).toEqual(["Brand/Primary (brand) light #ff1a2e → #de2413"]);
   });
 
-  it("drops a change once Figma has the code's value again, by Apply or by hand", async () => {
+  it("drops a change once Figma has the code's value again", async () => {
     const shop = await syncedShop();
     shop.recolor("color/brand", "Light", "#de2413");
     shop.recolor("color/ink", "Light", "#000000");
     expect(await shop.check()).toHaveLength(2);
     shop.recolor("color/ink", "Light", "#112233");
     expect(brief(await shop.check())).toEqual(["color/brand (brand) light #ff1a2e → #de2413"]);
-    await shop.app.session({ type: "apply", id: shop.plan() });
-    expect(await shop.check()).toEqual([]);
   });
 
   it("guesses nothing in a file synced before it recorded what the two agree on, and starts from then", async () => {
