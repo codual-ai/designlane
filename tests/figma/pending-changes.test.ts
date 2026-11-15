@@ -5,6 +5,7 @@ import type { FigmaChange } from "../../figma-plugin/src/messages.js";
 import { markerOf, openPullRequests, withPullRequests } from "../../figma-plugin/src/open-pull-requests.js";
 import type { Rgba } from "../../src/sync/tokens-file.js";
 import { fakeGitHub } from "../helpers/fake-github.js";
+import { brandChange as brand } from "../helpers/figma-change.js";
 import {
   modeNamed,
   onlyCollection,
@@ -16,22 +17,20 @@ import {
 } from "../helpers/figma-plugin.js";
 import {
   READ_TOKEN,
-  SHOP,
+  rebranded,
+  type SyncedShop,
   shopTokens,
   syncedShop,
-  THEME,
   TOKENS_PATH,
   WRITE_TOKEN,
 } from "../helpers/shop-repo.js";
 import { tokensJson } from "../helpers/tokens-json.js";
 
-type Shop = Awaited<ReturnType<typeof syncedShop>>;
-
 const brief = (changes: FigmaChange[]) =>
   changes.map(({ name, property, from, to }) => `${name} ${property} ${from} → ${to}`);
 
 /** The value a colour variable of the default theme holds in Figma, in its Light or Dark mode. */
-function valueIn(shop: Shop, name: string, mode: "Light" | "Dark") {
+function valueIn(shop: SyncedShop, name: string, mode: "Light" | "Dark") {
   const { fake } = shop.app;
   const collection = [...fake.collections.values()].find((c) => c.name === "Designmap");
   const modeId = collection?.modes.find((m) => m.name === mode)?.modeId ?? "";
@@ -41,26 +40,10 @@ function valueIn(shop: Shop, name: string, mode: "Light" | "Dark") {
   return variable?.valuesByMode[modeId];
 }
 
-/** The Shop's code with `brand`'s light value changed, as a push to the repo has it. */
-const rebranded = (hex: string) => ({
-  [THEME]: (SHOP[THEME] ?? "").replace("#FF1A2E", hex.toUpperCase()),
-  [TOKENS_PATH]: JSON.stringify(shopTokens({ brandLight: hex })),
-});
-
-const summaryOf = (shop: Shop) => {
+const summaryOf = (shop: SyncedShop) => {
   const message = shop.last();
   if (message?.type !== "plan") throw new Error(`expected a plan, got ${JSON.stringify(message)}`);
   return message.summary;
-};
-
-const brand: FigmaChange = {
-  id: "V:1 light",
-  name: "color/brand",
-  token: "brand",
-  property: "light",
-  from: "#ff1a2e",
-  to: "#de2413",
-  inCodeToo: false,
 };
 
 describe("Apply and the values a designer changed in Figma", () => {

@@ -9,13 +9,11 @@ import { run } from "../../src/cli/run.js";
 import { useGitHubServer } from "./figma-fetch.js";
 import { plugin, recolor } from "./figma-plugin.js";
 import { type Access, type GitHubServer, startGitHubServer } from "./github-server.js";
+import { READ_TOKEN, TOKENS_PATH, WRITE_TOKEN } from "./shop-repo.js";
 import { tempDir } from "./temp.js";
 
 export const REPO = "octo/shop";
 export const BRANCH = "main";
-export const TOKENS_PATH = "designmap/tokens.json";
-export const READ_TOKEN = "github_pat_read";
-export const WRITE_TOKEN = "github_pat_write";
 /** The Figma collection a sync makes for the app, named after its folder. */
 export const COLLECTION = "Shop (Designmap)";
 

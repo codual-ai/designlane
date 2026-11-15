@@ -56,6 +56,13 @@ export function shopTokens({ files = SHOP, brandLight }: { files?: Files; brandL
   return tokens;
 }
 
+/** The Shop's code with `brand`'s light value changed, as a push to the repo has it: written as long, so at the same
+ * place. */
+export function rebranded(hex: string) {
+  const files = { [THEME]: (SHOP[THEME] ?? "").replace("#FF1A2E", hex.toUpperCase()) };
+  return { ...files, [TOKENS_PATH]: JSON.stringify(shopTokens({ brandLight: hex })) };
+}
+
 export const TOKENS_PATH = "designmap/tokens.json";
 export const READ_TOKEN = "github_pat_read";
 export const WRITE_TOKEN = "github_pat_write";
@@ -127,3 +134,9 @@ export async function syncedShop({ root = "", files = SHOP } = {}) {
     },
   };
 }
+
+export type SyncedShop = Awaited<ReturnType<typeof syncedShop>>;
+
+/** The words of the design-to-code failure `message` shows, or what came instead. */
+export const designToCodeError = (message: ToWindow | undefined) =>
+  message?.type === "designToCodeError" ? message.message : `no error: ${JSON.stringify(message)}`;

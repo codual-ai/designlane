@@ -13,12 +13,10 @@ import {
   copyOf,
   designmap,
   filesIn,
-  READ_TOKEN,
   REPO,
-  TOKENS_PATH,
-  WRITE_TOKEN,
   withSpanReplaced,
 } from "../helpers/scanned-shop.js";
+import { READ_TOKEN, TOKENS_PATH, WRITE_TOKEN } from "../helpers/shop-repo.js";
 
 const NOW = new Date("2026-11-14T10:00:00Z");
 const BRANCH_NAME = /^designmap\/figma-2026-11-14-[0-9a-f]{7}$/;

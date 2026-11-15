@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeGitHub } from "../helpers/fake-github.js";
-import { SHOP, syncedShop, THEME, WRITE_TOKEN } from "../helpers/shop-repo.js";
+import { designToCodeError, SHOP, syncedShop, THEME, WRITE_TOKEN } from "../helpers/shop-repo.js";
 
 const NOW = new Date("2026-11-14T10:00:00Z");
 
@@ -17,9 +17,6 @@ async function plannedShop(options?: Parameters<typeof syncedShop>[0]) {
 
 const writes = (shop: { github: ReturnType<typeof fakeGitHub> }) =>
   shop.github.requests.filter((request) => request.method !== "GET");
-
-const errorOf = (message: unknown) =>
-  message && typeof message === "object" && "message" in message ? message.message : JSON.stringify(message);
 
 describe("opening a pull request with the code edits", () => {
   beforeEach(() => {
@@ -106,7 +103,7 @@ describe("opening a pull request with the code edits", () => {
   it("opens only the edits ticked, and refuses when none that can be made is", async () => {
     const shop = await plannedShop();
     const [brand, inkDark] = shop.changes;
-    expect(errorOf(await shop.openPullRequest(inkDark ? [inkDark] : [], WRITE_TOKEN))).toBe(
+    expect(designToCodeError(await shop.openPullRequest(inkDark ? [inkDark] : [], WRITE_TOKEN))).toBe(
       "Tick at least one edit to open a pull request.",
     );
     await shop.openPullRequest(brand ? [brand] : [], WRITE_TOKEN);
@@ -161,7 +158,7 @@ describe("opening a pull request with the code edits", () => {
     shop.github.accept();
     shop.github.refuse("POST", "pulls", 500);
     shop.github.refuse("DELETE", "git/refs/", 500);
-    const left = errorOf(await shop.openPullRequest(shop.changes, WRITE_TOKEN));
+    const left = designToCodeError(await shop.openPullRequest(shop.changes, WRITE_TOKEN));
     expect(left).toMatch(
       /^GitHub answered 500 Error\. Try again in a moment\. The branch designmap\/figma-\S+ is left on GitHub: delete it there\.$/,
     );
@@ -170,28 +167,28 @@ describe("opening a pull request with the code edits", () => {
   it("says plainly when GitHub limits requests, the branch is there already, or GitHub can't be reached", async () => {
     const shop = await plannedShop();
     shop.github.refuse("POST", "git/blobs", 403, { "x-ratelimit-remaining": "0" });
-    expect(errorOf(await shop.openPullRequest(shop.changes, WRITE_TOKEN))).toBe(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes, WRITE_TOKEN))).toBe(
       "GitHub is limiting requests for now. Try again in a few minutes.",
     );
     expect(await shop.app.fake.api.clientStorage.getAsync("writeToken:octo/app")).toBe(WRITE_TOKEN);
     shop.github.accept();
     shop.github.refuse("POST", "git/refs", 422);
-    expect(errorOf(await shop.openPullRequest(shop.changes))).toMatch(/it's there already/);
+    expect(designToCodeError(await shop.openPullRequest(shop.changes))).toMatch(/it's there already/);
     shop.github.accept();
     shop.github.refuse("POST", "git/refs", 409);
-    expect(errorOf(await shop.openPullRequest(shop.changes))).toMatch(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes))).toMatch(
       /^Couldn't make the branch designmap\/figma-2026-11-14-[0-9a-f]{7} on octo\/app: it's there already\. Press Open pull request again\.$/,
     );
     shop.github.accept();
     shop.github.disconnect();
-    expect(errorOf(await shop.openPullRequest(shop.changes))).toBe(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes))).toBe(
       "Couldn't reach GitHub. Check your internet connection, then try again.",
     );
   });
 
   it("asks for a token when the one pasted is empty, and opens no pull request for a plan no longer shown", async () => {
     const shop = await plannedShop();
-    expect(errorOf(await shop.openPullRequest(shop.changes, "  "))).toBe(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes, "  "))).toBe(
       "Paste a GitHub token that can open pull requests on this repo.",
     );
     await shop.app.session({
@@ -200,7 +197,9 @@ describe("opening a pull request with the code edits", () => {
       changes: shop.changes,
       token: WRITE_TOKEN,
     });
-    expect(errorOf(shop.last())).toBe("The plan changed. Look it over, then tick the changes again.");
+    expect(designToCodeError(shop.last())).toBe(
+      "The plan changed. Look it over, then tick the changes again.",
+    );
     expect(writes(shop)).toEqual([]);
   });
 
@@ -213,13 +212,15 @@ describe("opening a pull request with the code edits", () => {
       changes: shop.changes,
       token: WRITE_TOKEN,
     });
-    expect(errorOf(shop.last())).toBe("The plan changed. Look it over, then tick the changes again.");
+    expect(designToCodeError(shop.last())).toBe(
+      "The plan changed. Look it over, then tick the changes again.",
+    );
   });
 
   it("opens one pull request from a set of planned edits, never a second with the same edits", async () => {
     const shop = await plannedShop();
     await shop.openPullRequest(shop.changes, WRITE_TOKEN);
-    expect(errorOf(await shop.openPullRequest(shop.changes))).toBe(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes))).toBe(
       "The plan changed. Look it over, then tick the changes again.",
     );
     expect(shop.github.pulls).toHaveLength(1);
@@ -228,7 +229,7 @@ describe("opening a pull request with the code edits", () => {
   it("shows no link GitHub gives that isn't one of its own pages, keeping the branch it may be open from", async () => {
     const shop = await plannedShop();
     const github = fakeGitHub({ files: shop.github.filesOn("main"), pullUrl: "https://example.com" });
-    expect(errorOf(await shop.openPullRequest(shop.changes, WRITE_TOKEN))).toMatch(
+    expect(designToCodeError(await shop.openPullRequest(shop.changes, WRITE_TOKEN))).toMatch(
       /^GitHub answered in a way Designmap doesn't expect\. Try again in a moment\. The branch designmap\/figma-\S+ is on GitHub: look there for its pull request first\.$/,
     );
     expect(github.refs.size).toBe(2);

@@ -14,10 +14,9 @@ import {
   designmap,
   filesIn,
   pushScanned,
-  READ_TOKEN,
-  WRITE_TOKEN,
   withSpanReplaced,
 } from "../helpers/scanned-shop.js";
+import { READ_TOKEN, WRITE_TOKEN } from "../helpers/shop-repo.js";
 
 describe("a designer's changes while the code changes too, end to end, against GitHub's API on a local server", () => {
   afterEach(async () => {

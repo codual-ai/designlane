@@ -1,19 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FigmaChange } from "../../figma-plugin/src/messages.js";
 import { fakeGitHub } from "../helpers/fake-github.js";
-import { SHOP, shopTokens, syncedShop, THEME, TOKENS_PATH } from "../helpers/shop-repo.js";
-
-type Shop = Awaited<ReturnType<typeof syncedShop>>;
+import {
+  designToCodeError,
+  SHOP,
+  type SyncedShop,
+  shopTokens,
+  syncedShop,
+  THEME,
+  TOKENS_PATH,
+} from "../helpers/shop-repo.js";
 
 const ids = (changes: FigmaChange[]) => changes.map((change) => change.id);
-const errorOf = (message: unknown) =>
-  message &&
-  typeof message === "object" &&
-  "type" in message &&
-  message.type === "designToCodeError" &&
-  "message" in message
-    ? message.message
-    : `no error: ${JSON.stringify(message)}`;
 
 describe("planning the code edits for changes made in Figma", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -94,7 +92,7 @@ describe("planning the code edits for changes made in Figma", () => {
     shop.recolor("color/brand", "Light", "#de2413");
     const changes = await shop.check();
     shop.github.push({ [TOKENS_PATH]: JSON.stringify(shopTokens(), null, 1) });
-    expect(errorOf(await shop.planEdits(ids(changes)))).toBe(
+    expect(designToCodeError(await shop.planEdits(ids(changes)))).toBe(
       "main changed since you checked it. Press Check again, then tick the changes.",
     );
   });
@@ -138,32 +136,34 @@ describe("planning the code edits for changes made in Figma", () => {
     shop.recolor("color/brand", "Light", "#de2413");
     const changes = ids(await shop.check());
     shop.github.refuse("GET", "git/ref/heads/main", 404);
-    expect(errorOf(await shop.planEdits(changes))).toBe(
+    expect(designToCodeError(await shop.planEdits(changes))).toBe(
       "Couldn't find the branch main in octo/app. Check it still exists, then press Check again.",
     );
     shop.github.accept();
     shop.github.refuse("GET", "git/trees/", 403, { "x-ratelimit-remaining": "0" });
-    expect(errorOf(await shop.planEdits(changes))).toBe(
+    expect(designToCodeError(await shop.planEdits(changes))).toBe(
       "GitHub is limiting requests for now. Try again in a few minutes.",
     );
     shop.github.accept();
     shop.github.refuse("GET", "git/trees/", 429);
-    expect(errorOf(await shop.planEdits(changes))).toBe(
+    expect(designToCodeError(await shop.planEdits(changes))).toBe(
       "GitHub is limiting requests for now. Try again in a few minutes.",
     );
     shop.github.disconnect();
-    expect(errorOf(await shop.planEdits(changes))).toBe(
+    expect(designToCodeError(await shop.planEdits(changes))).toBe(
       "Couldn't reach GitHub. Check your internet connection, then try again.",
     );
     await shop.app.session({ type: "planEdits", id: shop.plan() + 1, changes });
-    expect(errorOf(shop.last())).toBe("The plan changed. Look it over, then tick the changes again.");
+    expect(designToCodeError(shop.last())).toBe(
+      "The plan changed. Look it over, then tick the changes again.",
+    );
   });
 
   it("needs a connected repo, not a picked tokens.json, and the tokens file where designmap writes it", async () => {
     const shop = await syncedShop();
     await shop.app.session({ type: "plan", id: 50, json: shop.json });
     await shop.app.session({ type: "planEdits", id: 50, changes: [] });
-    expect(errorOf(shop.last())).toBe(
+    expect(designToCodeError(shop.last())).toBe(
       "Connect this file to the app's repo to open a pull request. A picked tokens.json can't open one.",
     );
     const elsewhere = await syncedShop();
@@ -178,7 +178,7 @@ describe("planning the code edits for changes made in Figma", () => {
       token: "t",
     });
     await elsewhere.app.session({ type: "planEdits", id: 60, changes: [] });
-    expect(errorOf(elsewhere.last())).toBe(
+    expect(designToCodeError(elsewhere.last())).toBe(
       "Opening a pull request needs the tokens file in the app's designmap/ folder, where designmap writes it.",
     );
   });
@@ -191,7 +191,7 @@ describe("planning the code edits for changes made in Figma", () => {
     shop.app.fake.root.setPluginData("connection", JSON.stringify(source));
     await shop.app.fake.api.clientStorage.setAsync("token:octo/../../user", "github_pat_read");
     const before = shop.github.requests.length;
-    expect(errorOf(await shop.planEdits(changes))).toBe(
+    expect(designToCodeError(await shop.planEdits(changes))).toBe(
       '"octo/../../user" isn\'t a repo name. Connect the repo again.',
     );
     expect(shop.github.requests.length).toBe(before);
@@ -200,7 +200,7 @@ describe("planning the code edits for changes made in Figma", () => {
   it("refuses to edit a file Git doesn't hold as plain text: a link, one GitHub lists only part of, one outside the repo", async () => {
     const reasonFor = async (
       options: Omit<Parameters<typeof fakeGitHub>[0], "files">,
-      files = (shop: Shop) => shop.github.filesOn("main"),
+      files = (shop: SyncedShop) => shop.github.filesOn("main"),
     ) => {
       const shop = await syncedShop();
       shop.recolor("color/brand", "Light", "#de2413");
@@ -213,7 +213,7 @@ describe("planning the code edits for changes made in Figma", () => {
     expect(await reasonFor({ modes: { [THEME]: "120000" } })).toBe(
       "Designmap can't read src/theme.ts: it isn't a plain file.",
     );
-    const withoutTheme = (shop: Shop) => {
+    const withoutTheme = (shop: SyncedShop) => {
       const { [THEME]: _, ...rest } = shop.github.filesOn("main");
       return rest;
     };

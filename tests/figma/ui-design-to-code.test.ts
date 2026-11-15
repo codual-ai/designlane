@@ -1,17 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FigmaChange, PlanSummary } from "../../figma-plugin/src/messages.js";
+import { brandChange as brand } from "../helpers/figma-change.js";
 import { openWindow, summary } from "../helpers/plugin-window.js";
 
-const brand: FigmaChange = {
-  id: "V:1 light",
-  name: "color/brand",
-  token: "brand",
-  property: "light",
-  from: "#ff1a2e",
-  to: "#de2413",
-  inCodeToo: false,
-};
 const body: FigmaChange = {
   ...brand,
   id: "S:2 size",
@@ -156,7 +148,7 @@ describe("the window's changes made in Figma", () => {
   it("shows a change already in an open pull request with its link, and nothing to tick", async () => {
     const url = "https://github.com/octo/app/pull/3";
     const ui = await withChanges([{ ...brand, pullRequest: url }]);
-    expect(ui.result.textContent).toContain("color/brand #ff1a2e → #de2413: Pull request open: " + url);
+    expect(ui.result.textContent).toContain(`color/brand #ff1a2e → #de2413: Pull request open: ${url}`);
     expect(ui.result.querySelector("a")?.getAttribute("href")).toBe(url);
     expect(ui.result.querySelectorAll("input")).toHaveLength(0);
   });

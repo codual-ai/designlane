@@ -1,19 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { keptChanges } from "../../figma-plugin/src/kept-in-figma.js";
-import type { FigmaChange } from "../../figma-plugin/src/messages.js";
+import { brandChange as brand } from "../helpers/figma-change.js";
 import { modeNamed, plugin, recolor, rgb, styleNamed, variableNamed } from "../helpers/figma-plugin.js";
 import { syncedShop, WRITE_TOKEN } from "../helpers/shop-repo.js";
 import { tokensJson } from "../helpers/tokens-json.js";
-
-const brand: FigmaChange = {
-  id: "V:1 light",
-  name: "color/brand",
-  token: "brand",
-  property: "light",
-  from: "#ff1a2e",
-  to: "#de2413",
-  inCodeToo: false,
-};
 
 describe("setting a change made in Figma back to the code's value", () => {
   afterEach(() => vi.unstubAllGlobals());

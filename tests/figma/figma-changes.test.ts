@@ -1,21 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FigmaChange } from "../../figma-plugin/src/messages.js";
 import { rgb, variableNamed } from "../helpers/figma-plugin.js";
-import { SHOP, shopTokens, syncedShop, THEME, TOKENS_PATH } from "../helpers/shop-repo.js";
+import { rebranded, syncedShop, TOKENS_PATH } from "../helpers/shop-repo.js";
 
 const brief = (changes: FigmaChange[]) =>
   changes.map(
     ({ name, token, property, from, to, inCodeToo }) =>
       `${name} (${token}) ${property} ${from} → ${to}${inCodeToo ? ", in the code too" : ""}`,
   );
-
-/** The Shop's code with `brand`'s light value changed, as a push to the repo has it: written as long, so at the same
- * place. */
-function rebranded(hex: string) {
-  const files = { [THEME]: (SHOP[THEME] ?? "").replace("#FF1A2E", hex.toUpperCase()) };
-  const tokens = shopTokens({ brandLight: hex });
-  return { ...files, [TOKENS_PATH]: JSON.stringify(tokens) };
-}
 
 describe("what a designer changed in Figma", () => {
   afterEach(() => vi.unstubAllGlobals());
