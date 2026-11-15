@@ -6,21 +6,22 @@
 
 import { lineNumbers } from "../frameworks/source-text.js";
 import type { CodeSpan, ValueKind } from "../scan/types.js";
+import { namesHold, namesNothing } from "./alias-copy.js";
+import { isOperatorAfter, isOperatorBefore, nextCode, quotedSpan, WORD } from "./code-scan.js";
 import {
   COLOR_PROPERTIES,
-  type EditableToken,
   type EditProperty,
   editableTokens,
   findToken,
+  PROPERTY_NAMES,
   type TokenValue,
   type ValueLocation,
+  valueLabel,
 } from "./edit-tokens.js";
 import { COLOR_EDITOR, FAMILY_EDITOR, SIZE_EDITOR, type ValueEditor, WEIGHT_EDITOR } from "./editors.js";
 import { languageOf, MAX_VALUE_LENGTH, QUOTES, type SpanText, spliced } from "./notation.js";
-
-/** A file's text by its path relative to the app's root: undefined when there's no such file, or why it can't be
- * read (`it's over 512 KB`). */
-export type ReadSource = (file: string) => Promise<string | { unreadable: string } | undefined>;
+import { type ReadSource, sourceOf } from "./read-source.js";
+import { dependents, ownerOf, sharers } from "./sharers.js";
 
 export interface TokenChange {
   /** The token's key in tokens.json, or how the code refers to it (`Theme.surface`). */
@@ -42,27 +43,8 @@ export interface TextEdit {
 
 export type EditPlan = { ok: true; edit: TextEdit } | { ok: false; reason: string };
 
-const PROPERTY_NAMES: Record<EditProperty, string> = {
-  light: "colour",
-  dark: "dark colour",
-  family: "font family",
-  size: "font size",
-  weight: "font weight",
-};
 /** A name on the way to a value: `colors.blue0`, `Palette.Yellow500`, `@color/blue600`, `colors.brand[500]`. */
 const NAME = /^[@?]?[A-Za-z_$][\w.$/[\]"'-]*$/;
-/** The last part of a name: `blue0` of `colors.blue0`, `500` of `colors.brand[500]`, `blue600` of `@color/blue600`. */
-const LAST_PART = /([\w$-]+)["'\]]*$/;
-const WORD = /[\w$]/;
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-/** A value's parts: white space, a string, a number (`0x3366CC`, `0.5f`), a word, or one other character. */
-const PART = /\s+|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\d[\w.]*|[A-Za-z_$][\w$]*|[\s\S]/g;
-/** A string that works a name into it: Swift's `\(alpha)`, Kotlin's and Dart's `$alpha`. */
-const INTERPOLATES = /\\\(|\$/;
-/** Lines one declaration may run over, at most. */
-const MAX_STATEMENT_LINES = 20;
-const CONTINUES = /[=(,[{+\-*/.:?|&]$/;
-const OPERATORS = new Set(["+", "-", "*", "/", "%"]);
 
 const refuse = (reason: string): EditPlan => ({ ok: false, reason });
 const at = (span: CodeSpan) => `${span.file}:${span.line}`;
@@ -78,7 +60,7 @@ export async function planEdit(
   const isColor = COLOR_PROPERTIES.some((property) => property === change.property);
   const found = findToken(isColor ? colors : textStyles, change.token);
   if ("reason" in found) return refuse(found.reason);
-  const what = `${found.token.key}'s ${PROPERTY_NAMES[change.property]}`;
+  const what = valueLabel(found.token.key, change.property);
   const value = found.token.values.find((v) => v.property === change.property);
   if (!value) return refuse(`tokens.json gives ${found.token.key} no ${PROPERTY_NAMES[change.property]}.`);
   if (!value.location) {
@@ -170,41 +152,6 @@ async function targetOf(
   return { value, span: own, before: name.text, quote: quoted ? opening : "" };
 }
 
-/** The text of `file`, or why there's none to edit. */
-async function sourceOf(read: ReadSource, file: string): Promise<{ source: string } | { reason: string }> {
-  const got = await read(file);
-  if (got === undefined) return { reason: `${file} isn't in the app any more.` };
-  if (typeof got !== "string") return { reason: `Designmap can't read ${file}: ${got.unreadable}.` };
-  return { source: got };
-}
-
-/** `span` with the quotes around it when it's a quoted literal's contents. */
-function quotedSpan(text: string, span: CodeSpan): { start: number; end: number } {
-  const opening = text[span.start - 1] ?? "";
-  return QUOTES.has(opening) && text[span.end] === opening
-    ? { start: span.start - 1, end: span.end + 1 }
-    : span;
-}
-
-/** The index of the first character at or after `from` that isn't white space or in a comment. */
-function nextCode(text: string, from: number): number {
-  let at = from;
-  while (at < text.length) {
-    if (/\s/.test(text[at] ?? "")) at++;
-    else if (text.startsWith("//", at)) at = lineEnd(text, at);
-    else if (text.startsWith("/*", at)) {
-      const close = text.indexOf("*/", at + 2);
-      at = close === -1 ? text.length : close + 2;
-    } else break;
-  }
-  return at;
-}
-
-function lineEnd(text: string, from: number): number {
-  const end = text.indexOf("\n", from);
-  return end === -1 ? text.length : end;
-}
-
 /** The text at `span`, when the file still has it where tokens.json says and it's still a whole name or value: one
  * that grew (`17` to `170`) would be half rewritten, and one now worked out (`17 * 2`) is no longer the value. A
  * member's span starts at its dot. */
@@ -221,177 +168,9 @@ function spanText(fileText: string, span: CodeSpan): { text: string } | { reason
   return runsOn || runsIn || isComputed ? { reason: changedSince(span, { text }) } : { text };
 }
 
-/** Whether an arithmetic operator follows `end`, past white space and comments. */
-function isOperatorAfter(text: string, end: number): boolean {
-  return OPERATORS.has(text[nextCode(text, end)] ?? "");
-}
-
-/** Whether an arithmetic operator comes before `start`, past white space and comments. A line comment's start can't
- * be told from `//` in a string going backwards, so an operator before either counts. */
-function isOperatorBefore(text: string, start: number): boolean {
-  let at = start;
-  for (;;) {
-    const previous = text[at - 1] ?? "";
-    if (/\s/.test(previous)) {
-      at--;
-      if (previous !== "\n") continue;
-      const lineStart = text.lastIndexOf("\n", at - 1) + 1;
-      const comment = text.slice(lineStart, at).indexOf("//");
-      if (comment === -1) continue;
-      if (OPERATORS.has(text.slice(lineStart, at).trimEnd().at(-1) ?? "")) return true;
-      at = lineStart + comment;
-    } else if (text.startsWith("*/", at - 2)) {
-      const open = text.lastIndexOf("/*", at - 3);
-      if (open === -1) return true;
-      at = open;
-    } else return OPERATORS.has(previous);
-  }
-}
-
-/** Whether each name on the way to a colour still names the next: its last part (`blue0` of `colors.blue0`) is
- * declared on the line of the next name or the value, so a name changed since the scan isn't followed blindly. */
-async function namesHold(location: ValueLocation, read: ReadSource): Promise<CodeSpan | undefined> {
-  const chain = [...(location.via ?? []), location];
-  for (const [i, name] of chain.slice(0, -1).entries()) {
-    const next = chain[i + 1];
-    const [nameText, nextText] = (await Promise.all([read(name.file), next && read(next.file)])).map(textOf);
-    const part = LAST_PART.exec(nameText?.slice(name.start, name.end) ?? "")?.[1];
-    if (!next || nextText === undefined || !part) return name;
-    const declaration = nextText.slice(nextText.lastIndexOf("\n", next.start - 1) + 1, next.start);
-    if (!hasWord(declaration, part)) return name;
-  }
-  return undefined;
-}
-
-const textOf = (got: string | { unreadable: string } | undefined) =>
-  typeof got === "string" ? got : undefined;
-
-function hasWord(text: string, word: string): boolean {
-  for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
-    if (!WORD.test(text[at - 1] ?? "") && !WORD.test(text[at + word.length] ?? "")) return true;
-  }
-  return false;
-}
-
 function changedSince(span: CodeSpan, found?: { text: string } | { reason: string }) {
   const now = found && "text" in found ? ` now reads \`${found.text}\`` : " has changed";
   return `${at(span)}${now}: the code changed since designmap last ran. Run designmap again.`;
-}
-
-const overlaps = (a: CodeSpan, b: CodeSpan) => a.file === b.file && a.start < b.end && b.start < a.end;
-
-/** The key of the token whose own value is written at `span`, when there's one. */
-function ownerOf(tokens: EditableToken[], span: CodeSpan): string | undefined {
-  const owners = tokens.filter((token) =>
-    token.values.some((v) => v.location && !v.location.via?.length && overlaps(v.location, span)),
-  );
-  const [only] = owners;
-  return owners.length === 1 ? only?.key : undefined;
-}
-
-/** The other token values an edit at `span` would change too: those written there, and those whose names lead there. */
-function sharers(tokens: EditableToken[], value: TokenValue, span: CodeSpan): string[] {
-  return tokens.flatMap((token) =>
-    token.values
-      .filter((other) => other !== value && other.location)
-      .filter(({ location }) => [...(location?.via ?? []), location].some((s) => s && overlaps(s, span)))
-      .map((other) => `${token.key}'s ${PROPERTY_NAMES[other.property]}`),
-  );
-}
-
-/** Whether a value copied elsewhere names nothing that may not be in scope there: it's a literal, or a call
- * (`Color(hex: 0x3366CC, opacity: 0.5)`) of numbers and strings, labelled or not, and members its arguments' types
- * have (`.sRGB`), not `Color(hex: 0x3366CC, opacity: alpha)`. */
-function namesNothing(text: string, kind: ValueKind): boolean {
-  if (kind === "literal") return true;
-  const parts = [...text.matchAll(PART)].map(([part]) => part).filter((part) => part.trim() !== "");
-  let at = parts[0] === "#" ? 1 : 0;
-  while (IDENTIFIER.test(parts[at] ?? "") && parts[at + 1] === ".") at += 2;
-  at = IDENTIFIER.test(parts[at] ?? "") && parts[at + 1] === "(" ? at + 1 : 0;
-  return parts.slice(at).every((part, i, rest) => {
-    if (QUOTES.has(part[0] ?? "")) return !INTERPOLATES.test(part);
-    if (!IDENTIFIER.test(part)) return part !== "`";
-    const [before, after = "", next] = [rest[i - 1], rest[i + 1], rest[i + 2]];
-    const isLabel = after === ":" || (after === "=" && next !== "=");
-    const isMember = before === "." && (rest[i - 2] === "(" || rest[i - 2] === ",");
-    return isLabel || isMember;
-  });
-}
-
-/** The other token values the code works out from `token` by its name (`Faded = Brand.copy(alpha = 0.5f)`), which
- * an edit to it would change too: those written as an expression naming it, and those tokens.json doesn't say where
- * are written whose declaration names it. */
-async function dependents(
-  tokens: EditableToken[],
-  token: EditableToken,
-  read: ReadSource,
-): Promise<string[]> {
-  const names = [...token.names, token.key.split("/").at(-1) ?? ""].flatMap((name) => {
-    const part = LAST_PART.exec(name)?.[1];
-    return part && IDENTIFIER.test(part) ? [part] : [];
-  });
-  if (names.length === 0) return [];
-  const found = await Promise.all(
-    tokens
-      .filter((other) => other !== token)
-      .flatMap((other) =>
-        other.values.map(async (value) => {
-          const code = await codeOf(other, value, read);
-          const label = `${other.key}'s ${PROPERTY_NAMES[value.property]}`;
-          if (code === undefined) return [];
-          return code === null || names.some((name) => namesWord(code, name)) ? [label] : [];
-        }),
-      ),
-  );
-  return found.flat();
-}
-
-/** The code working out `value`: its expression, or its token's declaration when tokens.json doesn't say where it's
- * written, without the token's own name; undefined when it's a literal or there's no telling where it is, and null
- * when its file can't be read. */
-async function codeOf(
-  token: EditableToken,
-  value: TokenValue,
-  read: ReadSource,
-): Promise<string | null | undefined> {
-  const { location } = value;
-  if (location && location.kind !== "expression") return undefined;
-  const span = location ?? token.declared;
-  if (!span) return undefined;
-  const text = textOf(await read(span.file));
-  if (text === undefined) return null;
-  if (location) return text.slice(location.start, location.end);
-  const statement = statementAt(text, span.line);
-  const own = token.names
-    .map((name) => LAST_PART.exec(name)?.[1] ?? "")
-    .find((name) => name && statement.includes(name));
-  return own ? statement.slice(statement.indexOf(own) + own.length) : statement;
-}
-
-/** The declaration starting on `line`, through the lines it runs on to: while a bracket is open, a line ends in an
- * operator, or the next starts with a call (`.copy(…)`). */
-function statementAt(text: string, line: number): string {
-  const lines = text.split("\n").slice(line - 1, line - 1 + MAX_STATEMENT_LINES);
-  let depth = 0;
-  let end = 0;
-  while (end < lines.length) {
-    const current = lines[end] ?? "";
-    for (const char of current) depth += "([{".includes(char) ? 1 : ")]}".includes(char) ? -1 : 0;
-    end++;
-    const runsOn = depth > 0 || CONTINUES.test(current.trimEnd()) || /^\s*\??\./.test(lines[end] ?? "");
-    if (!runsOn) break;
-  }
-  return lines.slice(0, end).join("\n");
-}
-
-/** Whether `text` names `name` as a value, not as an argument's label (`primary = …`). */
-function namesWord(text: string, name: string): boolean {
-  for (let at = text.indexOf(name); at !== -1; at = text.indexOf(name, at + 1)) {
-    const after = text.slice(at + name.length);
-    const isWord = !WORD.test(text[at - 1] ?? "") && !WORD.test(after[0] ?? "");
-    if (isWord && !/^\s*(?::|=(?!=))/.test(after)) return true;
-  }
-  return false;
 }
 
 function list(items: string[]): string {

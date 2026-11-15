@@ -14,6 +14,17 @@ export const COLOR_PROPERTIES = ["light", "dark"] as const;
 export const TYPE_PROPERTIES = ["family", "size", "weight"] as const;
 export type EditProperty = (typeof COLOR_PROPERTIES)[number] | (typeof TYPE_PROPERTIES)[number];
 
+export const PROPERTY_NAMES: Record<EditProperty, string> = {
+  light: "colour",
+  dark: "dark colour",
+  family: "font family",
+  size: "font size",
+  weight: "font weight",
+};
+
+/** How a message names one value of a token: `link's dark colour`. */
+export const valueLabel = (key: string, property: EditProperty) => `${key}'s ${PROPERTY_NAMES[property]}`;
+
 /** A value of a token, as tokens.json has it, and where it's written when the file records that. */
 export type TokenValue = { location?: ValueLocation } & (
   | { property: (typeof COLOR_PROPERTIES)[number]; old: Color }
