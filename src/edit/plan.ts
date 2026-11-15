@@ -20,7 +20,7 @@ import {
 } from "./edit-tokens.js";
 import { COLOR_EDITOR, FAMILY_EDITOR, SIZE_EDITOR, type ValueEditor, WEIGHT_EDITOR } from "./editors.js";
 import { languageOf, MAX_VALUE_LENGTH, QUOTES, type SpanText, spliced } from "./notation.js";
-import { type ReadSource, sourceOf } from "./read-source.js";
+import { type ReadSource, readingOnce, sourceOf } from "./read-source.js";
 import { dependents, ownerOf, sharers } from "./sharers.js";
 
 export interface TokenChange {
@@ -53,9 +53,10 @@ const at = (span: CodeSpan) => `${span.file}:${span.line}`;
  * written, reading files with `read`. Throws when `tokensFile` isn't a tokens.json Designmap writes. */
 export async function planEdit(
   tokensFile: unknown,
-  read: ReadSource,
+  readFile: ReadSource,
   change: TokenChange,
 ): Promise<EditPlan> {
+  const read = readingOnce(readFile);
   const { colors, textStyles } = editableTokens(tokensFile);
   const isColor = COLOR_PROPERTIES.some((property) => property === change.property);
   const found = findToken(isColor ? colors : textStyles, change.token);
@@ -210,8 +211,9 @@ function rewriteWith<T>(
   if (matching.length === 0) return refuse(changedSince(value.span, value));
   const texts = new Set(matching.map((reading) => reading.write(to, old)));
   const [after] = texts;
-  if (texts.size > 1)
+  if (texts.size > 1) {
     return refuse(`${written} could be read more than one way, so its new value could be too.`);
+  }
   if (after === undefined) return refuse(`${written} can't hold ${editor.show(to)} written the same way.`);
   const { file, line, start, end } = span;
   return { ok: true, edit: { file, line, start, end, before, after: `${quote}${after}${quote}` } };

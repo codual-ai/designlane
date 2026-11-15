@@ -13,5 +13,19 @@ export async function sourceOf(
   return { source: got };
 }
 
+/** `read` reading each file once: the checks read the same files many times, and the Figma plugin reads over the
+ * network. */
+export function readingOnce(read: ReadSource): ReadSource {
+  const files = new Map<string, ReturnType<ReadSource>>();
+  return (file) => {
+    let got = files.get(file);
+    if (!got) {
+      got = read(file);
+      files.set(file, got);
+    }
+    return got;
+  };
+}
+
 export const textOf = (got: string | { unreadable: string } | undefined) =>
   typeof got === "string" ? got : undefined;

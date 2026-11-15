@@ -52,8 +52,9 @@ export async function edit(argv: string[], { out, error }: Output): Promise<numb
   }
   const real = await realPathInside(root, plan.edit.file);
   const text = real && (await readText(real));
-  if (!real || text === undefined)
+  if (!real || text === undefined) {
     throw new UsageError(`${plan.edit.file} changed while it was being edited`, 1);
+  }
   out(editDiff(text, plan.edit));
   if (values["dry-run"]) return 0;
   await writeFile(real, applyEdit(text, plan.edit));
