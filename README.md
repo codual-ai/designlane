@@ -8,7 +8,7 @@
 and it reads the colours and text styles your code names, so your design tool's variables and text styles update with
 every push.
 
-![A Figma file synced by Designmap: each colour from the code as a variable with its light and dark values, and the text styles](.github/assets/hero.png)
+https://github.com/user-attachments/assets/e6324208-a820-4d70-b27a-24a0337e082c
 
 *An app's design system in Figma, synced from its code: each colour with its light and dark value and how the code
 names it (`Theme.accent`).*
