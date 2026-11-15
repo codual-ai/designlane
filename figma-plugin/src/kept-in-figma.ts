@@ -4,30 +4,34 @@
 import { EDIT_PROPERTIES, type EditProperty } from "../../src/edit/edit-tokens.js";
 import type { DesignFile, DesignFileEntry, VariableValue } from "../../src/sync/plan.js";
 import type { SyncColor, SyncTokens, TextValue } from "../../src/sync/tokens-file.js";
+import type { DarkUnavailable } from "./design-file.js";
 import { changeIdOf, syncedByIdentity } from "./figma-changes.js";
 import type { FigmaChange } from "./messages.js";
 import { hasOwnDark } from "./values.js";
 
 type KeptOf = (entryId: string) => ReadonlySet<EditProperty>;
 
-/** `tokens` with each of the `kept` changes' values taken from `file`, the Figma file they were found in. */
+/** `tokens` with each of the `kept` changes' values taken from `file`, the Figma file as it is now; a collection
+ * `withoutDark` has no Dark mode to keep a value in. */
 export function withFigmaValues(
   tokens: SyncTokens,
   file: DesignFile,
   kept: readonly FigmaChange[],
+  withoutDark: DarkUnavailable,
 ): SyncTokens {
   const ids = new Set(kept.map((change) => change.id));
   const keptOf: KeptOf = (entryId) =>
     new Set(EDIT_PROPERTIES.filter((property) => ids.has(changeIdOf(entryId, property))));
   return {
     ...tokens,
-    colors: keptColors(tokens.colors, file.variables, keptOf),
+    colors: keptColors(tokens.colors, file.variables, keptOf, withoutDark.main),
     textStyles: keptTextStyles(tokens.textStyles, file.textStyles, keptOf),
     ...(tokens.themes
       ? {
           themes: tokens.themes.map((theme) => {
             const entries = file.themes?.find((inFile) => inFile.theme === theme.name)?.variables ?? [];
-            return { ...theme, colors: keptColors(theme.colors, entries, keptOf) };
+            const lightOnly = withoutDark.themes.has(theme.name);
+            return { ...theme, colors: keptColors(theme.colors, entries, keptOf, lightOnly) };
           }),
         }
       : {}),
@@ -38,6 +42,7 @@ function keptColors(
   colors: SyncColor[],
   entries: DesignFileEntry<VariableValue>[],
   keptOf: KeptOf,
+  lightOnly: boolean,
 ): SyncColor[] {
   const synced = syncedByIdentity(entries);
   return colors.map((color) => {
@@ -46,14 +51,16 @@ function keptColors(
     if (!entry || kept.size === 0 || typeof entry.value === "number") return color;
     const inFigma = entry.value;
     const light = kept.has("light") ? inFigma.light : color.light;
-    // A colour alike in both modes in the code keeps its Dark value when only its Light one is kept.
-    const dark = kept.has("dark")
-      ? (inFigma.dark ?? inFigma.light)
-      : (color.dark ?? (inFigma.dark && color.light));
+    const dark = kept.has("dark") ? (inFigma.dark ?? inFigma.light) : codeDark(color, lightOnly);
     const { dark: _, ...rest } = color;
     return dark && hasOwnDark(light, dark) ? { ...rest, light, dark } : { ...rest, light };
   });
 }
+
+/** The code's dark value, which a colour alike in both modes has in its Light one, unless its collection has no Dark
+ * mode, where only a dark value of the code's own would add one. */
+const codeDark = (color: SyncColor, lightOnly: boolean) =>
+  lightOnly ? color.dark : (color.dark ?? color.light);
 
 function keptTextStyles(
   styles: SyncTokens["textStyles"],

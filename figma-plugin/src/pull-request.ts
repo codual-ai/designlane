@@ -19,6 +19,8 @@ export interface Base {
   branch: string;
   commit: string;
   tree: string;
+  /** The tokens.json connected, whose app the edits are for. */
+  tokensFile: string;
 }
 
 /** A file the pull request changes: its path in the repo, its Git mode, and its text with the edits made. */
@@ -58,7 +60,7 @@ export async function openPullRequest(
   const branch = `${BRANCH_PREFIX}${now.toISOString().slice(0, 10)}-${commit.sha.slice(0, SHORT_HASH)}`;
   await createBranch(api, branch, commit.sha);
   try {
-    const body = { title, head: branch, base: base.branch, body: pullRequestBody(changes) };
+    const body = { title, head: branch, base: base.branch, body: pullRequestBody(base.tokensFile, changes) };
     return (await api.json(Pull, "pulls", { method: "POST", body })).html_url;
   } catch (error) {
     // Only a refusal says no pull request was opened; after any other failure one may have been.
@@ -99,7 +101,7 @@ async function createBranch(api: RepoApi, branch: string, sha: string): Promise<
 /** Names and values in code spans, with any backtick of their own made plain so none can end the span. */
 const code = (text: string) => `\`${text.replace(BACKTICKS, "'")}\``;
 
-function pullRequestBody(changes: MadeChange[]): string {
+function pullRequestBody(tokensFile: string, changes: MadeChange[]): string {
   const lines = changes.map(
     ({ change, edit, path }) =>
       `- ${code(changeLabel(change))}: ${code(change.from)} → ${code(change.to)}, in ${code(`${path}:${edit.line}`)}`,
@@ -111,6 +113,9 @@ function pullRequestBody(changes: MadeChange[]): string {
     "",
     "The app's tokens.json catches up the next time designmap runs.",
     "",
-    markerOf(changes.map(({ change }) => change)),
+    markerOf(
+      tokensFile,
+      changes.map(({ change }) => change),
+    ),
   ].join("\n");
 }

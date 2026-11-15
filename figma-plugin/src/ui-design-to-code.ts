@@ -61,7 +61,11 @@ export function designToCode(
   const refreshPlanButton = () => {
     planButton.disabled = ticked(list).length === 0;
   };
-  list.addEventListener("change", refreshPlanButton);
+  list.addEventListener("change", (event) => {
+    // Edits planned for a change whose value the designer now chooses differently no longer stand.
+    if (event.target instanceof HTMLInputElement && event.target.type === "radio") clearEdits();
+    refreshPlanButton();
+  });
   refreshPlanButton();
 
   let edits = element("ul");
@@ -75,6 +79,13 @@ export function designToCode(
     say(`Opening a pull request on ${repo}…`);
     send({ type: "openPullRequest", id, changes: ticked(edits), ...(token === undefined ? {} : { token }) });
   };
+
+  function clearEdits(): void {
+    edits = element("ul");
+    openButton = undefined;
+    editsArea.replaceChildren();
+    tokenArea.replaceChildren();
+  }
 
   function showEdits(planned: PlannedEdit[]): void {
     const byId = new Map(changes.map((change) => [change.id, change]));

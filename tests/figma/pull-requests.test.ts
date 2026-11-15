@@ -81,7 +81,7 @@ describe("opening a pull request with the code edits", () => {
           "",
           "The app's tokens.json catches up the next time designmap runs.",
           "",
-          '<!-- designmap-figma-changes [{"token":"brand","property":"light","value":"#de2413"},{"token":"body","property":"size","value":"20"}] -->',
+          '<!-- designmap-figma-changes {"tokens":"designmap/tokens.json","values":[{"token":"brand","property":"light","value":"#de2413"},{"token":"body","property":"size","value":"20"}]} -->',
         ].join("\n"),
       },
     ]);

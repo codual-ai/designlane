@@ -25,6 +25,7 @@ interface Planned {
   id: number;
   repo: string;
   branch: string;
+  tokensFile: string;
   snapshot: Snapshot;
   /** The app's folder in the repo, which tokens.json's paths are relative to. */
   root: string;
@@ -66,13 +67,14 @@ export function createDesignToCode(send: (message: ToWindow) => void) {
     // A change already in an open pull request isn't offered again, so a second one never has it.
     const ticked = found.changes.filter((change) => ids.includes(change.id) && !change.pullRequest);
     const plans = await planCodeEdits(JSON.parse(json), read, ticked);
-    planned = { id, repo: connection.repo, branch: connection.branch, snapshot, root, read, plans };
+    const { repo, branch, path: tokensFile } = connection;
+    planned = { id, repo, branch, tokensFile, snapshot, root, read, plans };
     send({ type: "edits", id, edits: [...plans].map(([change, plan]) => plannedEdit(change, plan)) });
   }
 
   async function openRequest(id: number, ids: string[], given: string | undefined): Promise<void> {
     if (planned?.id !== id) throw new Error(CHANGED);
-    const { repo, branch, snapshot, root, read, plans } = planned;
+    const { repo, branch, tokensFile, snapshot, root, read, plans } = planned;
     const made: MadeChange[] = [...plans].flatMap(([change, plan]) =>
       plan.ok && ids.includes(change.id)
         ? [{ change, edit: plan.edit, path: inRoot(root, plan.edit.file) }]
@@ -92,7 +94,7 @@ export function createDesignToCode(send: (message: ToWindow) => void) {
       root,
       made.map(({ edit }) => edit),
     );
-    const base = { branch, commit: snapshot.commit, tree: snapshot.tree };
+    const base = { branch, commit: snapshot.commit, tree: snapshot.tree, tokensFile };
     try {
       const url = await openPullRequest(repoApi(repo, token), base, files, made, new Date());
       // The same edits again would open a second pull request.

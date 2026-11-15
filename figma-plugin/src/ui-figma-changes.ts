@@ -40,7 +40,7 @@ function conflict(change: FigmaChange): HTMLLIElement {
   choices.append(
     element(
       "legend",
-      "The code changed this too. Keep the code's, which Apply sets, or use yours in a pull request:",
+      `${nameOf(change)}: the code changed this too. Keep the code's, which Apply sets, or use yours in a pull request:`,
       "hint",
     ),
   );

@@ -1,5 +1,5 @@
 /** The pull requests Designmap opened from Figma that are still open, found by a marker in each one's description
- * listing the values it changes, so a change already in one isn't offered again. */
+ * listing the values it changes and the tokens file they're for, so a change already in one isn't offered again. */
 
 import { z } from "zod";
 import { EDIT_PROPERTIES } from "../../src/edit/edit-tokens.js";
@@ -18,7 +18,8 @@ const ESCAPED_CLOSER = "\\u003e";
 const PAGE_SIZE = 100;
 
 const MarkedValue = z.object({ token: z.string(), property: z.enum(EDIT_PROPERTIES), value: z.string() });
-const Marked = z.array(MarkedValue);
+/** `tokens`: the tokens.json the values are for, which tells one app's from another's in a repo with several. */
+const Marked = z.object({ tokens: z.string(), values: z.array(MarkedValue) });
 type MarkedValue = z.infer<typeof MarkedValue>;
 /** A pull request's page, which GitHub gives as its `html_url`. */
 export const PullRequestPage = z.url().startsWith("https://github.com/");
@@ -40,23 +41,32 @@ export type OpenPullRequests = { listed: true; pulls: OpenPullRequest[] } | { li
 
 export const NO_PULL_REQUESTS: OpenPullRequests = { listed: true, pulls: [] };
 
-/** The marker for a pull request's description: the values it changes, kept out of sight in an HTML comment. */
-export function markerOf(changes: readonly FigmaChange[]): string {
+/** The marker for a pull request's description: the values it changes for `tokensFile`, out of sight in an HTML
+ * comment. */
+export function markerOf(tokensFile: string, changes: readonly FigmaChange[]): string {
   const values: MarkedValue[] = changes.map(({ token, property, to }) => ({ token, property, value: to }));
-  return `${MARKER_START}${JSON.stringify(values).replace(COMMENT_CLOSER, ESCAPED_CLOSER)}${MARKER_END}`;
+  const json = JSON.stringify({ tokens: tokensFile, values });
+  return `${MARKER_START}${json.replace(COMMENT_CLOSER, ESCAPED_CLOSER)}${MARKER_END}`;
 }
 
-/** The values a description's marker lists; none for one without a marker, such as one opened before markers. */
-function markedValues(body: string | null): MarkedValue[] {
+/** The values a description's marker lists for `tokensFile`; none for one without a marker, such as one opened before
+ * markers, or one for another app's tokens file. */
+function markedValues(body: string | null, tokensFile: string): MarkedValue[] {
   const start = body?.indexOf(MARKER_START) ?? -1;
   if (!body || start === -1) return [];
   const end = body.indexOf(MARKER_END, start + MARKER_START.length);
   if (end === -1) return [];
-  return Marked.safeParse(parsedJson(body.slice(start + MARKER_START.length, end))).data ?? [];
+  const marked = Marked.safeParse(parsedJson(body.slice(start + MARKER_START.length, end))).data;
+  return marked?.tokens === tokensFile ? marked.values : [];
 }
 
-/** Designmap's open pull requests into `branch`: those from one of its own branches in the repo itself. */
-export async function openPullRequests(api: RepoApi, branch: string): Promise<OpenPullRequests> {
+/** Designmap's open pull requests into `branch` for `tokensFile`'s app: those from one of its own branches in the repo
+ * itself. */
+export async function openPullRequests(
+  api: RepoApi,
+  branch: string,
+  tokensFile: string,
+): Promise<OpenPullRequests> {
   const query = `state=open&base=${encodeURIComponent(branch)}&per_page=${PAGE_SIZE}`;
   try {
     const pulls = await api.json(Pulls, `pulls?${query}`);
@@ -66,7 +76,7 @@ export async function openPullRequests(api: RepoApi, branch: string): Promise<Op
     );
     return {
       listed: true,
-      pulls: ours.map(({ html_url, body }) => ({ url: html_url, values: markedValues(body) })),
+      pulls: ours.map(({ html_url, body }) => ({ url: html_url, values: markedValues(body, tokensFile) })),
     };
   } catch {
     // A token without access to pull requests, or GitHub unreachable, leaves the changes offered as they are.

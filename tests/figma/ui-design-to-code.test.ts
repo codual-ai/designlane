@@ -89,9 +89,22 @@ describe("the window's changes made in Figma", () => {
     ui.tick("color/ink");
     ui.button("Plan code edits").click();
     expect(ui.sent.at(-1)).toEqual({ type: "planEdits", id: 1, changes: [ink.id] });
+    expect(ui.result.querySelector("legend")?.textContent).toMatch(
+      /^color\/ink dark: the code changed this too/,
+    );
+    ui.receive({
+      type: "edits",
+      id: 1,
+      edits: [{ ok: true, change: ink.id, file: "a.ts", line: 1, before: "a", after: "b" }],
+    });
+    expect(ui.button("Open pull request").disabled).toBe(false);
     ui.box("Keep the code's").click();
     expect([ui.box("color/ink").disabled, ui.box("color/ink").checked]).toEqual([true, false]);
     expect(ui.button("Plan code edits").disabled).toBe(true);
+    expect(ui.result.textContent).not.toContain("Code edits");
+    expect([...ui.result.querySelectorAll("button")].map((b) => b.textContent)).not.toContain(
+      "Open pull request",
+    );
   });
 
   it("tells Apply which changes made in the code too the designer keeps the code's value for", async () => {

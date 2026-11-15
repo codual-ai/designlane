@@ -51,9 +51,12 @@ interface Pending {
   inCode: SyncTokens;
 }
 
-/** The plan that syncs `tokens` to `file` and leaves the `kept` changes as Figma has them. */
-const fittedPlan = (tokens: SyncTokens, file: DesignFile, kept: readonly FigmaChange[]) =>
-  withoutMissingFonts(planSync(withFigmaValues(tokens, file, kept), file));
+/** The plan that syncs `tokens` to `file`, the file as the designer saw it planned, leaving the `kept` changes as
+ * Figma has them now: a value changed again since then is kept as it is now, not as it was. */
+async function fittedPlan(tokens: SyncTokens, file: DesignFile, kept: readonly FigmaChange[]) {
+  const keeping = withFigmaValues(tokens, await readDesignFile(), kept, await withoutDarkMode());
+  return withoutMissingFonts(planSync(keeping, file));
+}
 
 /** Answers each message from the window in turn, replying through `send`. */
 export function createSession(send: (message: ToWindow) => void): (data: unknown) => Promise<void> {
@@ -216,8 +219,8 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
 
 const repoOf = ({ repo, branch, path }: Connection): RepoSource => ({ repo, branch, path });
 
-const pullRequestsOf = ({ repo, branch, token }: Connection) =>
-  openPullRequests(repoApi(repo, token), branch);
+const pullRequestsOf = ({ repo, branch, path, token }: Connection) =>
+  openPullRequests(repoApi(repo, token), branch, path);
 
 function parseJson(text: string, origin: Origin): unknown {
   try {

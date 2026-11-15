@@ -27,6 +27,8 @@ interface Pair {
   token: string;
   code: Values;
   figma: Values;
+  /** Its collection has no Dark mode, so its dark values aren't compared or agreed on. */
+  lightOnly: boolean;
 }
 
 /** Every synced variable and text style the code still has, paired with its token. A designer's own entries aren't
@@ -36,11 +38,13 @@ export function pairsOf(tokens: SyncTokens, file: DesignFile, withoutDark: DarkU
   const groups = [
     {
       label: "",
+      lightOnly: withoutDark.main,
       tokens: tokens.colors.map((c) => colorToken(c.key, c, withoutDark.main)),
       entries: file.variables,
     },
     ...(tokens.themes ?? []).map((theme) => ({
       label: `${theme.name}: `,
+      lightOnly: withoutDark.themes.has(theme.name),
       tokens: theme.colors.map((c) =>
         colorToken(`${theme.key}/${c.key}`, c, withoutDark.themes.has(theme.name)),
       ),
@@ -53,10 +57,10 @@ export function pairsOf(tokens: SyncTokens, file: DesignFile, withoutDark: DarkU
     values: textValues(s.value),
   }));
   return [
-    ...groups.flatMap(({ label, tokens, entries }) =>
-      paired(tokens, entries, variableValues, "variable", label),
+    ...groups.flatMap(({ label, lightOnly, tokens, entries }) =>
+      paired(tokens, entries, variableValues, { kind: "variable", label, lightOnly }),
     ),
-    ...paired(textStyles, file.textStyles, textValues, "style", ""),
+    ...paired(textStyles, file.textStyles, textValues, { kind: "style", label: "", lightOnly: false }),
   ];
 }
 
@@ -70,15 +74,15 @@ function paired<V>(
   tokens: Token[],
   entries: DesignFileEntry<V>[],
   valuesOf: (value: V) => Values | undefined,
-  kind: Pair["kind"],
-  label: string,
+  { kind, label, lightOnly }: Pick<Pair, "kind" | "lightOnly"> & { label: string },
 ): Pair[] {
   const synced = syncedByIdentity(entries);
   return tokens.flatMap((token) => {
     const entry = synced.get(token.identity);
     const figma = entry && valuesOf(entry.value);
     if (!entry || !figma) return [];
-    return [{ id: entry.id, kind, name: label + entry.name, token: token.key, code: token.values, figma }];
+    const name = label + entry.name;
+    return [{ id: entry.id, kind, name, token: token.key, code: token.values, figma, lightOnly }];
   });
 }
 
@@ -164,8 +168,10 @@ function agreements(pairs: Pair[], agreed: Map<string, Values>): Map<Pair, Value
     for (const { property, inCode, inFigma } of compared(pair))
       if (inCode === inFigma) now[property] = inCode;
     // A colour alike in both modes agrees on its dark value too, so a later change to Dark alone has one to compare.
+    // Without a Dark mode there's none to agree on: one added later starts as a copy of Light, not a designer's value.
     const { code, figma } = pair;
     if (
+      !pair.lightOnly &&
       code.dark === undefined &&
       figma.dark === undefined &&
       code.light !== undefined &&
