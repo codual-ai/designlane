@@ -232,8 +232,8 @@ outside the app. Add Designmap to the library's repo instead, and connect your d
 
 ## Status
 
-Version 0.1. Designmap reads SwiftUI, Jetpack Compose and React Native apps and syncs to Figma. Feedback and issues
-are welcome.
+Version 0.2. Designmap reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
+in Figma into pull requests. Feedback and issues are welcome.
 
 ## License
 
