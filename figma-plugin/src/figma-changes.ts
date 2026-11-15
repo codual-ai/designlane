@@ -3,6 +3,7 @@
  * from a code change Figma hasn't taken yet. */
 
 import { z } from "zod";
+import { rgbOf, showColor } from "../../src/edit/color-value.js";
 import { EDIT_PROPERTIES, type EditProperty } from "../../src/edit/edit-tokens.js";
 import type { DesignFile, DesignFileEntry, VariableValue } from "../../src/sync/plan.js";
 import type { Rgba, SyncColor, SyncTokens, TextValue } from "../../src/sync/tokens-file.js";
@@ -103,10 +104,8 @@ const colorToken = (key: string, color: SyncColor, isLightOnly: boolean): Token 
   values: colorValues(color.light, isLightOnly ? undefined : color.dark),
 });
 
-const hexOf = ({ hex, alpha }: Rgba) => {
-  const byte = Math.round(alpha * OPAQUE);
-  return byte === OPAQUE ? hex.toLowerCase() : `${hex.toLowerCase()}${byte.toString(16).padStart(2, "0")}`;
-};
+const hexOf = ({ hex, alpha }: Rgba) =>
+  showColor({ ...rgbOf(hex.slice(1)), alpha: Math.round(alpha * OPAQUE) });
 
 function colorValues(light: Rgba, dark: Rgba | undefined): Values {
   const lightHex = hexOf(light);

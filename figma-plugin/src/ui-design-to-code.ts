@@ -97,6 +97,7 @@ export function designToCode(
       edits.append(
         edit.ok
           ? tickable(`${name}: ${edit.file}:${edit.line} ${edit.before} → ${edit.after}`, edit.change, true)
+              .row
           : element("li", `${name}: can't be edited. ${edit.reason}`),
       );
     }

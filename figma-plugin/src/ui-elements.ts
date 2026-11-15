@@ -14,30 +14,31 @@ export function button(text: string, onPress: () => void): HTMLButtonElement {
   return made;
 }
 
-/** A labelled checkbox or radio button holding `value`. */
-export function choice(type: "checkbox" | "radio", text: string, value: string): HTMLLabelElement {
+/** A labelled checkbox or radio button holding `value`, and the input in it. */
+export function choice(type: "checkbox" | "radio", text: string, value: string) {
   const label = element("label");
   const input = element("input");
   input.type = type;
   input.value = value;
   label.append(input, ` ${text}`);
-  return label;
+  return { label, input };
 }
 
-/** A list row with a labelled checkbox, ticked from the start when `checked`. */
-export function tickable(text: string, value: string, checked: boolean): HTMLLIElement {
+/** A list row with a labelled checkbox, ticked from the start when `checked`, and the checkbox. */
+export function tickable(text: string, value: string, checked: boolean) {
   const row = element("li");
-  const label = choice("checkbox", text, value);
-  const box = label.querySelector("input");
-  if (box) box.checked = checked;
+  const { label, input: box } = choice("checkbox", text, value);
+  box.checked = checked;
   row.append(label);
-  return row;
+  return { row, box };
 }
 
-export const ticked = (list: HTMLElement) =>
-  Array.from(list.querySelectorAll<HTMLInputElement>("input[type=checkbox]"))
-    .filter((box) => box.checked)
-    .map((box) => box.value);
+/** The inputs in `root` that `selector` picks and are checked. */
+export const checkedIn = (root: HTMLElement, selector: string) =>
+  Array.from(root.querySelectorAll<HTMLInputElement>(selector)).filter((input) => input.checked);
+
+/** The values of the ticked checkboxes in `list`. */
+export const ticked = (list: HTMLElement) => checkedIn(list, "input[type=checkbox]").map((box) => box.value);
 
 const GITHUB_PAGE = "https://github.com/";
 

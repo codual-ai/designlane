@@ -4,12 +4,12 @@
 import { z } from "zod";
 import type { TextEdit } from "../../src/edit/plan.js";
 import { changeLabel } from "./code-edits.js";
-import { encodedPath, GitHubRefusal, type RepoApi } from "./github.js";
+import { encodedPath, GitHubRefusal, type RepoApi, Sha } from "./github.js";
 import type { FigmaChange } from "./messages.js";
 import { messageOf } from "./notes.js";
 import { BRANCH_PREFIX, markerOf, PullRequestPage } from "./open-pull-requests.js";
 
-const Created = z.object({ sha: z.string().regex(/^[0-9a-f]{40}$/) });
+const Created = z.object({ sha: Sha });
 const Pull = z.object({ html_url: PullRequestPage });
 const SHORT_HASH = 7;
 const BACKTICKS = /`/g;

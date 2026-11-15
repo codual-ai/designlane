@@ -2,12 +2,11 @@
  * against comes from the same commit, which the pull request then builds on. */
 
 import { z } from "zod";
-import { TOO_LARGE } from "../../src/edit/read-source.js";
+import { type ReadSource, TOO_LARGE } from "../../src/edit/read-source.js";
 import { MAX_FILE_BYTES } from "../../src/scan/file-limits.js";
 import { isRepoPath } from "./connection.js";
-import { encodedPath, GitHubRefusal, type RepoApi } from "./github.js";
+import { encodedPath, GitHubRefusal, type RepoApi, Sha } from "./github.js";
 
-const Sha = z.string().regex(/^[0-9a-f]{40}$/);
 const Ref = z.object({ object: z.object({ sha: Sha }) });
 const Commit = z.object({ tree: z.object({ sha: Sha }) });
 const TreeEntry = z.object({
@@ -25,14 +24,12 @@ const FILE_MODES = new Set(["100644", "100755"]);
 /** What a decoder puts in place of bytes that aren't UTF-8. */
 const REPLACEMENT = "�";
 
-type FileRead = string | { unreadable: string } | undefined;
-
 export interface Snapshot {
   /** The commit read, the head of the connected branch when the snapshot was taken. */
   commit: string;
   tree: string;
   /** The text of the file at `path` in the repo, undefined when there's none, or why it can't be read. */
-  read(path: string): Promise<FileRead>;
+  read: ReadSource;
   /** The file's Git mode, which a commit changing it keeps. */
   mode(path: string): Promise<string | undefined>;
 }

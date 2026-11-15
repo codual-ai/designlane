@@ -1,7 +1,7 @@
 /** The plugin's requests to GitHub's API, the one place a token is sent, with GitHub's refusals put in words a designer
  * can act on. */
 
-import type { z } from "zod";
+import { z } from "zod";
 import { type Connection, isRepoName, parsedJson } from "./connection.js";
 import type { RepoSource } from "./messages.js";
 
@@ -11,11 +11,15 @@ const RAW_CONTENTS = "application/vnd.github.raw+json";
 const JSON_CONTENTS = "application/vnd.github+json";
 const API_VERSION = "2022-11-28";
 
-const TOKEN_REJECTED =
-  "GitHub didn't accept the token: it may be mistyped or expired. Check it, or make a new one, then connect again.";
+/** GitHub refused a token outright, before what it's for: the start of any message that says so. */
+export const TOKEN_NOT_ACCEPTED = "GitHub didn't accept the token: it may be mistyped or expired.";
+const TOKEN_REJECTED = `${TOKEN_NOT_ACCEPTED} Check it, or make a new one, then connect again.`;
 const RATE_LIMITED = "GitHub is limiting requests for now. Try again in a few minutes.";
 const UNREACHABLE = "Couldn't reach GitHub. Check your internet connection, then try again.";
 const UNEXPECTED = "GitHub answered in a way Designmap doesn't expect. Try again in a moment.";
+
+/** A Git object's full hash, as GitHub's API gives it. */
+export const Sha = z.string().regex(/^[0-9a-f]{40}$/);
 
 /** A request GitHub refused, worded for a designer unless the caller knows better what its status means here. */
 export class GitHubRefusal extends Error {

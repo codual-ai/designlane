@@ -88,8 +88,8 @@ applies everything else, until the code has them; to get them into the code, ope
 
 Once the pull request is merged and tokens.json written again, the code has the values and they leave the list.
 Until then, each check finds Designmap's open pull requests into the connected branch (read with the read-only token,
-from a marker in each one's description naming the values and this tokens file), and a change already in one shows **Pull request open** with its link
-instead of a box to tick. If the token can't read pull requests, the changes show as before, with a note saying so.
+from a marker in each one's description naming the values and this tokens file), and a change already in one shows
+**Pull request open** with its link instead of a box to tick. If the token can't read pull requests, the changes show as before, with a note saying so.
 
 When the code changed the same value too since the two last agreed, the list shows both, **Code: #1565c0 · Yours:
 #de2413**, and two choices. **Keep the code's** lets Apply set it to the code's value. **Use mine** lets it be ticked

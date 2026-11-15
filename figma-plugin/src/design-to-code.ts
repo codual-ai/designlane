@@ -6,7 +6,7 @@ import { type ReadSource, readingOnce } from "../../src/edit/read-source.js";
 import { OUTPUT_DIR } from "../../src/output/output-files.js";
 import { editedFiles, planCodeEdits } from "./code-edits.js";
 import { forgetWriteToken, savedConnection, savedWriteToken, saveWriteToken } from "./connection.js";
-import { GitHubRefusal, repoApi } from "./github.js";
+import { GitHubRefusal, repoApi, TOKEN_NOT_ACCEPTED } from "./github.js";
 import type { FigmaChange, PlannedEdit, ToWindow } from "./messages.js";
 import { messageOf, type Origin } from "./notes.js";
 import { type ChangedFile, type MadeChange, openPullRequest } from "./pull-request.js";
@@ -161,7 +161,7 @@ const needsOtherToken = (error: unknown) =>
 
 function refusedWith(error: unknown, repo: string): string {
   if (error instanceof GitHubRefusal && error.status === 401) {
-    return "GitHub didn't accept the token: it may be mistyped or expired. Make a new one and paste it here.";
+    return `${TOKEN_NOT_ACCEPTED} Make a new one and paste it here.`;
   }
   return `The token can't open pull requests on ${repo}. Give it access to this repo with Contents and Pull requests, both Read and write.`;
 }

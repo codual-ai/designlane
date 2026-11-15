@@ -47,7 +47,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Library: `SyncTheme` has the theme's `key` in tokens.json, which a code edit names its colours by.
-
 - A colour or text style written in both the app and another of its targets (a watch app, a widget, an app
   extension, a Wear, TV or car module, preview assets) is read from the app's own copy, which also takes the plain
   key in tokens.json.

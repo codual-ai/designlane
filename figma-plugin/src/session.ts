@@ -10,6 +10,7 @@ import {
   checkConnection,
   fileSource,
   forgetConnection,
+  parsedJson,
   saveConnection,
   savedConnection,
 } from "./connection.js";
@@ -223,11 +224,9 @@ const pullRequestsOf = ({ repo, branch, path, token }: Connection) =>
   openPullRequests(repoApi(repo, token), branch, path);
 
 function parseJson(text: string, origin: Origin): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(invalidJson(origin));
-  }
+  const json = parsedJson(text);
+  if (json === undefined) throw new Error(invalidJson(origin));
+  return json;
 }
 
 /** Every plan a sync makes, each with what its names are shown after: a theme's name (`Desert: color/tint`), since

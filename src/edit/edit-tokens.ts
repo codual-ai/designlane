@@ -11,7 +11,7 @@ import {
 import { type Color, rgbOf } from "./color-value.js";
 
 export const COLOR_PROPERTIES = ["light", "dark"] as const;
-export const TYPE_PROPERTIES = ["family", "size", "weight"] as const;
+const TYPE_PROPERTIES = ["family", "size", "weight"] as const;
 export const EDIT_PROPERTIES = [...COLOR_PROPERTIES, ...TYPE_PROPERTIES] as const;
 export type EditProperty = (typeof EDIT_PROPERTIES)[number];
 
