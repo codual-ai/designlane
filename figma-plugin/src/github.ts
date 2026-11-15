@@ -11,7 +11,7 @@ const RAW_CONTENTS = "application/vnd.github.raw+json";
 const JSON_CONTENTS = "application/vnd.github+json";
 const API_VERSION = "2022-11-28";
 
-/** GitHub refused a token outright, before what it's for: the start of any message that says so. */
+/** How every message saying GitHub refused a token outright (401) starts. */
 export const TOKEN_NOT_ACCEPTED = "GitHub didn't accept the token: it may be mistyped or expired.";
 const TOKEN_REJECTED = `${TOKEN_NOT_ACCEPTED} Check it, or make a new one, then connect again.`;
 const RATE_LIMITED = "GitHub is limiting requests for now. Try again in a few minutes.";

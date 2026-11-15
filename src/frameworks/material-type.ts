@@ -39,8 +39,8 @@ export const MATERIAL_DEFAULTS: Record<string, Default> = {
   overline: { size: 10, weight: "regular" },
 };
 
-/** Weights by the hundred, 100 to 900. */
 const UNDERSCORES = /_/g;
+/** Weights by the hundred, 100 to 900. */
 const BY_HUNDRED = ["thin", "ultraLight", "light", "regular", "medium", "semibold", "bold", "heavy", "black"];
 /** Compose's named weights (`FontWeight.SemiBold`), each as the name Designmap gives it. */
 export const COMPOSE_WEIGHTS: Record<string, string> = {

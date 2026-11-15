@@ -224,5 +224,6 @@ describe("design to code, end to end, against GitHub's API on a local server", (
     });
     expect(routes(shop)).toEqual([...OPENING, "DELETE git/refs/heads/designmap/figma-…"]);
     expect([...shop.server.refs.keys()]).toEqual([BRANCH]);
+    expect(shop.server.pulls).toEqual([]);
   });
 });

@@ -75,9 +75,12 @@ export async function startGitHubServer({
       return send(response, failure(403, "Resource not accessible by personal access token"));
     }
     const refused = refusals.find((refusal) => refusal.method === method && path === refusal.route);
+    if (refused) return send(response, refused.answer);
     const [route = "", query = ""] = path.split("?");
-    const answer = method === "GET" ? reads(state, route, query, accept) : writes(state, method, route, body);
-    send(response, refused?.answer ?? answer);
+    send(
+      response,
+      method === "GET" ? reads(state, route, query, accept) : writes(state, method, route, body),
+    );
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
