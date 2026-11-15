@@ -22,6 +22,7 @@
     "tests/figma",
     "tests/helpers/figma-plugin.ts",
     "tests/helpers/fake-github.ts",
+    "tests/helpers/github-fetch.ts",
     "tests/helpers/shop-repo.ts",
     "tests/helpers/plugin-window.ts",
     "tests/helpers/scanned-shop.ts"

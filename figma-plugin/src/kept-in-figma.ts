@@ -83,8 +83,8 @@ function keptTextStyles(
   });
 }
 
-/** A change the designer may set back to the code's value: one the code made too, not in a pull request already. */
-export const mayKeepCode = (change: FigmaChange) => change.inCodeToo && change.pullRequest === undefined;
+/** A change the designer may set back to the code's value: any not in a pull request already. */
+export const mayKeepCode = (change: FigmaChange) => change.pullRequest === undefined;
 
 /** The changes Apply keeps as Figma has them: all but those the designer chose the code's value for (`keepCode`). */
 export const keptChanges = (changes: readonly FigmaChange[], keepCode: readonly string[]) =>

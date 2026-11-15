@@ -67,7 +67,9 @@ describe("the window's changes made in Figma", () => {
     expect(text).toContain("Changed in Figma, not in code (2)");
     expect(text).toContain("color/brand #ff1a2e → #de2413");
     expect(text).toContain("Text/body size 17 → 20");
-    expect(text).toContain("Apply keeps these as you changed them until their pull request is merged.");
+    expect(text).toContain(
+      "Apply keeps these as you changed them until their pull request is merged, or until you set one back to the code's value.",
+    );
     expect(text).not.toContain("Couldn't check GitHub");
   });
 
@@ -123,6 +125,34 @@ describe("the window's changes made in Figma", () => {
     expect(ui.sent.at(-1)).toEqual({ type: "apply", id: 1, keepCode: [ink.id] });
   });
 
+  it("sets a change only Figma has back to the code's value on Apply, once the designer chooses that", async () => {
+    const ui = await withChanges([brand, body]);
+    const setBack = ui.box("Set back to the code's value");
+    expect(setBack.getAttribute("aria-label")).toBe("Set back to the code's value: color/brand, #ff1a2e");
+    ui.tick("color/brand");
+    ui.receive({
+      type: "edits",
+      id: 1,
+      edits: [{ ok: true, change: brand.id, file: "a.ts", line: 1, before: "a", after: "b" }],
+    });
+    setBack.click();
+    expect([ui.box("color/brand").disabled, ui.box("color/brand").checked]).toEqual([true, false]);
+    expect(ui.button("Plan code edits").disabled).toBe(true);
+    expect(ui.result.textContent).not.toContain("Code edits");
+    ui.apply.click();
+    expect(ui.sent.at(-1)).toEqual({ type: "apply", id: 1, keepCode: [brand.id] });
+  });
+
+  it("offers setting a change back from a picked file, which has no pull request to wait for", async () => {
+    const ui = await withChanges([brand], false);
+    ui.box("Set back to the code's value").click();
+    ui.box("Set back to the code's value").click();
+    expect(ui.box("color/brand").disabled).toBe(false);
+    ui.box("Set back to the code's value").click();
+    ui.apply.click();
+    expect(ui.sent.at(-1)).toEqual({ type: "apply", id: 1, keepCode: [brand.id] });
+  });
+
   it("shows a change already in an open pull request with its link, and nothing to tick", async () => {
     const url = "https://github.com/octo/app/pull/3";
     const ui = await withChanges([{ ...brand, pullRequest: url }]);
@@ -161,7 +191,7 @@ describe("the window's changes made in Figma", () => {
       "Text/body size 17 → 20: can't be edited. tokens.json doesn't say where body's font size is written.",
     );
     expect(ui.box("src/theme.ts:1").checked).toBe(true);
-    expect(ui.result.querySelectorAll("input[type=checkbox]")).toHaveLength(3);
+    expect(ui.result.querySelectorAll("input[type=checkbox]:not([data-change])")).toHaveLength(3);
     ui.button("Open pull request").click();
     expect(ui.sent.at(-1)).toEqual({ type: "openPullRequest", id: 1, changes: [brand.id] });
     expect(ui.button("Open pull request").disabled).toBe(true);

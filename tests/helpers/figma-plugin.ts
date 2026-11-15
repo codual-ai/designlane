@@ -16,8 +16,9 @@ export function plugin(options?: FakeOptions) {
     if (message?.type !== "plan") throw new Error(`expected a plan, got ${JSON.stringify(message)}`);
     return message.summary;
   }
-  async function apply(): Promise<string[]> {
-    await session({ type: "apply", id: picks });
+  /** Presses Apply, with the changes made in Figma the designer set back to the code's value. */
+  async function apply(keepCode: string[] = []): Promise<string[]> {
+    await session({ type: "apply", id: picks, keepCode });
     const message = last();
     if (message?.type !== "applied") throw new Error(`expected applied, got ${JSON.stringify(message)}`);
     return message.notes;

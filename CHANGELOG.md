@@ -31,7 +31,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
   already in an open Designmap pull request into the connected branch, found by a marker in its description, shows
   "Pull request open" with its link instead of a box to tick (if the read-only token can't list pull requests, the
   changes show as before with a note). A value the code changed too shows both values, "Code: … · Yours: …", with
-  **Keep the code's**, which Apply sets, or **Use mine**, which is planned from the code's value now.
+  **Keep the code's**, which Apply sets, or **Use mine**, which is planned from the code's value now. Any other
+  change not in a pull request has **Set back to the code's value**, which Apply sets too, so a designer can drop a
+  change, including one from a picked tokens.json.
 - `designmap edit <token> <property> <value>`: changes a colour's light or dark value, or a text style's family, size
   or weight, in the code where tokens.json says it's written, written the way the code writes it (hex case and
   length, `0xFF…` ARGB, `Color(red:green:blue:)` with the same decimals or `/ 255`, `rgb()`, asset catalog

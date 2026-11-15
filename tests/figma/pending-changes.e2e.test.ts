@@ -89,4 +89,19 @@ describe("a designer's changes while the code changes too, end to end, against G
     expect(await shop.check()).toEqual([]);
     expect(brandLightIn(shop)).toEqual(rgb("#de2413"));
   });
+  it("sets a designer's change back to the code's value when they choose that, and opens no pull request", async () => {
+    const shop = await connectedShop();
+    const inCode = brandLightIn(shop);
+    recolor(shop.fake, "color/Brand", "Light", "#de2413", COLLECTION);
+    const changes = await shop.check();
+    expect(changes).toMatchObject([{ token: "Brand", to: "#de2413", inCodeToo: false }]);
+    const from = shop.server.requests.length;
+    expect(await shop.apply(changes.map((change) => change.id))).toMatchObject({
+      type: "applied",
+      notes: [],
+    });
+    expect(brandLightIn(shop)).toEqual(inCode);
+    expect(await shop.check()).toEqual([]);
+    expect(shop.writesSince(from)).toEqual([]);
+  });
 });

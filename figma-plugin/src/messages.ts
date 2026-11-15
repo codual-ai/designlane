@@ -77,7 +77,7 @@ const ToPlugin = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fetch"), id }),
   z.object({ type: z.literal("disconnect") }),
   z.object({ type: z.literal("plan"), id, json: z.string() }),
-  /** `keepCode`: the changes made in the code too whose code value the designer chose, which Apply sets. */
+  /** `keepCode`: the changes made in Figma the designer set back to the code's value, which Apply sets. */
   z.object({ type: z.literal("apply"), id, keepCode: names.default([]) }),
   /** Plan the code edits for the Figma changes ticked, by their ids, in the plan `id` showed. */
   z.object({ type: z.literal("planEdits"), id, changes: names }),

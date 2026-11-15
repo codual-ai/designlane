@@ -96,6 +96,11 @@ When the code changed the same value too since the two last agreed, the list sho
 and planned like any other change, the edit going from the code's value now to yours. Until you choose, Apply keeps
 yours.
 
+To drop a change instead, as when you change your mind or synced from a picked tokens.json (which can't open a pull
+request), choose **Set back to the code's value** beside it. The next Apply sets it to the code's value, like any
+other code change, and it leaves the list. A change already in an open pull request can't be set back: close the
+pull request first.
+
 Opening a pull request needs more than the read-only token you connected with. The first time, Designmap asks for a
 second fine-grained token, for this repo only, with **Contents** and **Pull requests** both set to **Read and write**,
 and links to GitHub's form for one. It's kept on this computer for that repo, like the first, and both are only ever

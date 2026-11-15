@@ -17,7 +17,8 @@ const DESIGN_TO_CODE: ReadonlySet<ToWindow["type"]> = new Set([
   "designToCodeError",
 ]);
 const NEW_TOKEN_PAGE = "https://github.com/settings/personal-access-tokens/new";
-const KEPT = "Apply keeps these as you changed them until their pull request is merged.";
+const KEPT =
+  "Apply keeps these as you changed them until their pull request is merged, or until you set one back to the code's value.";
 const UNLISTED =
   "Couldn't check GitHub for open pull requests, so one of these may be in one already. To check, give the read-only token read access to pull requests.";
 
@@ -43,7 +44,7 @@ export function designToCode(
   repo: string | undefined,
   send: (message: ToPlugin) => void,
 ) {
-  const { list, keepCode } = figmaChangeList(changes);
+  const { list, toEdit, keepCode } = figmaChangeList(changes);
   /** The planned edits, the token form, and a line saying what's under way, what failed or what was opened. */
   const editsArea = element("div");
   const tokenArea = element("div");
@@ -56,14 +57,14 @@ export function designToCode(
     editsArea.replaceChildren();
     tokenArea.replaceChildren();
     say(`Reading the code from ${repo}…`);
-    send({ type: "planEdits", id, changes: ticked(list) });
+    send({ type: "planEdits", id, changes: toEdit() });
   });
   const refreshPlanButton = () => {
-    planButton.disabled = ticked(list).length === 0;
+    planButton.disabled = toEdit().length === 0;
   };
   list.addEventListener("change", (event) => {
     // Edits planned for a change whose value the designer now chooses differently no longer stand.
-    if (event.target instanceof HTMLInputElement && event.target.type === "radio") clearEdits();
+    if (event.target instanceof HTMLInputElement && event.target.dataset.change !== undefined) clearEdits();
     refreshPlanButton();
   });
   refreshPlanButton();
