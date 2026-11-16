@@ -1,4 +1,4 @@
-/** A small stand-in for the Figma plugin API: only what Designmap's plugin touches, with the limits and failures a
+/** A small stand-in for the Figma plugin API: only what Designlane's plugin touches, with the limits and failures a
  * real file can have (a Figma plan's mode limit, a font that won't load). */
 
 function sharedData() {

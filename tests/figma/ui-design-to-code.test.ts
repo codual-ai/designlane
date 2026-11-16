@@ -28,7 +28,7 @@ async function withChanges(changes: FigmaChange[], connected = true, more: Parti
   if (connected)
     ui.receive({
       type: "connection",
-      repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
+      repo: { repo: "octo/app", branch: "main", path: "designlane/tokens.json" },
     });
   ui.receive({ type: "plan", id: 1, summary: { ...summary, ...more, figmaChanges: changes } });
   const button = (name: string) => {

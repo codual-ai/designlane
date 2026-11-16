@@ -1,4 +1,4 @@
-/** `designmap edit`: makes a change to a token in the app's code, in the code's own notation. */
+/** `designlane edit`: makes a change to a token in the app's code, in the code's own notation. */
 
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,11 +7,13 @@ import { editDiff } from "../edit/diff.js";
 import { EDIT_PROPERTIES, type EditProperty } from "../edit/edit-tokens.js";
 import { applyEdit, planEdit } from "../edit/plan.js";
 import { type ReadSource, TOO_LARGE } from "../edit/read-source.js";
-import { APP_TOKENS_FILES, OUTPUT_DIR, TOKENS_FILE } from "../output/output-files.js";
+import { OLD_OUTPUT_DIR } from "../output/old-names.js";
+import { OUTPUT_DIR, TOKENS_FILE } from "../output/output-files.js";
+import { tokensFilesIn } from "../output/write.js";
 import { isFolder, isTooLarge, readText } from "../scan/files.js";
 import { type Output, UsageError } from "./command.js";
 
-export const EDIT_USAGE = `  designmap edit <token> <property> <value> [--dir <app>] [--dry-run] [--tokens <file>]
+export const EDIT_USAGE = `  designlane edit <token> <property> <value> [--dir <app>] [--dry-run] [--tokens <file>]
                     Change a token in the code where tokens.json says its value is written, written the way the
                     code writes it, and print the diff. <token> is its key or how the code refers to it;
                     <property> is light, dark, family, size or weight; <value> is #rrggbb, a number or a name.
@@ -21,7 +23,7 @@ export const EDIT_USAGE = `  designmap edit <token> <property> <value> [--dir <a
 const isProperty = (word: string): word is EditProperty =>
   EDIT_PROPERTIES.some((property) => property === word);
 
-/** Runs `designmap edit` with `argv` (the words after `edit`), and returns the exit code. */
+/** Runs `designlane edit` with `argv` (the words after `edit`), and returns the exit code. */
 export async function edit(argv: string[], { out, error }: Output): Promise<number> {
   const { values, positionals } = parse(argv);
   const [token, property, value] = positionals;
@@ -45,7 +47,7 @@ export async function edit(argv: string[], { out, error }: Output): Promise<numb
     throw new UsageError(messageOf(e), 1);
   });
   if (!plan.ok) {
-    error(`designmap: ${plan.reason}`);
+    error(`designlane: ${plan.reason}`);
     return 1;
   }
   const real = await realPathInside(root, plan.edit.file);
@@ -71,18 +73,18 @@ function parse(argv: string[]) {
   }
 }
 
-/** The app's one tokens file in designmap/: tokens.json, or the one app's file of a repo that had two. */
+/** The app's one tokens file in designlane/, or in the designmap/ of an app set up before the rename: tokens.json, or
+ * the one app's file of a repo that had two. */
 async function tokensFileIn(root: string): Promise<string> {
-  const folder = path.join(root, OUTPUT_DIR);
-  const names = [TOKENS_FILE, ...Object.values(APP_TOKENS_FILES)];
-  const present = [];
-  for (const name of names) if ((await readText(path.join(folder, name))) !== undefined) present.push(name);
-  const [only] = present;
-  if (present.length === 1 && only) return path.join(folder, only);
-  if (present.length === 0) {
-    throw new UsageError(`no ${OUTPUT_DIR}/${TOKENS_FILE} in ${root}: run designmap there first`, 1);
+  for (const dir of [OUTPUT_DIR, OLD_OUTPUT_DIR]) {
+    const folder = path.join(root, dir);
+    const present = await tokensFilesIn(folder);
+    const [only] = present;
+    if (present.length === 1 && only) return path.join(folder, only);
+    if (present.length > 1)
+      throw new UsageError(`${dir}/ has ${present.join(" and ")}: name the app's with --tokens`, 2);
   }
-  throw new UsageError(`${OUTPUT_DIR}/ has ${present.join(" and ")}: name the app's with --tokens`, 2);
+  throw new UsageError(`no ${OUTPUT_DIR}/${TOKENS_FILE} in ${root}: run designlane there first`, 1);
 }
 
 async function readTokens(file: string): Promise<unknown> {

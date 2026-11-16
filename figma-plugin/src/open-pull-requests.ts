@@ -1,4 +1,4 @@
-/** The pull requests Designmap opened from Figma that are still open, found by a marker in each one's description
+/** The pull requests Designlane opened from Figma that are still open, found by a marker in each one's description
  * listing the values it changes and the tokens file they're for, so a change already in one isn't offered again. */
 
 import { z } from "zod";
@@ -7,9 +7,12 @@ import { parsedJson } from "./connection.js";
 import type { RepoApi } from "./github.js";
 import type { FigmaChange } from "./messages.js";
 
-/** Branch names Designmap makes, apart from anyone's own. */
-export const BRANCH_PREFIX = "designmap/figma-";
-const MARKER_START = "<!-- designmap-figma-changes ";
+/** Branch names Designlane makes, apart from anyone's own. */
+export const BRANCH_PREFIX = "designlane/figma-";
+const MARKER_START = "<!-- designlane-figma-changes ";
+/** What its pull requests opened before the rename to Designlane carry instead, which are still its own. */
+const OLD_BRANCH_PREFIX = "designmap/figma-";
+const OLD_MARKER_START = "<!-- designmap-figma-changes ";
 const MARKER_END = " -->";
 /** Escaped inside the marker's JSON strings, where it's the only character that could end the comment early. */
 const COMMENT_CLOSER = />/g;
@@ -52,15 +55,19 @@ export function markerOf(tokensFile: string, changes: readonly FigmaChange[]): s
 /** The values a description's marker lists for `tokensFile`; none for one without a marker, such as one opened before
  * markers, or one for another app's tokens file. */
 function markedValues(body: string | null, tokensFile: string): MarkedValue[] {
-  const start = body?.indexOf(MARKER_START) ?? -1;
-  if (!body || start === -1) return [];
-  const end = body.indexOf(MARKER_END, start + MARKER_START.length);
+  if (!body) return [];
+  const markerStart = body.includes(MARKER_START) ? MARKER_START : OLD_MARKER_START;
+  const start = body.indexOf(markerStart);
+  if (start === -1) return [];
+  const end = body.indexOf(MARKER_END, start + markerStart.length);
   if (end === -1) return [];
-  const marked = Marked.safeParse(parsedJson(body.slice(start + MARKER_START.length, end))).data;
+  const marked = Marked.safeParse(parsedJson(body.slice(start + markerStart.length, end))).data;
   return marked?.tokens === tokensFile ? marked.values : [];
 }
 
-/** Designmap's open pull requests into `branch` for `tokensFile`'s app: those from one of its own branches in the repo
+const isOwnBranch = (ref: string) => ref.startsWith(BRANCH_PREFIX) || ref.startsWith(OLD_BRANCH_PREFIX);
+
+/** Designlane's open pull requests into `branch` for `tokensFile`'s app: those from one of its own branches in the repo
  * itself. */
 export async function openPullRequests(
   api: RepoApi,
@@ -71,8 +78,7 @@ export async function openPullRequests(
   try {
     const pulls = await api.json(Pulls, `pulls?${query}`);
     const ours = pulls.filter(
-      ({ head }) =>
-        head.ref.startsWith(BRANCH_PREFIX) && head.repo?.full_name.toLowerCase() === api.repo.toLowerCase(),
+      ({ head }) => isOwnBranch(head.ref) && head.repo?.full_name.toLowerCase() === api.repo.toLowerCase(),
     );
     return {
       listed: true,

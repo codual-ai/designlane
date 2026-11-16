@@ -1,9 +1,9 @@
-/** The files Designmap writes into an app, by name; kept apart from writing them so the Figma plugin can find them. */
+/** The files Designlane writes into an app, by name; kept apart from writing them so the Figma plugin can find them. */
 
 import type { FrameworkId } from "../scan/types.js";
 
 /** Where the outputs go inside the app, unless told otherwise. */
-export const OUTPUT_DIR = "designmap";
+export const OUTPUT_DIR = "designlane";
 
 /** The tokens file of an app that's alone in its repo. */
 export const TOKENS_FILE = "tokens.json";

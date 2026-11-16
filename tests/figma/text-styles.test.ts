@@ -108,7 +108,7 @@ describe("syncing text styles into a Figma file", () => {
     await app.sync(tokensJson({ styles: [body] }));
     expect([app.fake.styles.size, title.description]).toEqual([
       2,
-      "Deprecated: Designmap no longer finds this in the code.",
+      "Deprecated: Designlane no longer finds this in the code.",
     ]);
     await app.sync(tokensJson({ styles: [body, { key: "title", size: 24, weight: 700 }] }));
     expect(title.description).toBe("Screen titles");

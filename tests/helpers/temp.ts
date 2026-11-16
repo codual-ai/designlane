@@ -11,7 +11,7 @@ afterEach(async () => {
 
 /** A temporary folder with the given files, removed after each test. */
 export async function tempDir(files: Record<string, string> = {}): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "designmap-test-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "designlane-test-"));
   created.push(dir);
   for (const [rel, text] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(dir, rel)), { recursive: true });

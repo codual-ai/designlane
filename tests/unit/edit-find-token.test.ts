@@ -58,9 +58,9 @@ describe("finding the token", () => {
     );
   });
 
-  it("throws for a file Designmap didn't write", async () => {
+  it("throws for a file Designlane didn't write", async () => {
     await expect(plan(files, { color: { brand: { $value: 1 } } }, change("brand"))).rejects.toThrow(
-      /isn't a tokens.json Designmap writes/,
+      /isn't a tokens.json Designlane writes/,
     );
   });
 });

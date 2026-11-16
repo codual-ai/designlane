@@ -54,7 +54,7 @@ describe("planning the code edits for changes made in Figma", () => {
 
   it("plans a theme's colour change in that theme's code", async () => {
     const shop = await syncedShop();
-    shop.recolor("color/brand", "Light", "#aa0000", "Desert (Designmap)");
+    shop.recolor("color/brand", "Light", "#aa0000", "Desert (Designlane)");
     const planned = await shop.planEdits(ids(await shop.check()));
     expect(planned).toMatchObject({ edits: [{ ok: true, line: 3, before: "#DF915E", after: "#AA0000" }] });
   });
@@ -105,14 +105,14 @@ describe("planning the code edits for changes made in Figma", () => {
       edits: [
         {
           ok: false,
-          reason: "Designmap can't read src/theme.ts: it's over 512 KB, more than it reads as source.",
+          reason: "Designlane can't read src/theme.ts: it's over 512 KB, more than it reads as source.",
         },
       ],
     });
     const garbled = await syncedShop({ files: { [THEME]: `${SHOP[THEME]}\n// �` } });
     garbled.recolor("color/brand", "Light", "#de2413");
     expect(await garbled.planEdits(ids(await garbled.check()))).toMatchObject({
-      edits: [{ ok: false, reason: "Designmap can't read src/theme.ts: it isn't plain UTF-8 text." }],
+      edits: [{ ok: false, reason: "Designlane can't read src/theme.ts: it isn't plain UTF-8 text." }],
     });
   });
 
@@ -159,7 +159,7 @@ describe("planning the code edits for changes made in Figma", () => {
     );
   });
 
-  it("needs a connected repo, not a picked tokens.json, and the tokens file where designmap writes it", async () => {
+  it("needs a connected repo, not a picked tokens.json, and the tokens file where designlane writes it", async () => {
     const shop = await syncedShop();
     await shop.app.session({ type: "plan", id: 50, json: shop.json });
     await shop.app.session({ type: "planEdits", id: 50, changes: [] });
@@ -179,7 +179,7 @@ describe("planning the code edits for changes made in Figma", () => {
     });
     await elsewhere.app.session({ type: "planEdits", id: 60, changes: [] });
     expect(designToCodeError(elsewhere.last())).toBe(
-      "Opening a pull request needs the tokens file in the app's designmap/ folder, where designmap writes it.",
+      "Opening a pull request needs the tokens file in the app's designlane/ folder, where designlane writes it.",
     );
   });
 
@@ -211,14 +211,14 @@ describe("planning the code edits for changes made in Figma", () => {
       return edit?.ok === false ? edit.reason : JSON.stringify(planned);
     };
     expect(await reasonFor({ modes: { [THEME]: "120000" } })).toBe(
-      "Designmap can't read src/theme.ts: it isn't a plain file.",
+      "Designlane can't read src/theme.ts: it isn't a plain file.",
     );
     const withoutTheme = (shop: SyncedShop) => {
       const { [THEME]: _, ...rest } = shop.github.filesOn("main");
       return rest;
     };
     expect(await reasonFor({ truncated: true }, withoutTheme)).toBe(
-      "Designmap can't read src/theme.ts: GitHub listed only part of its folder.",
+      "Designlane can't read src/theme.ts: GitHub listed only part of its folder.",
     );
   });
 
@@ -226,7 +226,7 @@ describe("planning the code edits for changes made in Figma", () => {
     const shop = await syncedShop({ files: { [THEME]: `\uFEFF${SHOP[THEME]}` } });
     shop.recolor("color/brand", "Light", "#de2413");
     expect(await shop.planEdits(ids(await shop.check()))).toMatchObject({
-      edits: [{ ok: false, reason: "Designmap can't read src/theme.ts: it isn't plain UTF-8 text." }],
+      edits: [{ ok: false, reason: "Designlane can't read src/theme.ts: it isn't plain UTF-8 text." }],
     });
   });
 
@@ -236,7 +236,7 @@ describe("planning the code edits for changes made in Figma", () => {
     shop.github.push({ [TOKENS_PATH]: json });
     shop.recolor("color/brand", "Light", "#de2413");
     expect(await shop.planEdits(ids(await shop.check()))).toMatchObject({
-      edits: [{ ok: false, reason: "Designmap can't read ../theme.ts: its path steps outside the repo." }],
+      edits: [{ ok: false, reason: "Designlane can't read ../theme.ts: its path steps outside the repo." }],
     });
   });
 });

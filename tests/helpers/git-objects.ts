@@ -29,7 +29,7 @@ export interface FileEntry {
   sha: string;
 }
 
-const AUTHOR = "Designmap Test <test@example.com>";
+const AUTHOR = "Designlane Test <test@example.com>";
 const LEADING_ZERO = /^0/;
 
 export function gitObjects() {

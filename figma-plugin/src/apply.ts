@@ -6,7 +6,7 @@ import type { TextValue } from "../../src/sync/tokens-file.js";
 import {
   availableFontStyles,
   type DarkUnavailable,
-  designmapName,
+  designlaneName,
   isDeprecated,
   KEYS,
   NAMESPACE,
@@ -24,7 +24,7 @@ import { describeFont, fontFor, toFigmaColor } from "./values.js";
 /** Figma's error when a collection already has as many modes as the file's plan allows. */
 const MODE_LIMIT = /limited to \d+ modes?/i;
 /** Written without apostrophes: Figma stores a description as markup and shows one escaped. */
-const DEPRECATED_NOTE = "Deprecated: Designmap no longer finds this in the code.";
+const DEPRECATED_NOTE = "Deprecated: Designlane no longer finds this in the code.";
 const IN_THE_CODE = "In the code: ";
 /** The size of a new style whose size the code works out while the app runs: iOS body text. */
 const DEFAULT_SIZE = 17;
@@ -40,7 +40,7 @@ type Modes = SyncModes & { light: string };
 export interface ApplyOptions {
   /** The collections to try again to add the Dark mode to that they couldn't take before. */
   retryDark: DarkUnavailable;
-  /** The app's name, which names a new collection: "Shop (Designmap)", "Shop · Desert (Designmap)". */
+  /** The app's name, which names a new collection: "Shop (Designlane)", "Shop · Desert (Designlane)". */
   app?: string;
   /** The platform the app's code is for, whose code syntax shows how the code refers to each variable. */
   platform?: Platform;
@@ -180,8 +180,9 @@ function newCollection(name: string, mark: string): VariableCollection {
   return collection;
 }
 
-/** The default theme's collection, named for the app and for Designmap. */
-const newSyncedCollection = (app: string | undefined) => newCollection(designmapName(app), SYNCED_COLLECTION);
+/** The default theme's collection, named for the app and for Designlane. */
+const newSyncedCollection = (app: string | undefined) =>
+  newCollection(designlaneName(app), SYNCED_COLLECTION);
 
 function newThemeCollection(app: string | undefined, theme: string): VariableCollection {
   const collection = newCollection(themeCollectionName(app, theme), THEME_COLLECTION);
@@ -191,7 +192,7 @@ function newThemeCollection(app: string | undefined, theme: string): VariableCol
 
 const isModeLimit = (error: unknown) => error instanceof Error && MODE_LIMIT.test(error.message);
 
-/** Adds back the Light mode a designer deleted, since Designmap never writes into a mode it didn't make. */
+/** Adds back the Light mode a designer deleted, since Designlane never writes into a mode it didn't make. */
 function addLightMode(collection: VariableCollection): string {
   try {
     const light = collection.addMode("Light");
@@ -200,7 +201,7 @@ function addLightMode(collection: VariableCollection): string {
   } catch (error) {
     if (!isModeLimit(error)) throw error;
     throw new Error(
-      "The Designmap collection's Light mode was deleted, and this Figma plan can't add it back. Delete a mode from the collection, then sync again.",
+      "The Designlane collection's Light mode was deleted, and this Figma plan can't add it back. Delete a mode from the collection, then sync again.",
     );
   }
 }

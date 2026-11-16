@@ -184,7 +184,7 @@ describe("tokens.json for syncing", () => {
   it("records the app's name and platform, so a sync names what it makes after the app and shows its code", async () => {
     const scan = await shop();
     expect(toDesignTokens(scan).$extensions).toEqual({
-      designmap: { app: path.basename(scan.root), platform: "ios" },
+      designlane: { app: path.basename(scan.root), platform: "ios" },
     });
   });
 
@@ -192,7 +192,7 @@ describe("tokens.json for syncing", () => {
     const tokens = toDesignTokens(await shop());
     const color = tokens.color as Record<string, { $extensions: unknown }>;
     expect(color.brand?.$extensions).toEqual({
-      designmap: {
+      designlane: {
         reference: "Theme.brand",
         source: "Shop/Theme.swift",
         line: 3,
@@ -201,7 +201,7 @@ describe("tokens.json for syncing", () => {
       },
     });
     expect((tokens.typography as Record<string, { $extensions: unknown }>).heading?.$extensions).toEqual({
-      designmap: {
+      designlane: {
         name: "heading",
         reference: "Font.heading",
         uses: 1,
@@ -302,7 +302,7 @@ describe("theme sets in tokens.json and DESIGN.md", () => {
     expect(ownKeys(tokens.theme)).toEqual(["Ice-Cube", "Ice-Cube-2"]);
     expect(tokens.theme?.["Ice-Cube"]).toEqual({
       $description: "The Ice Cube theme",
-      $extensions: { designmap: { name: "Ice Cube" } },
+      $extensions: { designlane: { name: "Ice Cube" } },
       color: {
         $description: "Most used first",
         tint: {
@@ -310,7 +310,7 @@ describe("theme sets in tokens.json and DESIGN.md", () => {
           $value: colorValue("#df915e"),
           $description: "From ColorSet.swift, 4 uses",
           $extensions: {
-            designmap: {
+            designlane: {
               reference: "ColorSet.tint",
               source: "ColorSet.swift",
               line: 9,
@@ -412,16 +412,16 @@ describe("DESIGN.md", () => {
 
   it("says plainly when the app has no code it reads", async () => {
     const md = toDesignMd(await scanRepo(await tempDir({ "README.md": "hi" })));
-    expect(md).toContain("Designmap found no SwiftUI, Jetpack Compose or React Native code in");
+    expect(md).toContain("Designlane found no SwiftUI, Jetpack Compose or React Native code in");
     expect(md).toContain('  - section: "colors"');
   });
 });
 
 describe("writing", () => {
-  it("writes tokens.json and DESIGN.md into designmap/ in the app, or where it's told", async () => {
+  it("writes tokens.json and DESIGN.md into designlane/ in the app, or where it's told", async () => {
     const scan = await shop();
     const { tokens, design } = await writeOutputs(scan);
-    expect(tokens.map((t) => path.relative(scan.root, t))).toEqual([path.join("designmap", "tokens.json")]);
+    expect(tokens.map((t) => path.relative(scan.root, t))).toEqual([path.join("designlane", "tokens.json")]);
     expect(JSON.parse(await readFile(tokens[0] ?? "", "utf8"))).toEqual(toDesignTokens(scan));
     expect(await readFile(design, "utf8")).toBe(toDesignMd(scan));
     const elsewhere = path.join(await tempDir({}), "out");
@@ -441,7 +441,7 @@ describe("an iPhone and an Android app in one repo", () => {
   it("makes a caller name the app whose tokens to write, and refuses one the scan doesn't have", async () => {
     const scan = await both();
     expect(() => toDesignTokens(scan)).toThrow("name the framework whose tokens to write");
-    expect(toDesignTokens(scan, "compose").$extensions?.designmap.platform).toBe("android");
+    expect(toDesignTokens(scan, "compose").$extensions?.designlane.platform).toBe("android");
     const ios = await scanRepo(await tempDir(APP));
     expect(() => toDesignTokens(ios, "compose")).toThrow("has no Jetpack Compose code");
   });

@@ -157,9 +157,9 @@ describe("a React Native app", () => {
       "src/App.tsx": `${RN}export const App = () => <View style={{ backgroundColor: theme.brand }} />;`,
     });
     const tokens = toDesignTokens(scan);
-    expect(tokens.$extensions?.designmap.platform).toBe("react-native");
+    expect(tokens.$extensions?.designlane.platform).toBe("react-native");
     const brand = tokens.color?.brand;
-    expect(typeof brand === "object" && brand.$extensions.designmap.reference).toBe("theme.brand");
+    expect(typeof brand === "object" && brand.$extensions.designlane.reference).toBe("theme.brand");
   });
 
   it("reads only the React Native app's own folder", async () => {

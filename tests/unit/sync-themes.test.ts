@@ -43,10 +43,10 @@ describe("theme sets", () => {
 
   it("reads a file written before themes as one with none, and one with only themes as not empty", () => {
     const desert = { color: { tint: colorEntry("#df915e", "ColorSet.tint") } };
-    const theme = { desert: { $extensions: { designmap: { name: "Desert" } }, ...desert } };
+    const theme = { desert: { $extensions: { designlane: { name: "Desert" } }, ...desert } };
     expect(readTokensFile({ $description: "old", ...desert }).themes).toBeUndefined();
     expect(readTokensFile({ $description: "themes", theme }).themes?.map((t) => t.name)).toEqual(["Desert"]);
-    const empty = { desert: { $extensions: { designmap: { name: "Desert" } }, color: {} } };
+    const empty = { desert: { $extensions: { designlane: { name: "Desert" } }, color: {} } };
     expect(() => readTokensFile({ $description: "empty", theme: empty })).toThrow(/has no tokens/);
   });
 

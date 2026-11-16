@@ -26,7 +26,7 @@ describe("refusing when the code changed since the scan", () => {
 
   it("refuses a value that's no longer the one tokens.json has", async () => {
     expect(outcome(await plan({ "colors.ts": "const a = '#3366CD';" }, tokens, change))).toBe(
-      "refused: colors.ts:1 now reads `#3366CD`: the code changed since designmap last ran. Run designmap again.",
+      "refused: colors.ts:1 now reads `#3366CD`: the code changed since designlane last ran. Run designlane again.",
     );
   });
 
@@ -141,7 +141,7 @@ describe("refusing a value the code changed around", () => {
       property: "light",
       value: "#de2413",
     });
-    expect(outcome(planned)).toBe("refused: Designmap can't read colors.ts: it's over 512 KB.");
+    expect(outcome(planned)).toBe("refused: Designlane can't read colors.ts: it's over 512 KB.");
   });
 
   it("refuses a size too large to write", async () => {

@@ -52,7 +52,7 @@ export function shopTokens({ files = SHOP, brandLight }: { files?: Files; brandL
     },
   });
   const desert = tokens.theme.desert;
-  if (desert) desert.$extensions.designmap.name = "Desert";
+  if (desert) desert.$extensions.designlane.name = "Desert";
   return tokens;
 }
 
@@ -63,7 +63,7 @@ export function rebranded(hex: string) {
   return { ...files, [TOKENS_PATH]: JSON.stringify(shopTokens({ brandLight: hex })) };
 }
 
-export const TOKENS_PATH = "designmap/tokens.json";
+export const TOKENS_PATH = "designlane/tokens.json";
 export const READ_TOKEN = "github_pat_read";
 export const WRITE_TOKEN = "github_pat_write";
 

@@ -25,10 +25,10 @@ describe("syncing an app's other themes", () => {
     const app = plugin();
     await app.sync(themed(desert("#df915e")));
     expect([...app.fake.collections.values()].map((c) => c.name)).toEqual([
-      "Ice (Designmap)",
-      "Ice · Desert (Designmap)",
+      "Ice (Designlane)",
+      "Ice · Desert (Designlane)",
     ]);
-    const { collection, variables, mode } = collectionNamed(app.fake, "Ice · Desert (Designmap)");
+    const { collection, variables, mode } = collectionNamed(app.fake, "Ice · Desert (Designlane)");
     expect(collection.modes.map((m) => m.name)).toEqual(["Light", "Dark"]);
     const [tint] = variables;
     expect([variables.length, tint?.name, tint?.codeSyntax]).toEqual([
@@ -49,16 +49,16 @@ describe("syncing an app's other themes", () => {
     const plan = await app.plan(themed(desert("#ffffff")));
     expect([plan.update, plan.unchanged]).toEqual([["Desert: color/tint"], 1]);
     await app.apply();
-    const { variables, mode } = collectionNamed(app.fake, "Ice · Desert (Designmap)");
+    const { variables, mode } = collectionNamed(app.fake, "Ice · Desert (Designlane)");
     expect(variables[0]?.valuesByMode[mode("Light")]).toEqual(rgb("#ffffff"));
-    const main = collectionNamed(app.fake, "Ice (Designmap)");
+    const main = collectionNamed(app.fake, "Ice (Designlane)");
     expect(main.variables[0]?.valuesByMode[main.mode("Light")]).toEqual(rgb("#111111"));
   });
 
   it("finds a theme's collection by its mark after a designer renames it, and deprecates a theme the code dropped", async () => {
     const app = plugin();
     await app.sync(themed(desert("#df915e")));
-    const { collection, variables } = collectionNamed(app.fake, "Ice · Desert (Designmap)");
+    const { collection, variables } = collectionNamed(app.fake, "Ice · Desert (Designlane)");
     collection.name = "Sand";
     expect((await app.plan(themed(desert("#df915e")))).applicable).toBe(false);
     expect((await app.plan(themed())).deprecate).toEqual(["Desert: color/tint"]);
@@ -84,8 +84,8 @@ describe("syncing an app's other themes", () => {
       themes: [desert("#df915e"), ocean],
     });
     expect(await app.sync(json)).toEqual([
-      'Dark values weren\'t added: the collection "Desert (Designmap)" has as many modes as this Figma plan allows.',
-      'Dark values weren\'t added: the collection "Ocean (Designmap)" has as many modes as this Figma plan allows.',
+      'Dark values weren\'t added: the collection "Desert (Designlane)" has as many modes as this Figma plan allows.',
+      'Dark values weren\'t added: the collection "Ocean (Designlane)" has as many modes as this Figma plan allows.',
     ]);
     const again = await app.plan(json);
     expect([again.update, again.unchanged, again.darkLeftOut]).toEqual([[], 3, true]);
@@ -95,13 +95,13 @@ describe("syncing an app's other themes", () => {
     const app = plugin({ maxModes: 2 });
     const ocean = { name: "Ocean", colors: [{ key: "tint", hex: "#0000ff", dark: "#000080" }] };
     await app.sync(themed(desert("#df915e"), ocean));
-    const { collection } = collectionNamed(app.fake, "Ice · Desert (Designmap)");
-    collection.removeMode(collectionNamed(app.fake, "Ice · Desert (Designmap)").mode("Dark"));
+    const { collection } = collectionNamed(app.fake, "Ice · Desert (Designlane)");
+    collection.removeMode(collectionNamed(app.fake, "Ice · Desert (Designlane)").mode("Dark"));
     collection.addMode("Brand");
     await app.sync(themed(desert("#df915e"), ocean));
     const again = await app.plan(themed(desert("#df915e"), ocean));
     expect([again.update, again.darkLeftOut]).toEqual([[], true]);
-    const oceanTint = collectionNamed(app.fake, "Ice · Ocean (Designmap)");
+    const oceanTint = collectionNamed(app.fake, "Ice · Ocean (Designlane)");
     expect(oceanTint.variables[0]?.valuesByMode[oceanTint.mode("Dark")]).toEqual(rgb("#000080"));
   });
 
@@ -111,7 +111,7 @@ describe("syncing an app's other themes", () => {
     await app.sync(json);
     expect((await app.plan(json)).darkLeftOut).toBe(true);
     await app.apply();
-    expect([...app.fake.collections.values()].map((c) => c.name)).toEqual(["Ice · Desert (Designmap)"]);
+    expect([...app.fake.collections.values()].map((c) => c.name)).toEqual(["Ice · Desert (Designlane)"]);
   });
 
   it("tries the Dark mode again only in the collection that couldn't take it", async () => {
@@ -125,13 +125,13 @@ describe("syncing an app's other themes", () => {
       themes: [plain, desert("#df915e")],
     });
     await app.sync(withDesert);
-    const desertCollection = collectionNamed(app.fake, "Ice · Desert (Designmap)").collection;
-    desertCollection.removeMode(collectionNamed(app.fake, "Ice · Desert (Designmap)").mode("Dark"));
+    const desertCollection = collectionNamed(app.fake, "Ice · Desert (Designlane)").collection;
+    desertCollection.removeMode(collectionNamed(app.fake, "Ice · Desert (Designlane)").mode("Dark"));
     desertCollection.addMode("Brand");
     await app.sync(withDesert);
     expect((await app.plan(withDesert)).darkLeftOut).toBe(true);
     await app.apply();
     const modes = (name: string) => collectionNamed(app.fake, name).collection.modes.map((m) => m.name);
-    expect([modes("Ice (Designmap)"), modes("Ice · Ocean (Designmap)")]).toEqual([["Light"], ["Light"]]);
+    expect([modes("Ice (Designlane)"), modes("Ice · Ocean (Designlane)")]).toEqual([["Light"], ["Light"]]);
   });
 });

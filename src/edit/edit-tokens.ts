@@ -4,9 +4,9 @@ import { z } from "zod";
 import {
   type ColorTokenEntry,
   type ColorValue,
+  parseTokensFile,
   type ValueLocation as RecordedLocation,
   type TextStyleGroup,
-  TokensFile,
 } from "../output/tokens-schema.js";
 import { type Color, rgbOf } from "./color-value.js";
 
@@ -49,12 +49,12 @@ export interface EditableToken {
 type ColorEntry = z.output<typeof ColorTokenEntry>;
 type TypeEntry = z.output<typeof TextStyleGroup>;
 
-/** Every colour and text style in `json`, or an error saying the file isn't a tokens.json Designmap writes. */
+/** Every colour and text style in `json`, or an error saying the file isn't a tokens.json Designlane writes. */
 export function editableTokens(json: unknown): { colors: EditableToken[]; textStyles: EditableToken[] } {
-  const file = TokensFile.safeParse(json);
+  const file = parseTokensFile(json);
   if (!file.success) {
     throw new Error(
-      `This isn't a tokens.json Designmap writes. Run designmap on the app again. ${z.prettifyError(file.error)}`,
+      `This isn't a tokens.json Designlane writes. Run designlane on the app again. ${z.prettifyError(file.error)}`,
     );
   }
   const themes = entries(file.data.theme).flatMap(([themeKey, theme]) =>
@@ -79,7 +79,7 @@ function located<T extends TokenValue>(value: T, location: ValueLocation | undef
 }
 
 function colorToken(key: string, entry: ColorEntry): EditableToken {
-  const { reference, modes, locations, source, line } = entry.$extensions.designmap;
+  const { reference, modes, locations, source, line } = entry.$extensions.designlane;
   const values: TokenValue[] = [located({ property: "light", old: color(entry.$value) }, locations?.light)];
   if (modes) values.push(located({ property: "dark", old: color(modes.dark) }, locations?.dark));
   const names = reference ? [reference] : [];
@@ -87,7 +87,7 @@ function colorToken(key: string, entry: ColorEntry): EditableToken {
 }
 
 function typeToken(key: string, entry: TypeEntry): EditableToken {
-  const { name, reference, locations } = entry.$extensions.designmap;
+  const { name, reference, locations } = entry.$extensions.designlane;
   const values: TokenValue[] = [];
   if (entry.fontFamily) {
     values.push(located({ property: "family", old: entry.fontFamily.$value }, locations?.fontFamily));

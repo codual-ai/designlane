@@ -1,6 +1,6 @@
 /** Font families and weights as React Native writes them. */
 
-/** CSS's weight names and numbers as the weights Designmap names. */
+/** CSS's weight names and numbers as the weights Designlane names. */
 export const WEIGHTS: Record<string, string> = {
   "100": "thin",
   "200": "ultraLight",

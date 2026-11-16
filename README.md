@@ -1,10 +1,10 @@
-# Designmap
+# Designlane
 
-[![npm](https://img.shields.io/npm/v/designmap.svg)](https://www.npmjs.com/package/designmap)
-[![CI](https://github.com/codual-ai/designmap/actions/workflows/ci.yml/badge.svg)](https://github.com/codual-ai/designmap/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/designlane.svg)](https://www.npmjs.com/package/designlane)
+[![CI](https://github.com/codual-ai/designlane/actions/workflows/ci.yml/badge.svg)](https://github.com/codual-ai/designlane/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**Your design tools stay in step with your app's code.** Run `designmap` in your iOS, Android or React Native repo
+**Your design tools stay in step with your app's code.** Run `designlane` in your iOS, Android or React Native repo
 and it reads the colours and text styles your code names, so your design tool's variables and text styles update with
 every push.
 
@@ -20,21 +20,23 @@ names it (`Theme.accent`).*
   with you. Bring your own coding agent only if you want to.
 
 > [!NOTE]
-> Designmap works with **Figma** today, with **Penpot** and **Sketch** next. It writes standard W3C design tokens,
+> Designlane works with **Figma** today, with **Penpot** and **Sketch** next. It writes standard W3C design tokens,
 > which Tokens Studio and Style Dictionary already import.
+
+Designlane was called Designmap until 0.3.0: what it set up then keeps working (see the [changelog](CHANGELOG.md)).
 
 ## Get started (30 seconds)
 
 Needs Node 22 or later. In your app's repo:
 
 ```sh
-npx designmap .
+npx designlane .
 ```
 
 That's it. You get four files:
 
 ```
-designmap/
+designlane/
 ├── tokens.json   the design system the code names, as W3C design tokens: what your design tool syncs
 ├── DESIGN.md     the full report: every colour, text style, spacing and corner radius, with where each is used
 ├── catalog.html  one page with the colours, text styles and every component, to open or send to a designer
@@ -43,7 +45,7 @@ designmap/
 
 Then keep your design file in step:
 
-1. **Add the GitHub Action.** On every push it updates `designmap/tokens.json` and commits it when it changed
+1. **Add the GitHub Action.** On every push it updates `designlane/tokens.json` and commits it when it changed
    ([workflow](figma-plugin/README.md#keeping-tokensjson-up-to-date)).
 2. **Install the Figma plugin** and connect your repo, with a token that can only read it
    ([plugin](figma-plugin/README.md)).
@@ -57,7 +59,7 @@ Then keep your design file in step:
 
 Real output, run on a small SwiftUI shop app:
 
-![designmap run on a SwiftUI app: it finds 5 colours and 2 text styles and writes tokens.json and DESIGN.md](.github/assets/cli.gif)
+![designlane run on a SwiftUI app: it finds 5 colours and 2 text styles and writes tokens.json and DESIGN.md](.github/assets/cli.gif)
 
 Each colour in `tokens.json` records how the code refers to it and where it's declared, so the plugin can show it
 and find it again after any rename, and exactly where each of its values is written: the file, line and characters
@@ -71,7 +73,7 @@ quotes), what the span holds (`kind`: a `literal`, an `expression`, a `family-na
   "$type": "color",
   "$value": { "colorSpace": "srgb", "components": [1, 0.102, 0.18], "hex": "#ff1a2e" },
   "$extensions": {
-    "designmap": {
+    "designlane": {
       "reference": "Color(\"Brand\")",
       "source": "Shop/Assets.xcassets/Brand.colorset/Contents.json",
       "modes": { "dark": { "colorSpace": "srgb", "components": [1, 0.333, 0.4], "hex": "#ff5566" } },
@@ -98,16 +100,16 @@ system as swatches and type samples.
 | A plan you apply | What's new, what changed and what the code no longer uses, each with how the code refers to it |
 | Safe renames | A token renamed in the code, or a whole theme renamed, keeps its variable and every design using it |
 | Several themes | An app whose users pick a theme gets a Figma collection for each, with Light and Dark modes |
-| Your coding agent, for unusual setups | Your agent reads the app; Designmap checks every value against the code before syncing it |
+| Your coding agent, for unusual setups | Your agent reads the app; Designlane checks every value against the code before syncing it |
 | Two apps, one repo | An iPhone and an Android app in one repo each get their own design system |
 | The full picture | `DESIGN.md` lists every value the code uses and the app's screens (for SwiftUI and Compose, how they open each other too) |
-| Design context for agents | An agent can ask for the design system while it codes: `claude mcp add designmap -- npx designmap mcp .` |
+| Design context for agents | An agent can ask for the design system while it codes: `claude mcp add designlane -- npx designlane mcp .` |
 | A component catalog | `catalog.html`: the colours light and dark, text styles, spacing, corner radii and every component, with its file, uses, parameters and the tokens it uses |
 | Drift | `drift.md`: colours written as values (with the named colour to use), spacing and corners off the scale the code uses, text styles written in place, near-duplicate components |
 
 ## Component catalog
 
-`designmap/catalog.html` is one page that opens offline in any browser, in light or dark: the app's colours (light
+`designlane/catalog.html` is one page that opens offline in any browser, in light or dark: the app's colours (light
 and dark, and each theme), text styles, the spacing and corner radii the code uses, and every component and screen.
 Each component shows its kind (a button, a row, a card…), where it's declared, how often other code uses it, its
 parameters as the code writes them (`title: String`), and the colours and text styles it uses. When two components
@@ -115,36 +117,36 @@ share a name, each use counts for the one declared nearest (the same file, else 
 both is shown as possibly either. Search and filter by kind at the top.
 
 Your coding agent can add a picture of each component. With the MCP server connected, ask it to *"draw my components
-for the Designmap catalog"*: it finds them with `find_components`, reads each with `get_component`, draws it in HTML
+for the Designlane catalog"*: it finds them with `find_components`, reads each with `get_component`, draws it in HTML
 with the app's own colours, and saves it with `save_preview`, which updates the catalog. Pictures are plain HTML and
 styles only, no scripts or links, and show in a sandbox; when a component's code changes, its card says the picture is
-out of date. Use `--no-write` to see what Designmap finds without writing any file.
+out of date. Use `--no-write` to see what Designlane finds without writing any file.
 
-`designmap/drift.md` lists where the UI code skips the design system, each with its file and line, and the agent can
-check its own changes with `check_drift`. Designmap names a colour or text style to use when one matches; for spacing
+`designlane/drift.md` lists where the UI code skips the design system, each with its file and line, and the agent can
+check its own changes with `check_drift`. Designlane names a colour or text style to use when one matches; for spacing
 and corners it says which value the code uses often nearby, since it doesn't read named spacing tokens. Theme and
 token files (`Theme.kt`, `AppColors.swift`, `theme/`) and previews are left out, as values belong there.
 
 ## Unusual setup? Let your coding agent read it
 
-Designmap's own reading covers the common ways apps define colours and text styles. If your app builds its theme
-some other way, have your coding agent do the reading, and Designmap checks it before anything reaches Figma:
+Designlane's own reading covers the common ways apps define colours and text styles. If your app builds its theme
+some other way, have your coding agent do the reading, and Designlane checks it before anything reaches Figma:
 
 ```sh
-claude -p "$(npx designmap prompt)" --allowedTools Read Glob Grep Write   # writes designmap/agent.json
-npx designmap --from-agent designmap/agent.json                           # checks it, writes tokens.json
+claude -p "$(npx designlane prompt)" --allowedTools Read Glob Grep Write   # writes designlane/agent.json
+npx designlane --from-agent designlane/agent.json                           # checks it, writes tokens.json
 ```
 
 A colour is kept only when the code writes its exact value and uses its name; whatever isn't is listed and left out.
-Any agent works: `designmap prompt` prints plain instructions.
+Any agent works: `designlane prompt` prints plain instructions.
 
 ## Change a token in the code
 
-`designmap edit` makes a design change in the code, in the one place tokens.json says the value is written, and
+`designlane edit` makes a design change in the code, in the one place tokens.json says the value is written, and
 writes it the way the code already does:
 
 ```sh
-npx designmap edit Theme.brand light '#de2413' --dry-run
+npx designlane edit Theme.brand light '#de2413' --dry-run
 ```
 
 ```diff
@@ -162,7 +164,7 @@ case and length, Compose's `0xFF…`, Swift's `/ 255` or its decimals, `rgb()`, 
 in place of that name, so everything else using `colors.blue0` keeps it, when the value is written in the same file and
 can stand on its own there.
 
-When it can't be sure, it changes nothing and says why: the code changed since designmap last ran (run it again), the
+When it can't be sure, it changes nothing and says why: the code changed since designlane last ran (run it again), the
 colour is a named or computed one (`.white`, `Brand.copy(alpha = 0.5f)`), the weight is part of a font's name
 (`Inter-Bold`), the change would also change another token (one written in the same place, or one whose name leads
 there), a value can't be copied in place of a name safely (it's in another file, or Swift's `.init(…)`), or a text
@@ -174,7 +176,7 @@ style's value comes from a style it builds on. `--tokens` is read relative to `-
 |---|---|---|
 | **Code** | SwiftUI, Jetpack Compose, React Native | more to come |
 | **Design tools** | Figma | Penpot, Sketch |
-| **Direction** | code to design; design to code, from Figma as a pull request ([plugin](figma-plugin/README.md#changes-made-in-figma)) or with `designmap edit` | |
+| **Direction** | code to design; design to code, from Figma as a pull request ([plugin](figma-plugin/README.md#changes-made-in-figma)) or with `designlane edit` | |
 | **Token formats** | W3C design tokens (Tokens Studio, Style Dictionary) | |
 
 ## What it reads
@@ -201,19 +203,19 @@ colours (`OceanLight` and `OceanDark`, `DesertLight` and `DesertDark`), or React
 and dark pair (`themes.black`, a list of presets). The first theme the code declares, or the one named `light` and
 `dark`, is the app's own colours, so reordering the themes in the code changes which one that is. Every other theme
 gets its own colours in tokens.json, under `theme`, and its own Figma collection with Light and Dark modes, such as
-**Shop · Desert (Designmap)**, with the same variable names, so designers can see every theme and design with any of
+**Shop · Desert (Designlane)**, with the same variable names, so designers can see every theme and design with any of
 them. DESIGN.md lists each theme's colours.
 
 ### Two apps in one repo
 
 A repo with both an iPhone and an Android app gets a design system for each, since the two often differ (a different
-blue, the platform's own fonts): `designmap/tokens.ios.json` and `designmap/tokens.android.json`, with one `DESIGN.md`
+blue, the platform's own fonts): `designlane/tokens.ios.json` and `designlane/tokens.android.json`, with one `DESIGN.md`
 covering both. Connect each design file to its app's path.
 
 ### A design system in its own repo
 
-Some teams keep their theme in a separate library that the app imports. Designmap then tells you the theme is defined
-outside the app. Add Designmap to the library's repo instead, and connect your design tool there.
+Some teams keep their theme in a separate library that the app imports. Designlane then tells you the theme is defined
+outside the app. Add Designlane to the library's repo instead, and connect your design tool there.
 
 ## Prerequisites
 
@@ -230,7 +232,7 @@ outside the app. Add Designmap to the library's repo instead, and connect your d
 
 ## Status
 
-Version 0.2. Designmap reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
+Version 0.2. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
 in Figma into pull requests. Feedback and issues are welcome.
 
 ## License

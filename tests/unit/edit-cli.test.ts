@@ -25,7 +25,7 @@ const DIFF = [
   "+  static let brand = Color(hex: 0xDE2413)",
 ].join("\n");
 
-async function designmap(...argv: string[]) {
+async function designlane(...argv: string[]) {
   const out: string[] = [];
   const error: string[] = [];
   const code = await run(argv, { out: (t) => out.push(t), error: (t) => error.push(t) });
@@ -33,13 +33,13 @@ async function designmap(...argv: string[]) {
 }
 
 async function app(tokensName = "tokens.json", tokens: unknown = TOKENS) {
-  return tempDir({ ...APP, [`designmap/${tokensName}`]: JSON.stringify(tokens) });
+  return tempDir({ ...APP, [`designlane/${tokensName}`]: JSON.stringify(tokens) });
 }
 
-describe("designmap edit", () => {
+describe("designlane edit", () => {
   it("prints the diff and writes nothing with --dry-run", async () => {
     const root = await app();
-    const { code, out } = await designmap(
+    const { code, out } = await designlane(
       "edit",
       "Theme.brand",
       "light",
@@ -55,40 +55,40 @@ describe("designmap edit", () => {
 
   it("writes the edit without --dry-run", async () => {
     const root = await app();
-    const { code } = await designmap("edit", "brand", "light", "#de2413", "--dir", root);
+    const { code } = await designlane("edit", "brand", "light", "#de2413", "--dir", root);
     expect(code).toBe(0);
     expect(await readFile(path.join(root, THEME), "utf8")).toContain("Color(hex: 0xDE2413)");
   });
 
   it("says why it refuses, and exits 1", async () => {
     const root = await app();
-    const { code, error } = await designmap("edit", "brand", "dark", "#de2413", "--dir", root);
+    const { code, error } = await designlane("edit", "brand", "dark", "#de2413", "--dir", root);
     expect(code).toBe(1);
-    expect(error).toBe("designmap: tokens.json gives brand no dark colour.");
+    expect(error).toBe("designlane: tokens.json gives brand no dark colour.");
   });
 
   it("refuses an unknown property, and a missing value", async () => {
     const root = await app();
-    expect(await designmap("edit", "brand", "colour", "#de2413", "--dir", root)).toMatchObject({
+    expect(await designlane("edit", "brand", "colour", "#de2413", "--dir", root)).toMatchObject({
       code: 2,
       error: expect.stringContaining("colour isn't a property: use light, dark, family, size, weight"),
     });
-    expect((await designmap("edit", "brand", "light", "--dir", root)).code).toBe(2);
+    expect((await designlane("edit", "brand", "light", "--dir", root)).code).toBe(2);
   });
 
   it("finds one app's tokens file, and asks which when there are two", async () => {
     const one = await app("tokens.ios.json");
-    expect((await designmap("edit", "brand", "light", "#de2413", "--dir", one, "--dry-run")).out).toBe(DIFF);
+    expect((await designlane("edit", "brand", "light", "#de2413", "--dir", one, "--dry-run")).out).toBe(DIFF);
     const two = await tempDir({
       ...APP,
-      "designmap/tokens.ios.json": JSON.stringify(TOKENS),
-      "designmap/tokens.android.json": JSON.stringify(TOKENS),
+      "designlane/tokens.ios.json": JSON.stringify(TOKENS),
+      "designlane/tokens.android.json": JSON.stringify(TOKENS),
     });
-    const { code, error } = await designmap("edit", "brand", "light", "#de2413", "--dir", two);
+    const { code, error } = await designlane("edit", "brand", "light", "#de2413", "--dir", two);
     expect(code).toBe(2);
     expect(error).toContain("name the app's with --tokens");
-    const named = path.join(two, "designmap", "tokens.ios.json");
-    const chosen = await designmap(
+    const named = path.join(two, "designlane", "tokens.ios.json");
+    const chosen = await designlane(
       "edit",
       "brand",
       "light",
@@ -100,7 +100,7 @@ describe("designmap edit", () => {
       "--dry-run",
     );
     expect(chosen.out).toBe(DIFF);
-    const relative = await designmap(
+    const relative = await designlane(
       "edit",
       "brand",
       "light",
@@ -108,7 +108,7 @@ describe("designmap edit", () => {
       "--dir",
       two,
       "--tokens",
-      "designmap/tokens.ios.json",
+      "designlane/tokens.ios.json",
       "--dry-run",
     );
     expect(relative.out).toBe(DIFF);
@@ -117,33 +117,33 @@ describe("designmap edit", () => {
   it("says when a file is too large to read", async () => {
     const root = await app();
     await writeFile(path.join(root, THEME), `${APP[THEME]}\n${"// padding\n".repeat(60_000)}`);
-    const { code, error } = await designmap("edit", "brand", "light", "#de2413", "--dir", root);
+    const { code, error } = await designlane("edit", "brand", "light", "#de2413", "--dir", root);
     expect(code).toBe(1);
     expect(error).toBe(
-      `designmap: Designmap can't read ${THEME}: it's over 512 KB, more than it reads as source.`,
+      `designlane: Designlane can't read ${THEME}: it's over 512 KB, more than it reads as source.`,
     );
   });
 
   it("never reads a file outside the app, through a symlink or a path", async () => {
     const outside = await tempDir({ "Theme.swift": APP[THEME] ?? "" });
-    const root = await tempDir({ "designmap/tokens.json": JSON.stringify(TOKENS) });
+    const root = await tempDir({ "designlane/tokens.json": JSON.stringify(TOKENS) });
     await symlink(outside, path.join(root, "Shop"));
-    const linked = await designmap("edit", "brand", "light", "#de2413", "--dir", root);
-    expect(linked).toMatchObject({ code: 1, error: `designmap: ${THEME} isn't in the app any more.` });
+    const linked = await designlane("edit", "brand", "light", "#de2413", "--dir", root);
+    expect(linked).toMatchObject({ code: 1, error: `designlane: ${THEME} isn't in the app any more.` });
     const escaping = JSON.parse(
       JSON.stringify(TOKENS).replaceAll(THEME, `../${path.basename(outside)}/Theme.swift`),
     );
     const parent = await app("tokens.json", escaping);
-    expect((await designmap("edit", "brand", "light", "#de2413", "--dir", parent)).error).toMatch(
+    expect((await designlane("edit", "brand", "light", "#de2413", "--dir", parent)).error).toMatch(
       /isn.t in the app any more/,
     );
   });
 
   it("says so when the app has no tokens file", async () => {
     const root = await tempDir(APP);
-    expect(await designmap("edit", "brand", "light", "#de2413", "--dir", root)).toMatchObject({
+    expect(await designlane("edit", "brand", "light", "#de2413", "--dir", root)).toMatchObject({
       code: 1,
-      error: expect.stringContaining("no designmap/tokens.json"),
+      error: expect.stringContaining("no designlane/tokens.json"),
     });
   });
 });

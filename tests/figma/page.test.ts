@@ -8,7 +8,7 @@ type App = ReturnType<typeof plugin>;
 
 const pages = (app: App) => app.fake.root.children;
 
-/** The frame Designmap drew on its page. */
+/** The frame Designlane drew on its page. */
 function sheetOf(app: App): FakeNode {
   const [page] = pages(app);
   const [sheet] =
@@ -26,7 +26,7 @@ describe("the design system page", () => {
     await app.sync(
       tokensJson({ app: "shop", colors: [{ key: "surface", hex: "#18191c", dark: "#ffffff" }] }),
     );
-    expect(pages(app).map((page) => page.name)).toEqual(["Shop (Designmap)"]);
+    expect(pages(app).map((page) => page.name)).toEqual(["Shop (Designlane)"]);
     const surface = variableNamed(app.fake, "color/surface");
     const chips = sheetOf(app)
       .descendants()

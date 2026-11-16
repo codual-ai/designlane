@@ -48,7 +48,7 @@ describe("opening a pull request with the code edits", () => {
       url: "https://github.com/octo/app/pull/1",
     });
     const branch = [...shop.github.refs.keys()].find((name) => name !== "main") ?? "";
-    expect(branch).toMatch(/^designmap\/figma-2026-11-14-[0-9a-f]{7}$/);
+    expect(branch).toMatch(/^designlane\/figma-2026-11-14-[0-9a-f]{7}$/);
     const expected = (SHOP[THEME] ?? "")
       .replace("#FF1A2E", "#DE2413")
       .replace("fontSize: 17", "fontSize: 20");
@@ -71,14 +71,14 @@ describe("opening a pull request with the code edits", () => {
         head: branch,
         base: "main",
         body: [
-          "Changed in Figma by a designer, and written into the code by Designmap from Figma, each value the way the code already writes it:",
+          "Changed in Figma by a designer, and written into the code by Designlane from Figma, each value the way the code already writes it:",
           "",
           "- `color/brand`: `#ff1a2e` → `#de2413`, in `src/theme.ts:1`",
           "- `Text/body's font size`: `17` → `20`, in `src/theme.ts:4`",
           "",
-          "The app's tokens.json catches up the next time designmap runs.",
+          "The app's tokens.json catches up the next time designlane runs.",
           "",
-          '<!-- designmap-figma-changes {"tokens":"designmap/tokens.json","values":[{"token":"brand","property":"light","value":"#de2413"},{"token":"body","property":"size","value":"20"}]} -->',
+          '<!-- designlane-figma-changes {"tokens":"designlane/tokens.json","values":[{"token":"brand","property":"light","value":"#de2413"},{"token":"body","property":"size","value":"20"}]} -->',
         ].join("\n"),
       },
     ]);
@@ -160,7 +160,7 @@ describe("opening a pull request with the code edits", () => {
     shop.github.refuse("DELETE", "git/refs/", 500);
     const left = designToCodeError(await shop.openPullRequest(shop.changes, WRITE_TOKEN));
     expect(left).toMatch(
-      /^GitHub answered 500 Error\. Try again in a moment\. The branch designmap\/figma-\S+ is left on GitHub: delete it there\.$/,
+      /^GitHub answered 500 Error\. Try again in a moment\. The branch designlane\/figma-\S+ is left on GitHub: delete it there\.$/,
     );
   });
 
@@ -177,7 +177,7 @@ describe("opening a pull request with the code edits", () => {
     shop.github.accept();
     shop.github.refuse("POST", "git/refs", 409);
     expect(designToCodeError(await shop.openPullRequest(shop.changes))).toMatch(
-      /^Couldn't make the branch designmap\/figma-2026-11-14-[0-9a-f]{7} on octo\/app: it's there already\. Press Open pull request again\.$/,
+      /^Couldn't make the branch designlane\/figma-2026-11-14-[0-9a-f]{7} on octo\/app: it's there already\. Press Open pull request again\.$/,
     );
     shop.github.accept();
     shop.github.disconnect();
@@ -230,7 +230,7 @@ describe("opening a pull request with the code edits", () => {
     const shop = await plannedShop();
     const github = fakeGitHub({ files: shop.github.filesOn("main"), pullUrl: "https://example.com" });
     expect(designToCodeError(await shop.openPullRequest(shop.changes, WRITE_TOKEN))).toMatch(
-      /^GitHub answered in a way Designmap doesn't expect\. Try again in a moment\. The branch designmap\/figma-\S+ is on GitHub: look there for its pull request first\.$/,
+      /^GitHub answered in a way Designlane doesn't expect\. Try again in a moment\. The branch designlane\/figma-\S+ is on GitHub: look there for its pull request first\.$/,
     );
     expect(github.refs.size).toBe(2);
   });

@@ -5,7 +5,8 @@ import type { DesignFile, DesignFileEntry, DesignFileTheme, VariableValue } from
 import type { TextValue } from "../../src/sync/tokens-file.js";
 import { fromFigmaColor, hasOwnDark, weightOfStyle } from "./values.js";
 
-/** Where the plugin keeps its own data on variables, styles and its collection; shared, so other tools can read it. */
+/** Where the plugin keeps its own data on variables, styles and its collection; shared, so other tools can read it.
+ * Still the name from before the rename to Designlane: every file synced since keeps its data here. */
 export const NAMESPACE = "designmap";
 /** The plugin data keys a sync writes and reads back, under `NAMESPACE`. */
 export const KEYS = {
@@ -23,7 +24,7 @@ export const KEYS = {
   deprecated: "deprecated",
   descriptionBefore: "descriptionBefore",
   hiddenBefore: "hiddenBefore",
-  /** On the page Designmap draws the design system on, and on the frame it draws there. */
+  /** On the page Designlane draws the design system on, and on the frame it draws there. */
   page: "page",
   sheet: "sheet",
 } as const;
@@ -33,12 +34,12 @@ export const THEME_COLLECTION = "theme";
 /** The app's name as a title, `Shop`; a name already capitalized, like `ShopKit`, is kept. */
 export const appTitle = (app: string) => `${app.charAt(0).toUpperCase()}${app.slice(1)}`;
 
-/** What Designmap names what it makes for an app: "Shop (Designmap)". */
-export const designmapName = (app: string | undefined) =>
-  app ? `${appTitle(app)} (Designmap)` : "Designmap";
-/** What Designmap names the collection of one of an app's other themes: "Shop · Desert (Designmap)". */
+/** What Designlane names what it makes for an app: "Shop (Designlane)". */
+export const designlaneName = (app: string | undefined) =>
+  app ? `${appTitle(app)} (Designlane)` : "Designlane";
+/** What Designlane names the collection of one of an app's other themes: "Shop · Desert (Designlane)". */
 export const themeCollectionName = (app: string | undefined, theme: string) =>
-  designmapName(app ? `${appTitle(app)} · ${theme}` : theme);
+  designlaneName(app ? `${appTitle(app)} · ${theme}` : theme);
 
 /** How many variables deep a value pointing at another variable is followed before it's taken as unreadable. */
 const MAX_ALIAS_DEPTH = 10;
@@ -102,7 +103,7 @@ export const darkUnavailable = () =>
     (collection) => collection.getSharedPluginData(NAMESPACE, KEYS.darkUnavailable) === "true",
   );
 
-/** Which collections have no Dark mode of Designmap's now: not added yet, out of room, or deleted by a designer. */
+/** Which collections have no Dark mode of Designlane's now: not added yet, out of room, or deleted by a designer. */
 export const withoutDarkMode = () =>
   collectionsWhere((collection) => syncModes(collection).dark === undefined);
 
@@ -156,7 +157,7 @@ function entryOf(item: { id: string; name: string } & PluginDataMixin) {
   return { id: item.id, name: item.name, ...(identity ? { identity } : {}), deprecated: isDeprecated(item) };
 }
 
-/** A value the file holds that can't be read (a link to a variable that's gone, a loop, or a Designmap mode a
+/** A value the file holds that can't be read (a link to a variable that's gone, a loop, or a Designlane mode a
  * designer deleted): never equal to the code's, so a sync writes the code's value over it rather than losing it. */
 const UNREADABLE = { color: { light: { hex: "", alpha: Number.NaN } }, number: Number.NaN };
 

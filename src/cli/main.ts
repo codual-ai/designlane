@@ -9,7 +9,7 @@ run(process.argv.slice(2), {
     process.exitCode = code;
   },
   (e: unknown) => {
-    console.error(`designmap: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`designlane: ${e instanceof Error ? e.message : String(e)}`);
     process.exitCode = 1;
   },
 );

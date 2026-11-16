@@ -22,9 +22,9 @@ describe("reading tokens.json from a GitHub repo", () => {
     expect(await attempt(403, { "x-ratelimit-remaining": "0" })).toBe(
       "GitHub is limiting requests for now. Try again in a few minutes.",
     );
-    expect(await attempt(404)).toMatch(/^Couldn't find designmap\/tokens\.json on main in octo\/app\./);
+    expect(await attempt(404)).toMatch(/^Couldn't find designlane\/tokens\.json on main in octo\/app\./);
     expect(await attempt(404)).toContain(
-      "designmap/tokens.ios.json and designmap/tokens.android.json instead",
+      "designlane/tokens.ios.json and designlane/tokens.android.json instead",
     );
   });
 
@@ -67,9 +67,9 @@ describe("reading tokens.json from a GitHub repo", () => {
   it("refuses a path that isn't a file's path in the repo", async () => {
     const app = plugin();
     github(200);
-    await app.session({ type: "connect", id: 1, ...connection, path: "/designmap/tokens.json" });
+    await app.session({ type: "connect", id: 1, ...connection, path: "/designlane/tokens.json" });
     expect(lastError(app)).toBe(
-      "\"/designmap/tokens.json\" isn't a file's path in the repo. Write it like designmap/tokens.json.",
+      "\"/designlane/tokens.json\" isn't a file's path in the repo. Write it like designlane/tokens.json.",
     );
   });
 
@@ -115,7 +115,7 @@ describe("reading tokens.json from a GitHub repo", () => {
     const fetch = github(200);
     await app.session({ type: "connect", id: 1, ...connection, path: "../secrets/tokens.json" });
     expect([lastError(app), fetch.mock.calls.length]).toEqual([
-      "\"../secrets/tokens.json\" isn't a file's path in the repo. Write it like designmap/tokens.json.",
+      "\"../secrets/tokens.json\" isn't a file's path in the repo. Write it like designlane/tokens.json.",
       0,
     ]);
   });

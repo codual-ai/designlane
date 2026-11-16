@@ -3,7 +3,7 @@
 import { vi } from "vitest";
 import type { plugin } from "./figma-plugin.js";
 
-export const repo = { repo: "octo/app", branch: "main", path: "designmap/tokens.json" };
+export const repo = { repo: "octo/app", branch: "main", path: "designlane/tokens.json" };
 export const connection = { ...repo, token: "github_pat_secret" };
 
 /** GitHub as the plugin's `fetch` sees it: answering every request with `status`, and `body` when it's found. */

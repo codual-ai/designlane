@@ -32,7 +32,7 @@ const brief = (changes: FigmaChange[]) =>
 /** The value a colour variable of the default theme holds in Figma, in its Light or Dark mode. */
 function valueIn(shop: SyncedShop, name: string, mode: "Light" | "Dark") {
   const { fake } = shop.app;
-  const collection = [...fake.collections.values()].find((c) => c.name === "Designmap");
+  const collection = [...fake.collections.values()].find((c) => c.name === "Designlane");
   const modeId = collection?.modes.find((m) => m.name === mode)?.modeId ?? "";
   const variable = collection?.variableIds
     .map((id) => fake.variables.get(id))
@@ -132,7 +132,7 @@ describe("Apply and the values a designer changed in Figma", () => {
 
   it("fills in the code's Dark value when Apply adds back a Dark mode a designer deleted, keeping their Light", async () => {
     const shop = await syncedShop();
-    const collection = [...shop.app.fake.collections.values()].find((c) => c.name === "Designmap");
+    const collection = [...shop.app.fake.collections.values()].find((c) => c.name === "Designlane");
     const darkMode = collection?.modes.find((mode) => mode.name === "Dark")?.modeId;
     if (!collection || !darkMode) throw new Error("no Dark mode");
     collection.removeMode(darkMode);
@@ -198,7 +198,7 @@ describe("Apply and the values a designer changed in Figma", () => {
 describe("pull requests already open for a designer's changes", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("shows a change already in an open Designmap pull request with its link, and plans no edit for it", async () => {
+  it("shows a change already in an open Designlane pull request with its link, and plans no edit for it", async () => {
     const shop = await syncedShop();
     shop.recolor("color/brand", "Light", "#de2413");
     const changes = (await shop.check()).map((change) => change.id);
@@ -210,19 +210,19 @@ describe("pull requests already open for a designer's changes", () => {
     expect(await shop.planEdits(changes)).toMatchObject({ type: "edits", edits: [] });
   });
 
-  it("offers a change again whose pull request has another value or app, is closed, isn't Designmap's or has no marker", async () => {
+  it("offers a change again whose pull request has another value or app, is closed, isn't Designlane's or has no marker", async () => {
     const shop = await syncedShop();
     shop.recolor("color/brand", "Light", "#de2413");
     const marked = markerOf(TOKENS_PATH, [brand]);
     const pull = {
       title: "Design changes",
-      head: "designmap/figma-2026-11-14-abcdef0",
+      head: "designlane/figma-2026-11-14-abcdef0",
       base: "main",
       body: marked,
     };
     shop.github.pulls.push(
       { ...pull, body: markerOf(TOKENS_PATH, [{ ...brand, to: "#000000" }]) },
-      { ...pull, body: markerOf("apps/android/designmap/tokens.json", [brand]) },
+      { ...pull, body: markerOf("apps/android/designlane/tokens.json", [brand]) },
       { ...pull, head: "feature/brand" },
       { ...pull, body: "Changed in Figma by a designer, before markers." },
       { ...pull, repo: "someone/app" },
@@ -250,7 +250,7 @@ describe("pull requests already open for a designer's changes", () => {
     const family = { ...brand, property: "family" as const, to: "Odd --> <b>Font</b>" };
     const marker = markerOf(TOKENS_PATH, [family]);
     expect(marker.indexOf("-->")).toBe(marker.length - "-->".length);
-    github.pulls.push({ title: "t", head: "designmap/figma-1", base: "main", body: `Before.\n\n${marker}` });
+    github.pulls.push({ title: "t", head: "designlane/figma-1", base: "main", body: `Before.\n\n${marker}` });
     const open = await openPullRequests(repoApi("octo/app", READ_TOKEN), "main", TOKENS_PATH);
     expect(withPullRequests([family], open)).toMatchObject([
       { pullRequest: "https://github.com/octo/app/pull/1" },

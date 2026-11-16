@@ -65,7 +65,7 @@ describe("refusing what can't be rewritten safely", () => {
     const expression = (text: string) => ({ text, kind: "expression" as const });
     const named = "static let ink: Color = .black";
     expect(await recolored("Theme.swift", named, expression(".black"), "#000000", "#de2413")).toMatch(
-      /refused: Designmap can't safely rewrite `.black`/,
+      /refused: Designlane can't safely rewrite `.black`/,
     );
     const faded = "static let ink = Color(hex: 0x112233).opacity(0.5)";
     expect(

@@ -107,11 +107,11 @@ function pullRequestBody(tokensFile: string, changes: MadeChange[]): string {
       `- ${code(changeLabel(change))}: ${code(change.from)} → ${code(change.to)}, in ${code(`${path}:${edit.line}`)}`,
   );
   return [
-    "Changed in Figma by a designer, and written into the code by Designmap from Figma, each value the way the code already writes it:",
+    "Changed in Figma by a designer, and written into the code by Designlane from Figma, each value the way the code already writes it:",
     "",
     ...lines,
     "",
-    "The app's tokens.json catches up the next time designmap runs.",
+    "The app's tokens.json catches up the next time designlane runs.",
     "",
     markerOf(
       tokensFile,

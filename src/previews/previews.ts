@@ -13,8 +13,9 @@ const MAX_BYTES = 100_000;
 /** Fetches nothing and runs nothing: on each picture's page, and atop each saved file, so opening one alone is safe. */
 const PREVIEW_POLICY = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
 const POLICY_TAG = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_POLICY}">`;
+/** Atop each saved picture, `designmap-preview` on one saved before the rename to Designlane. */
 const HEADER =
-  /^<!-- designmap-preview source=([0-9a-f]+) -->\n(?:<meta http-equiv="Content-Security-Policy" content="[^"\n]*">\n)?/;
+  /^<!-- design(?:lane|map)-preview source=([0-9a-f]+) -->\n(?:<meta http-equiv="Content-Security-Policy" content="[^"\n]*">\n)?/;
 /** A browser reads an attribute after a space, a `/` or a quote: `<svg/onload=…>`. */
 const SCRIPTED = /<script\b|[\s/"']on[a-z]+\s*=|javascript:|vbscript:/i;
 /** Character references can spell a URL or a scheme past the checks below (`&#104;ttp`, `javascript&colon;`). */
@@ -61,7 +62,7 @@ export async function savePreview(outDir: string, c: ComponentInfo, html: string
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(
     file,
-    `<!-- designmap-preview source=${hash(c.source)} -->\n${POLICY_TAG}\n${html.trim()}\n`,
+    `<!-- designlane-preview source=${hash(c.source)} -->\n${POLICY_TAG}\n${html.trim()}\n`,
   );
   return file;
 }

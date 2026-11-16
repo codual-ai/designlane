@@ -1,6 +1,6 @@
-/** What `designmap prompt` prints: the instructions a coding agent follows to read an app's design system into the
- * file `designmap --from-agent` takes. */
-export const AGENT_FILE = "designmap/agent.json";
+/** What `designlane prompt` prints: the instructions a coding agent follows to read an app's design system into the
+ * file `designlane --from-agent` takes. */
+export const AGENT_FILE = "designlane/agent.json";
 
 export const AGENT_PROMPT = `Read this app's code and write its design system to ${AGENT_FILE}, without changing anything else.
 

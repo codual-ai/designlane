@@ -3,6 +3,34 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 - 2026-11-15
+
+### Changed
+
+- Renamed to Designlane: the npm package and its command are `designlane`, the repo is `codual-ai/designlane`, the
+  Action and the Figma plugin are named Designlane, and the output folder is `designlane/`. New files carry their
+  data under `$extensions.designlane`, the plugin's pull requests come from `designlane/figma-…` branches, and the
+  MCP server is named `designlane`. The library's `OUTPUT_DIR` is now `"designlane"`.
+- The copyright holder in NOTICE is now Hyperion Arc Inc.
+
+### What to do
+
+Nothing is required: everything set up under the old name keeps working.
+
+- **Your app's files stay where they are.** An app with a tokens file in `designmap/` and none in `designlane/` keeps
+  writing there, from the CLI, the MCP server and the Action, so nothing is moved or copied; `designlane edit` and the plugin
+  find `designmap/tokens.json` too. tokens.json files with `$extensions.designmap` read as before, and so do component
+  pictures saved under the old name.
+- **Figma files synced before carry on.** The plugin keeps its id and the data it stores on variables, styles,
+  collections and its page, so nothing is synced again; a collection or page named "(Designmap)" keeps its name until
+  you rename it. A connection to `designlane/tokens.json` in an app that still has `designmap/tokens.json` connects to
+  that one.
+- **Open pull requests opened from Figma** on `designmap/figma-…` branches still show as "Pull request open".
+- **Update the Action reference** to `codual-ai/designlane@v0.3.0`. `codual-ai/designmap@v0.2.x` keeps working through
+  GitHub's redirect, but only `designlane` gets new versions.
+- **Use the `designlane` command** (`npx designlane`, `designlane prompt`, `designlane edit`) and re-add the MCP server
+  as `claude mcp add designlane -- npx designlane mcp .`. The `designmap` package stays at 0.2.1.
+
 ## 0.2.1 - 2026-11-15
 
 ### Fixed

@@ -1,11 +1,11 @@
 /** The page that shows the app's design system as a designer sees it: colour swatches linked to their variables, a
- * sample of each text style, and the spacing and radius scales a file written before Designmap left them to DESIGN.md
+ * sample of each text style, and the spacing and radius scales a file written before Designlane left them to DESIGN.md
  * holds. Redrawn on every apply; only its own frame changes, so what a designer adds to the page stays. */
 
 import type { VariableValue } from "../../src/sync/plan.js";
 import {
   appTitle,
-  designmapName,
+  designlaneName,
   identityOf,
   isDeprecated,
   KEYS,
@@ -51,7 +51,7 @@ export async function drawDesignSystemPage(app: string | undefined): Promise<voi
 }
 
 async function fill(sheet: FrameNode, app: string | undefined): Promise<void> {
-  sheet.name = designmapName(app);
+  sheet.name = designlaneName(app);
   sheet.fills = [{ type: "SOLID", color: WHITE }];
   sheet.setSharedPluginData(NAMESPACE, KEYS.sheet, "true");
   sheet.paddingTop = sheet.paddingRight = sheet.paddingBottom = sheet.paddingLeft = PADDING;
@@ -73,7 +73,7 @@ async function designSystemPage(app: string | undefined): Promise<{ page: PageNo
   );
   if (marked) return { page: marked, isNew: false };
   const page = figma.createPage();
-  page.name = designmapName(app);
+  page.name = designlaneName(app);
   page.setSharedPluginData(NAMESPACE, KEYS.page, "true");
   return { page, isNew: true };
 }
@@ -109,7 +109,7 @@ async function syncedTokens(collection: VariableCollection): Promise<Token[]> {
 function header(parent: FrameNode, app: string | undefined): void {
   const block = stack(parent, "VERTICAL", 8);
   text(block, app ? appTitle(app) : "Design system", 48, HEADING_FONT);
-  text(block, `Design system, synced from the code by Designmap on ${today()}`, 16);
+  text(block, `Design system, synced from the code by Designlane on ${today()}`, 16);
 }
 
 /** The designer's local date, `2026-11-10`. */

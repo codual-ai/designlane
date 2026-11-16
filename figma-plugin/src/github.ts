@@ -2,6 +2,8 @@
  * can act on. */
 
 import { z } from "zod";
+import { OLD_OUTPUT_DIR } from "../../src/output/old-names.js";
+import { OUTPUT_DIR } from "../../src/output/output-files.js";
 import { type Connection, isRepoName, parsedJson } from "./connection.js";
 import type { RepoSource } from "./messages.js";
 
@@ -16,7 +18,7 @@ export const TOKEN_NOT_ACCEPTED = "GitHub didn't accept the token: it may be mis
 const TOKEN_REJECTED = `${TOKEN_NOT_ACCEPTED} Check it, or make a new one, then connect again.`;
 const RATE_LIMITED = "GitHub is limiting requests for now. Try again in a few minutes.";
 const UNREACHABLE = "Couldn't reach GitHub. Check your internet connection, then try again.";
-const UNEXPECTED = "GitHub answered in a way Designmap doesn't expect. Try again in a moment.";
+const UNEXPECTED = "GitHub answered in a way Designlane doesn't expect. Try again in a moment.";
 
 /** A Git object's full hash, as GitHub's API gives it. */
 export const Sha = z.string().regex(/^[0-9a-f]{40}$/);
@@ -105,11 +107,38 @@ export function repoApi(repo: string, token: string) {
 export type RepoApi = ReturnType<typeof repoApi>;
 
 /** The file `connection` points at; its settings are checked by `checkConnection` first. */
-export async function fetchTokensFile({ repo, branch, path, token }: Connection): Promise<string> {
-  const url = `repos/${repo}/contents/${encodedPath(path)}?ref=${encodeURIComponent(branch)}`;
-  const response = await send(token, url, { accept: RAW_CONTENTS });
+export async function fetchTokensFile(connection: Connection): Promise<string> {
+  const response = await requestTokensFile(connection);
   if (response.ok) return response.text();
-  throw new Error(refusalMessage(response, { repo, branch, path }));
+  throw new Error(refusalMessage(response, connection));
+}
+
+/** The file `connection` points at, with the connection that read it: for a path in a `designlane/` folder that isn't
+ * there, the same file in `designmap/` when an app set up before the rename has it there. */
+export async function findTokensFile(
+  connection: Connection,
+): Promise<{ json: string; connection: Connection }> {
+  const response = await requestTokensFile(connection);
+  if (response.ok) return { json: await response.text(), connection };
+  const oldPath = oldFolderPath(connection.path);
+  if (response.status === 404 && oldPath) {
+    const old = { ...connection, path: oldPath };
+    const oldResponse = await requestTokensFile(old);
+    if (oldResponse.ok) return { json: await oldResponse.text(), connection: old };
+  }
+  throw new Error(refusalMessage(response, connection));
+}
+
+const requestTokensFile = ({ repo, branch, path, token }: Connection) =>
+  send(token, `repos/${repo}/contents/${encodedPath(path)}?ref=${encodeURIComponent(branch)}`, {
+    accept: RAW_CONTENTS,
+  });
+
+/** `path` in the old output folder, when it's a file in the current one. */
+function oldFolderPath(path: string): string | undefined {
+  const parts = path.split("/");
+  if (parts.length < 2 || parts[parts.length - 2] !== OUTPUT_DIR) return undefined;
+  return [...parts.slice(0, -2), OLD_OUTPUT_DIR, ...parts.slice(-1)].join("/");
 }
 
 function refusalMessage(response: FetchResponse, { repo, branch, path }: RepoSource): string {
@@ -117,7 +146,7 @@ function refusalMessage(response: FetchResponse, { repo, branch, path }: RepoSou
     return `The token can't read ${repo}. Give it read access to this repo's contents.`;
   }
   if (response.status === 404) {
-    return `Couldn't find ${path} on ${branch} in ${repo}. Check the names and that the token can read the repo. A repo with both an iPhone and an Android app has designmap/tokens.ios.json and designmap/tokens.android.json instead. If CI hasn't written the file yet, it will on the next push.`;
+    return `Couldn't find ${path} on ${branch} in ${repo}. Check the names and that the token can read the repo. A repo with both an iPhone and an Android app has designlane/tokens.ios.json and designlane/tokens.android.json instead. If CI hasn't written the file yet, it will on the next push.`;
   }
   return new GitHubRefusal(response).message;
 }

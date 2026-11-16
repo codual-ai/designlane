@@ -88,7 +88,7 @@ export async function readText(abs: string): Promise<string | undefined> {
   }
 }
 
-/** Whether `abs` is a file too large for Designmap to read as source. */
+/** Whether `abs` is a file too large for Designlane to read as source. */
 export async function isTooLarge(abs: string): Promise<boolean> {
   try {
     return (await stat(abs)).size > MAX_FILE_BYTES;

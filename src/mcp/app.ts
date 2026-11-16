@@ -33,7 +33,7 @@ export async function withApp(
     if (typeof answered !== "string") return answered;
     return text(`${gaps ? `${gaps}\n\n` : ""}${answered}`);
   } catch (e) {
-    return failure(`Designmap couldn't read ${root}: ${e instanceof Error ? e.message : String(e)}`);
+    return failure(`Designlane couldn't read ${root}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

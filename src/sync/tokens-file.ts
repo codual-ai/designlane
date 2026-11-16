@@ -1,6 +1,6 @@
 /**
- * Reads a tokens.json that Designmap wrote into the tokens a sync works with. Each token's identity is how the code
- * refers to it (`Theme.surface`), so a sync finds it again whatever it's called in the design file. Designmap writes
+ * Reads a tokens.json that Designlane wrote into the tokens a sync works with. Each token's identity is how the code
+ * refers to it (`Theme.surface`), so a sync finds it again whatever it's called in the design file. Designlane writes
  * only what the code names; a file written before it did may hold values known by the value itself (an inline
  * `#ff0000`, a spacing of 8), which sync as before until the next run drops them.
  */
@@ -9,8 +9,8 @@ import { z } from "zod";
 import {
   type ColorTokenEntry,
   type ColorValue,
+  parseTokensFile,
   type TextStyleGroup,
-  TokensFile,
 } from "../output/tokens-schema.js";
 import type { Platform } from "../scan/types.js";
 
@@ -70,10 +70,10 @@ export interface SyncTokens {
 
 /** The tokens in `json`, or an error saying what's wrong and what to do. */
 export function readTokensFile(json: unknown): SyncTokens {
-  const file = TokensFile.safeParse(json);
+  const file = parseTokensFile(json);
   if (!file.success) {
     throw new Error(
-      `This isn't a tokens.json Designmap writes. Run designmap on the app again. ${z.prettifyError(file.error)}`,
+      `This isn't a tokens.json Designlane writes. Run designlane on the app again. ${z.prettifyError(file.error)}`,
     );
   }
   const colors = tokensIn(file.data.color).map(([key, token]) => syncColor(key, token));
@@ -83,17 +83,17 @@ export function readTokensFile(json: unknown): SyncTokens {
   // A theme with no colours holds nothing to sync, and mustn't make an empty file look full.
   const themes = tokensIn(file.data.theme)
     .map(([key, theme]) => ({
-      name: theme.$extensions.designmap.name,
+      name: theme.$extensions.designlane.name,
       key,
       colors: distinct(tokensIn(theme.color).map(([key, token]) => syncColor(key, token))),
     }))
     .filter((theme) => theme.colors.length > 0);
   const spacing = tokensIn(file.data.spacing).map(([, token]) => token.$value.value);
   const radii = tokensIn(file.data.radius).map(([, token]) => token.$value.value);
-  const app = file.data.$extensions?.designmap.app;
-  const complete = file.data.$extensions?.designmap.partial !== true;
+  const app = file.data.$extensions?.designlane.app;
+  const complete = file.data.$extensions?.designlane.partial !== true;
   // An app whose code names nothing is a sync like any other, but a file that only looks empty would deprecate
-  // everything: one Designmap didn't write, or a scan that didn't read the whole app.
+  // everything: one Designlane didn't write, or a scan that didn't read the whole app.
   if (
     !colors.length &&
     !themes.length &&
@@ -102,7 +102,7 @@ export function readTokensFile(json: unknown): SyncTokens {
     !radii.length &&
     (!app || !complete)
   ) {
-    throw new Error("This tokens.json has no tokens. Run designmap on the app again before syncing.");
+    throw new Error("This tokens.json has no tokens. Run designlane on the app again before syncing.");
   }
   return {
     colors: distinct(colors),
@@ -112,8 +112,8 @@ export function readTokensFile(json: unknown): SyncTokens {
     radii,
     complete,
     ...(app ? { app } : {}),
-    ...(file.data.$extensions?.designmap.platform
-      ? { platform: file.data.$extensions.designmap.platform }
+    ...(file.data.$extensions?.designlane.platform
+      ? { platform: file.data.$extensions.designlane.platform }
       : {}),
   };
 }
@@ -145,7 +145,7 @@ function syncColor(
   key: string,
   token: z.output<typeof ColorTokenEntry>,
 ): { token: SyncColor; line?: number } {
-  const { reference, source, line, modes } = token.$extensions.designmap;
+  const { reference, source, line, modes } = token.$extensions.designlane;
   const light = rgba(token.$value);
   return {
     token: {
@@ -162,7 +162,7 @@ function syncColor(
 /** A text style is known by its name in the code (`heading`, `brand 20 bold` for a helper called with a size, or a
  * description like `System 15 semibold`) and the font helper it comes from, which is one in the whole app. */
 function syncTextStyle(key: string, style: z.output<typeof TextStyleGroup>): SyncTextStyle {
-  const { reference, name } = style.$extensions.designmap;
+  const { reference, name } = style.$extensions.designlane;
   return {
     identity: `type:${reference ? `${reference}|${name}` : name}`,
     key,

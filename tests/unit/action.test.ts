@@ -36,15 +36,35 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 // The action runs on GitHub's Linux runners; its steps are bash.
 describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
   it("runs only on a push to a branch", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "designmap-action-"));
+    dir = mkdtempSync(path.join(tmpdir(), "designlane-action-"));
     const { script } = step("Check it's a push to a branch");
     const run = (event: string, refType: string) =>
       bash(script, dir, { GITHUB_EVENT_NAME: event, GITHUB_REF_TYPE: refType }).status;
     expect([run("push", "branch"), run("pull_request", "branch"), run("push", "tag")]).toEqual([0, 1, 1]);
   });
 
+  it("writes to designlane/, or the designmap/ with a tokens file of a repo set up before the rename, or the folder it's given", () => {
+    dir = mkdtempSync(path.join(tmpdir(), "designlane-action-"));
+    const { script } = step("Choose the output folder");
+    const chosen = (out = "") => {
+      const output = path.join(dir, "output");
+      writeFileSync(output, "");
+      expect(bash(script, dir, { OUT: out, GITHUB_OUTPUT: output }).status).toBe(0);
+      return readFileSync(output, "utf8");
+    };
+    expect(chosen()).toBe("out=designlane\n");
+    mkdirSync(path.join(dir, "designmap"));
+    expect(chosen()).toBe("out=designlane\n");
+    writeFileSync(path.join(dir, "designmap", "tokens.ios.json"), "{}\n");
+    mkdirSync(path.join(dir, "designlane"));
+    writeFileSync(path.join(dir, "designlane", "agent.json"), "{}\n");
+    expect([chosen(), chosen("tokens")]).toEqual(["out=designmap\n", "out=tokens\n"]);
+    writeFileSync(path.join(dir, "designlane", "tokens.json"), "{}\n");
+    expect(chosen()).toBe("out=designlane\n");
+  });
+
   it("commits only the tokens, only when they changed, onto a push that landed meanwhile", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "designmap-action-"));
+    dir = mkdtempSync(path.join(tmpdir(), "designlane-action-"));
     const remote = path.join(dir, "remote.git");
     const app = path.join(dir, "app");
     execFileSync("git", ["init", "-q", "--bare", "-b", "main", remote]);
@@ -53,8 +73,8 @@ describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
     git(app, "add", "README.md");
     git(app, "commit", "-qm", "app");
     git(app, "push", "-q", "origin", "HEAD:main");
-    mkdirSync(path.join(app, "designmap"));
-    writeFileSync(path.join(app, "designmap", "tokens.json"), "{}\n");
+    mkdirSync(path.join(app, "designlane"));
+    writeFileSync(path.join(app, "designlane", "tokens.json"), "{}\n");
     writeFileSync(path.join(app, "unrelated.txt"), "staged by an earlier step\n");
     git(app, "add", "unrelated.txt");
     const other = path.join(dir, "other");
@@ -65,13 +85,13 @@ describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
     git(other, "push", "-q");
 
     const { script, env } = step("Commit them if they changed");
-    const commit = () => bash(script, app, { ...env, OUT: "designmap", GITHUB_REF_NAME: "main" });
+    const commit = () => bash(script, app, { ...env, OUT: "designlane", GITHUB_REF_NAME: "main" });
     expect(commit().status).toBe(0);
     const log = git(remote, "log", "--format=%s", "main").trim().split("\n");
     const files = git(remote, "show", "--name-only", "--format=", "main").trim();
     expect([log, files]).toEqual([
       ["Update design tokens [skip ci]", "someone else", "app"],
-      "designmap/tokens.json",
+      "designlane/tokens.json",
     ]);
     expect(commit().stdout).toContain("The design tokens haven't changed.");
   });

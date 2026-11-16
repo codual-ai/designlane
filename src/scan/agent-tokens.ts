@@ -1,10 +1,11 @@
 /**
- * A coding agent's reading of an app's design system (the file `designmap prompt` asks it to write), checked against
- * the code and added to what Designmap read itself, so an app whose setup its rules don't cover still syncs.
+ * A coding agent's reading of an app's design system (the file `designlane prompt` asks it to write), checked against
+ * the code and added to what Designlane read itself, so an app whose setup its rules don't cover still syncs.
  */
 
 import { z } from "zod";
 import { colorOf } from "../frameworks/css-color.js";
+import { OLD_OUTPUT_DIR } from "../output/old-names.js";
 import { OUTPUT_DIR } from "../output/output-files.js";
 import { listFiles, readText } from "./files.js";
 import type { ColorToken, FrameworkScan, ScanResult } from "./types.js";
@@ -66,7 +67,7 @@ interface CodeIndex {
   names: Set<string>;
 }
 
-/** The scan with the agent's tokens added that the code bears out and Designmap didn't already have. */
+/** The scan with the agent's tokens added that the code bears out and Designlane didn't already have. */
 export async function mergeAgentTokens(scan: ScanResult, json: unknown): Promise<AgentMerge> {
   const parsed = AgentFile.safeParse(json);
   if (!parsed.success)
@@ -74,7 +75,7 @@ export async function mergeAgentTokens(scan: ScanResult, json: unknown): Promise
   const [framework, ...others] = scan.frameworks;
   if (!framework) throw new Error("no app code to add the agent's tokens to");
   if (others.length)
-    throw new Error("this repo has more than one app: run designmap and the agent in one app's folder");
+    throw new Error("this repo has more than one app: run designlane and the agent in one app's folder");
   const code = await indexCode(scan.root);
   const dropped: string[] = [];
   const colors = [...framework.tokens.colors];
@@ -140,9 +141,10 @@ const named = (code: CodeIndex, reference: string) => code.names.has(nameOf(refe
 async function indexCode(root: string): Promise<CodeIndex> {
   const { files } = await listFiles(root);
   const index: CodeIndex = { colors: new Map(), names: new Set() };
-  // Designmap's own output, the agent's file among it, would bear out anything the agent wrote: an app's own and a
-  // nested app's alike.
-  const own = (rel: string) => rel.startsWith(`${OUTPUT_DIR}/`) || rel.includes(`/${OUTPUT_DIR}/`);
+  // Designlane's own output, the agent's file among it, would bear out anything the agent wrote: an app's own and a
+  // nested app's alike, in the folder it writes or the one an app set up before the rename keeps.
+  const own = (rel: string) =>
+    [OUTPUT_DIR, OLD_OUTPUT_DIR].some((dir) => rel.startsWith(`${dir}/`) || rel.includes(`/${dir}/`));
   for (const file of files.filter((f) => CODE_FILES.test(f.rel) && !own(f.rel))) {
     const text = await readText(file.abs);
     if (text === undefined) continue;

@@ -1,12 +1,11 @@
 /** The MCP tools for the app's components: finding one to reuse, reading it, and saving a picture of it. */
 
-import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CATEGORIES, type ComponentInfo, firstLines, inventory } from "../catalog/components.js";
 import { readSources } from "../catalog/sources.js";
-import { OUTPUT_DIR } from "../output/output-files.js";
 import { writeCatalog } from "../output/reports.js";
+import { outputDir } from "../output/write.js";
 import {
   loadPreviews,
   PREVIEW_RULES,
@@ -25,7 +24,7 @@ const MAX_CODE_LINES = 200;
 type Repo = z.ZodOptional<z.ZodString>;
 
 async function componentsOf(scan: ScanResult) {
-  return { components: inventory(scan, await readSources(scan)), outDir: path.join(scan.root, OUTPUT_DIR) };
+  return { components: inventory(scan, await readSources(scan)), outDir: await outputDir(scan.root) };
 }
 
 async function withPreviews(scan: ScanResult) {
@@ -138,7 +137,7 @@ export function registerComponentTools(server: McpServer, repo: Repo, rootOf: (r
     "save_preview",
     {
       title: "Save a picture of a component",
-      description: `Saves an HTML picture of a component into designmap/previews/ and rebuilds designmap/catalog.html with it. Read the component with get_component first. ${PREVIEW_RULES}`,
+      description: `Saves an HTML picture of a component into designlane/previews/ and rebuilds designlane/catalog.html with it. Read the component with get_component first. ${PREVIEW_RULES}`,
       inputSchema: { repo, name, file, html: z.string().describe("The HTML fragment") },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },

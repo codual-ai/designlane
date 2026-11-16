@@ -105,20 +105,20 @@ describe("the plugin window", () => {
       id: 2,
       repo: "octo/app",
       branch: "main",
-      path: "designmap/tokens.json",
+      path: "designlane/tokens.json",
       token: "github_pat_secret",
     });
   });
 
   it("fills the form with the repo the file syncs from, so a teammate types only a token", async () => {
     const ui = await openWindow();
-    const saved = { repo: "octo/app", branch: "release", path: "designmap/tokens.android.json" };
+    const saved = { repo: "octo/app", branch: "release", path: "designlane/tokens.android.json" };
     ui.receive({ type: "connection", repo: null, saved });
     const value = (id: string) => (document.getElementById(id) as HTMLInputElement).value;
     expect([value("repo"), value("branch"), value("path"), value("token")]).toEqual([
       "octo/app",
       "release",
-      "designmap/tokens.android.json",
+      "designlane/tokens.android.json",
       "",
     ]);
   });
@@ -127,7 +127,7 @@ describe("the plugin window", () => {
     const ui = await openWindow();
     ui.receive({
       type: "connection",
-      repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
+      repo: { repo: "octo/app", branch: "main", path: "designlane/tokens.json" },
     });
     expect([
       (document.getElementById("connect") as HTMLElement).hidden,
@@ -151,7 +151,7 @@ describe("the plugin window", () => {
     token.value = "github_pat_secret";
     ui.receive({
       type: "connection",
-      repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
+      repo: { repo: "octo/app", branch: "main", path: "designlane/tokens.json" },
     });
     expect(token.value).toBe("");
   });
@@ -160,7 +160,7 @@ describe("the plugin window", () => {
     const ui = await openWindow();
     ui.receive({
       type: "connection",
-      repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
+      repo: { repo: "octo/app", branch: "main", path: "designlane/tokens.json" },
     });
     ui.receive({ type: "plan", id: 1, summary });
     (document.getElementById("disconnect") as HTMLButtonElement).click();
@@ -171,7 +171,7 @@ describe("the plugin window", () => {
     const ui = await openWindow();
     ui.receive({
       type: "connection",
-      repo: { repo: "octo/app", branch: "main", path: "designmap/tokens.json" },
+      repo: { repo: "octo/app", branch: "main", path: "designlane/tokens.json" },
     });
     ui.receive({ type: "plan", id: 1, summary });
     ui.apply.click();

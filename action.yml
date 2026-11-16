@@ -1,5 +1,5 @@
-name: Designmap
-description: Keeps your mobile app's design tokens in step with its code, for the Designmap Figma plugin.
+name: Designlane
+description: Keeps your mobile app's design tokens in step with its code, for the Designlane Figma plugin.
 branding:
   icon: layers
   color: purple
@@ -8,8 +8,8 @@ inputs:
     description: The app's folder, from the repo's root.
     default: "."
   out:
-    description: The folder to write tokens.json and DESIGN.md to, from the repo's root.
-    default: designmap
+    description: The folder to write tokens.json and DESIGN.md to, from the repo's root. By default designlane, or designmap in a repo that has one from before the rename.
+    default: ""
 runs:
   using: composite
   steps:
@@ -18,30 +18,46 @@ runs:
       shell: bash
       run: |
         if [ "$GITHUB_EVENT_NAME" != "push" ] || [ "$GITHUB_REF_TYPE" != "branch" ]; then
-          echo "::error::Designmap commits tokens.json, so run it on a push to a branch, not on this $GITHUB_EVENT_NAME."
+          echo "::error::Designlane commits tokens.json, so run it on a push to a branch, not on this $GITHUB_EVENT_NAME."
           exit 1
         fi
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: 22
-    - name: Build Designmap
+    - name: Build Designlane
       shell: bash
       working-directory: ${{ github.action_path }}
       env:
         COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       run: corepack pnpm install --frozen-lockfile && corepack pnpm build
+    # A repo set up before the rename keeps its designmap folder, which its Figma files are connected to, until
+    # designlane has a tokens file of its own.
+    - name: Choose the output folder
+      id: folder
+      shell: bash
+      env:
+        OUT: ${{ inputs.out }}
+      run: |
+        if [ -z "$OUT" ]; then
+          if ! compgen -G "designlane/tokens*.json" > /dev/null && compgen -G "designmap/tokens*.json" > /dev/null; then
+            OUT=designmap
+          else
+            OUT=designlane
+          fi
+        fi
+        echo "out=$OUT" >> "$GITHUB_OUTPUT"
     - name: Write the design tokens
       shell: bash
       env:
-        DESIGNMAP: ${{ github.action_path }}
+        DESIGNLANE: ${{ github.action_path }}
         APP: ${{ inputs.app }}
-        OUT: ${{ inputs.out }}
-      run: node "$DESIGNMAP/dist/cli/main.js" "$APP" --out "$OUT"
+        OUT: ${{ steps.folder.outputs.out }}
+      run: node "$DESIGNLANE/dist/cli/main.js" "$APP" --out "$OUT"
     # [skip ci] keeps this commit from starting the workflow that made it.
     - name: Commit them if they changed
       shell: bash
       env:
-        OUT: ${{ inputs.out }}
+        OUT: ${{ steps.folder.outputs.out }}
         GIT_AUTHOR_NAME: github-actions[bot]
         GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         GIT_COMMITTER_NAME: github-actions[bot]

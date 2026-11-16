@@ -89,7 +89,7 @@ describe("font sizes a React Native app names", () => {
     const style = toDesignTokens(scan).typography?.fontSizeLarge;
     expect(style).toMatchObject({
       fontSize: { $value: { value: 17 } },
-      $extensions: { designmap: { reference: "variables.fontSizeLarge" } },
+      $extensions: { designlane: { reference: "variables.fontSizeLarge" } },
     });
     expect(style).not.toHaveProperty("fontFamily");
     expect(style).not.toHaveProperty("fontWeight");

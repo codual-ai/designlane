@@ -11,7 +11,7 @@ import {
   closeServers,
   connectedShop,
   copyOf,
-  designmap,
+  designlane,
   filesIn,
   pushScanned,
   withSpanReplaced,
@@ -26,7 +26,7 @@ describe("a designer's changes while the code changes too, end to end, against G
 
   it("opens a pull request for a value the code changed too, from the code's value, once the designer uses theirs", async () => {
     const shop = await connectedShop();
-    await pushScanned(shop, (app) => designmap("edit", "Brand", "light", "#1565c0", "--dir", app));
+    await pushScanned(shop, (app) => designlane("edit", "Brand", "light", "#1565c0", "--dir", app));
     recolor(shop.fake, "color/Brand", "Light", "#de2413", COLLECTION);
     const changes = await shop.check();
     expect(changes).toMatchObject([{ token: "Brand", from: "#1565c0", to: "#de2413", inCodeToo: true }]);
@@ -36,7 +36,7 @@ describe("a designer's changes while the code changes too, end to end, against G
     expect(await shop.openPullRequest(changes, WRITE_TOKEN)).toMatchObject({ type: "pullRequest" });
 
     const editedByCli = await copyOf(shop.app, shop.server.filesOn(BRANCH));
-    await designmap("edit", "Brand", "light", "#de2413", "--dir", editedByCli);
+    await designlane("edit", "Brand", "light", "#de2413", "--dir", editedByCli);
     const expected = await readFile(path.join(editedByCli, edit.file), "utf8");
     const onMain = shop.server.filesOn(BRANCH).get(edit.file) ?? "";
     expect(onMain).not.toBe((await filesIn(shop.app)).get(edit.file));
@@ -62,7 +62,7 @@ describe("a designer's changes while the code changes too, end to end, against G
     const opened = await shop.openPullRequest(changes, WRITE_TOKEN);
     if (opened.type !== "pullRequest")
       throw new Error(`expected a pull request, got ${JSON.stringify(opened)}`);
-    await pushScanned(shop, (app) => designmap("edit", "display", "size", "36", "--dir", app));
+    await pushScanned(shop, (app) => designlane("edit", "display", "size", "36", "--dir", app));
     expect(await shop.plan()).toMatchObject({
       update: ["Text/display"],
       figmaChanges: [{ token: "Brand", pullRequest: opened.url }],

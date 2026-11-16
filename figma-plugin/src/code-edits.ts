@@ -1,4 +1,4 @@
-/** The code edits for the Figma changes a designer ticked, planned with Designmap's edit engine, and the files they
+/** The code edits for the Figma changes a designer ticked, planned with Designlane's edit engine, and the files they
  * make. */
 
 import { valueLabel } from "../../src/edit/edit-tokens.js";

@@ -28,7 +28,7 @@ export function checkConnection(connection: Connection): Connection {
   }
   if (branch === "") throw new Error("Enter the branch to read, for example main.");
   if (!isRepoPath(path)) {
-    throw new Error(`"${path}" isn't a file's path in the repo. Write it like designmap/tokens.json.`);
+    throw new Error(`"${path}" isn't a file's path in the repo. Write it like designlane/tokens.json.`);
   }
   if (token === "") throw new Error("Paste a GitHub token that can read this repo.");
   return connection;

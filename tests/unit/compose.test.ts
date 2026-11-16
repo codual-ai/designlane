@@ -414,7 +414,7 @@ describe("a Compose app's tokens.json", () => {
       "app/Screen.kt": "@Composable fun S() { Text(style = MaterialTheme.typography.bodyLarge) }",
     });
     const file = toDesignTokens(scan);
-    expect(file.$extensions?.designmap.platform).toBe("android");
+    expect(file.$extensions?.designlane.platform).toBe("android");
     expect(JSON.stringify(file.typography)).toContain('"Roboto"');
   });
 });
@@ -468,7 +468,7 @@ describe("themes outside the project", () => {
     });
     expect(themesOutsideNote(scan)).toBe(
       "This app's theme (`CompanyTheme`) is defined outside this project, so its colours and text styles aren't " +
-        "here. Run Designmap on the repo that defines it, and connect the Figma plugin there.",
+        "here. Run Designlane on the repo that defines it, and connect the Figma plugin there.",
     );
   });
 

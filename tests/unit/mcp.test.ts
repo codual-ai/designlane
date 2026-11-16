@@ -36,7 +36,7 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 describe("MCP server", () => {
   it("tells the agent to use the app's own names, and offers read-only tools", async () => {
     const client = await connect(await tempDir(APP));
-    expect(client.getServerVersion()).toMatchObject({ name: "designmap", version: "1.2.3" });
+    expect(client.getServerVersion()).toMatchObject({ name: "designlane", version: "1.2.3" });
     expect(client.getInstructions()).toContain("1. Call get_design_system first.");
     const { tools } = await client.listTools();
     expect(tools.map((t) => [t.name, t.annotations?.readOnlyHint])).toEqual([
@@ -113,9 +113,9 @@ describe("MCP server", () => {
       });
       const saved = await call(client, "save_preview", { name: "PriceRow", html: "<b>$4.99</b>" });
       expect(saved.text).toMatch(
-        /^Saved designmap\/previews\/PriceRow-[0-9a-f]{8}\.html, and updated designmap\/catalog\.html\.$/,
+        /^Saved designlane\/previews\/PriceRow-[0-9a-f]{8}\.html, and updated designlane\/catalog\.html\.$/,
       );
-      const catalog = await readFile(path.join(root, "designmap", "catalog.html"), "utf8");
+      const catalog = await readFile(path.join(root, "designlane", "catalog.html"), "utf8");
       expect(catalog).toContain('sandbox="" loading="lazy" srcdoc="');
       expect(catalog).toContain("&lt;b&gt;$4.99&lt;/b&gt;");
       expect((await call(client, "find_components", { query: "row" })).text).toContain("· has a picture");
@@ -239,7 +239,7 @@ describe("MCP server", () => {
       await client.connect(clientSide);
       expect(await call(client, "find_views")).toEqual({
         isError: true,
-        text: `Designmap couldn't read ${root}: disk read failed`,
+        text: `Designlane couldn't read ${root}: disk read failed`,
       });
     } finally {
       vi.doUnmock("../../src/scan/index.js");

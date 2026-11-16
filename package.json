@@ -1,17 +1,17 @@
 {
-  "name": "designmap",
-  "version": "0.2.1",
+  "name": "designlane",
+  "version": "0.3.0",
   "description": "Keep your design tools in step with your app's code: reads the colours and text styles your SwiftUI, Jetpack Compose or React Native code names and syncs them to Figma.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/codual-ai/designmap.git"
+    "url": "git+https://github.com/codual-ai/designlane.git"
   },
-  "homepage": "https://github.com/codual-ai/designmap#readme",
-  "bugs": "https://github.com/codual-ai/designmap/issues",
+  "homepage": "https://github.com/codual-ai/designlane#readme",
+  "bugs": "https://github.com/codual-ai/designlane/issues",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "designmap": "dist/cli/main.js"
+    "designlane": "dist/cli/main.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

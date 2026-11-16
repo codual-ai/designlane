@@ -177,7 +177,7 @@ export interface FrameworkScan {
   platforms: Platform[];
   screens: ScreenRef[];
   tokens: DesignTokens;
-  /** Navigation libraries the app uses that Designmap doesn't read (`Appyx`), so its links aren't listed. */
+  /** Navigation libraries the app uses that Designlane doesn't read (`Appyx`), so its links aren't listed. */
   navigationNotRead?: string[];
   /** Screens opening other screens, by id, in a stable order; present, even empty, only for the frameworks whose
    * navigation is read. */

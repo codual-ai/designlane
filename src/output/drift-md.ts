@@ -55,7 +55,7 @@ function scaleSection(report: DriftReport, column: ReturnType<typeof frameworkCo
   return [
     "## Spacing and corners off the scale the code uses",
     "",
-    "Each value is used once or twice, right beside a value the code uses often, so it may be meant as that one. Designmap reads the values the code writes, not named spacing tokens, so it names the value on the scale, not a token.",
+    "Each value is used once or twice, right beside a value the code uses often, so it may be meant as that one. Designlane reads the values the code writes, not named spacing tokens, so it names the value on the scale, not a token.",
     "",
     `| Value | Kind |${column.head} Uses | On the scale nearby | Where |`,
     `| --- | --- |${column.rule} --- | --- | --- |`,
@@ -72,7 +72,7 @@ function typeSection(report: DriftReport, column: ReturnType<typeof frameworkCol
   return [
     "## Text styles written in place",
     "",
-    "Each has the same font, size and weight as a text style the code names, so it could use that style and change with it. Designmap counts these rather than locating them: search the code for the font it writes.",
+    "Each has the same font, size and weight as a text style the code names, so it could use that style and change with it. Designlane counts these rather than locating them: search the code for the font it writes.",
     "",
     `| Written |${column.head} Uses | Use instead |`,
     `| --- |${column.rule} --- | --- |`,
@@ -114,7 +114,7 @@ export function toDriftMd(scan: ScanResult, report: DriftReport): string {
   return [
     "# Design drift",
     "",
-    "Where the UI code skips the app's own design system, read from the code by Designmap. Each item says where it is.",
+    "Where the UI code skips the app's own design system, read from the code by Designlane. Each item says where it is.",
     "",
     `- ${plural(report.colors.length, "colour")} written as values${matching ? `, ${matching} the same as a named colour` : ""}`,
     `- ${plural(report.scale.length, "spacing or corner value")} off the scale the code uses`,

@@ -149,7 +149,7 @@ describe("Android text appearances", () => {
     expect(scan.frameworks[0]?.tokens.fonts).toEqual(["Work Sans"]);
     expect(toDesignTokens(scan).typography?.["TextAppearance-App-Body"]).toMatchObject({
       fontSize: { $value: { value: 16 } },
-      $extensions: { designmap: { reference: "R.style.TextAppearance_App_Body" } },
+      $extensions: { designlane: { reference: "R.style.TextAppearance_App_Body" } },
     });
   });
 

@@ -33,7 +33,7 @@ const brand: ColorToken = {
 describe("locations in tokens.json", () => {
   it("writes where each colour's light and dark values are written, and reads them back", () => {
     const file = JSON.parse(JSON.stringify(toDesignTokens(scanWith([brand]))));
-    expect(file.color.brand.$extensions.designmap.locations).toEqual(brand.locations);
+    expect(file.color.brand.$extensions.designlane.locations).toEqual(brand.locations);
     expect(readTokensFile(file).colors[0]?.reference).toBe("Theme.brand");
   });
 
@@ -49,13 +49,15 @@ describe("locations in tokens.json", () => {
       locations: { fontSize: value(5, 100, 102), fontWeight: value(5, 110, 120) },
     };
     const file = JSON.parse(JSON.stringify(toDesignTokens(scanWith([], [style]))));
-    expect(file.typography.heading.$extensions.designmap.locations).toEqual({ fontSize: value(5, 100, 102) });
+    expect(file.typography.heading.$extensions.designlane.locations).toEqual({
+      fontSize: value(5, 100, 102),
+    });
   });
 
   it("refuses a location that ends before it starts, or says more than a place", () => {
     const withLight = (light: object) => {
       const file = JSON.parse(JSON.stringify(toDesignTokens(scanWith([brand]))));
-      file.color.brand.$extensions.designmap.locations = { light };
+      file.color.brand.$extensions.designlane.locations = { light };
       return file;
     };
     expect(() => readTokensFile(withLight(value(3, 61, 40)))).toThrow(/ends before it starts/);

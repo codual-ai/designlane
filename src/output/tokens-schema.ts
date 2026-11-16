@@ -1,7 +1,8 @@
-/** The shape of the tokens.json Designmap writes: one schema the writer's output is typed by and a sync reads with. */
+/** The shape of the tokens.json Designlane writes: one schema the writer's output is typed by and a sync reads with. */
 
 import { z } from "zod";
 import { PLATFORMS, VALUE_KINDS } from "../scan/types.js";
+import { withCurrentNames } from "./old-names.js";
 
 const Dimension = z.object({ value: z.number(), unit: z.literal("px") });
 
@@ -54,7 +55,7 @@ export const ColorTokenEntry = z.object({
   $type: z.literal("color"),
   $value: ColorValue,
   $description: z.string().optional(),
-  $extensions: z.object({ designmap: ColorOrigin.strict() }),
+  $extensions: z.object({ designlane: ColorOrigin.strict() }),
 });
 
 const DimensionToken = z.object({ $type: z.literal("dimension"), $value: Dimension });
@@ -65,7 +66,7 @@ export const TextStyleGroup = z
   .object({
     $description: z.string().optional(),
     $extensions: z.object({
-      designmap: Origin.extend({
+      designlane: Origin.extend({
         name: z.string(),
         /** Where each value the group holds is written, by the value's key. */
         locations: z
@@ -90,7 +91,7 @@ export const TextStyleGroup = z
 /** On the whole file: the app's name, and whether the scan couldn't read all of the app, so what's missing from it
  * may still be in the code. Files from before the app was named have no `app`. */
 const FileExtensions = z.object({
-  designmap: z.object({
+  designlane: z.object({
     app: z.string().optional(),
     partial: z.literal(true).optional(),
     platform: z.enum(PLATFORMS).optional(),
@@ -112,14 +113,14 @@ const groupOf = <T extends z.ZodType>(token: T) =>
 export const ThemeGroup = z
   .object({
     $description: z.string().optional(),
-    $extensions: z.object({ designmap: z.object({ name: z.string() }).strict() }),
+    $extensions: z.object({ designlane: z.object({ name: z.string() }).strict() }),
     color: groupOf(ColorTokenEntry),
   })
   .strict();
 
 /** One app's tokens. Strict, so a file shaped otherwise (a group per framework) is refused rather than read as empty,
  * which would deprecate everything. `color` is the default theme's; `theme` holds the others. */
-export const TokensFile = z
+const TokensFile = z
   .object({
     $description: z.string(),
     $extensions: FileExtensions.optional(),
@@ -133,3 +134,6 @@ export const TokensFile = z
   .strict();
 
 export type DesignTokensFile = z.input<typeof TokensFile>;
+
+/** `json` read as one app's tokens, a file written before the rename too. */
+export const parseTokensFile = (json: unknown) => TokensFile.safeParse(withCurrentNames(json));

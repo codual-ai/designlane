@@ -185,7 +185,7 @@ export function toDesignMd(scan: ScanResult): string {
   const front: Yaml = {
     version: "alpha",
     name,
-    description: `The design system of ${name}, read from its code by Designmap.`,
+    description: `The design system of ${name}, read from its code by Designlane.`,
   };
   const omitted: Yaml[] = [];
   for (const [section, tokens, reason] of [
@@ -231,7 +231,7 @@ function linksLine(frameworks: FrameworkScan[]): string {
 }
 
 function overview({ frameworks }: ScanResult, name: string): string {
-  if (!frameworks.length) return `Designmap found no ${SUPPORTED_FRAMEWORKS} code in ${name}.`;
+  if (!frameworks.length) return `Designlane found no ${SUPPORTED_FRAMEWORKS} code in ${name}.`;
   const views = frameworks.flatMap((f) => f.screens);
   const screens = views.filter((v) => v.kind === "screen").map((v) => v.name);
   const components = views.filter((v) => v.kind === "component").map((v) => v.name);

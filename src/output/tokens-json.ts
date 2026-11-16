@@ -54,7 +54,7 @@ function colorEntry(color: ColorToken): z.input<typeof ColorTokenEntry> {
     $value: colorValue(color.light),
     $description: `From ${color.source}, ${uses(color.uses)}`,
     $extensions: {
-      designmap: {
+      designlane: {
         ...(color.reference ? { reference: color.reference } : {}),
         source: color.source,
         ...(color.line ? { line: color.line } : {}),
@@ -82,7 +82,7 @@ function themes(all: ColorTheme[]): Group<"theme"> {
   for (const { theme, key } of keyedThemes(all)) {
     group[key] = {
       $description: `The ${theme.name} theme`,
-      $extensions: { designmap: { name: theme.name } },
+      $extensions: { designlane: { name: theme.name } },
       color: colors(theme.colors),
     };
   }
@@ -100,7 +100,7 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
     group[key] = {
       $description: `${style.name}, ${uses(style.uses)}`,
       $extensions: {
-        designmap: {
+        designlane: {
           name: style.name,
           ...(style.reference ? { reference: style.reference } : {}),
           uses: style.uses,
@@ -138,9 +138,9 @@ export function toDesignTokens(scan: ScanResult, framework?: FrameworkId): Desig
   const several = scan.frameworks.length > 1 && read;
   const file: DesignTokensFile = {
     $description: several
-      ? `Read from the ${FRAMEWORK_NAMES[read.framework]} code of ${app} by Designmap`
-      : `Read from the code of ${app} by Designmap`,
-    $extensions: { designmap: { app, ...(partial ? { partial: true } : {}) } },
+      ? `Read from the ${FRAMEWORK_NAMES[read.framework]} code of ${app} by Designlane`
+      : `Read from the code of ${app} by Designlane`,
+    $extensions: { designlane: { app, ...(partial ? { partial: true } : {}) } },
   };
   return read ? withTokens(file, read) : file;
 }
@@ -148,7 +148,7 @@ export function toDesignTokens(scan: ScanResult, framework?: FrameworkId): Desig
 function withTokens(file: DesignTokensFile, framework: FrameworkScan): DesignTokensFile {
   const { tokens } = framework;
   const platform = framework.platforms[0];
-  if (platform && file.$extensions) file.$extensions.designmap.platform = platform;
+  if (platform && file.$extensions) file.$extensions.designlane.platform = platform;
   const color = colors(tokens.colors);
   if (Object.keys(color).length > 1) file.color = color;
   const theme = themes(tokens.themes ?? []);

@@ -9,7 +9,7 @@ import { tempDir } from "../helpers/temp.js";
 
 const RN = 'import { View } from "react-native";\n';
 
-/** A React Native app whose palette Designmap's own reading misses: built by a function, not written as an object. */
+/** A React Native app whose palette Designlane's own reading misses: built by a function, not written as an object. */
 const APP = {
   "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
   "src/palette.ts": [
@@ -56,7 +56,7 @@ describe("a coding agent's reading", () => {
     expect(dropped).toEqual(["palette.ghost", "palette.ink", "palette.surface", "typography.missing"]);
   });
 
-  it("adds a text style the code names, with a weight it knows, and nothing Designmap already read", async () => {
+  it("adds a text style the code names, with a weight it knows, and nothing Designlane already read", async () => {
     const { scan, added } = await merged({
       textStyles: {
         "fonts.headline": { family: "Inter", size: 22, weight: "semibold" },
@@ -72,7 +72,7 @@ describe("a coding agent's reading", () => {
     });
     // `subhead` isn't a name the code uses.
     expect(added).toBe(1);
-    // A style Designmap read itself is kept as it read it; one with neither size nor family says nothing.
+    // A style Designlane read itself is kept as it read it; one with neither size nor family says nothing.
     const again = await mergeAgentTokens(scan, {
       textStyles: { "fonts.headline": { size: 40 }, "palette.ink": { weight: "bold" } },
     });
@@ -83,7 +83,7 @@ describe("a coding agent's reading", () => {
     ).toBe(22);
   });
 
-  it("skips a colour Designmap already has, by how the code refers to it or by its value", async () => {
+  it("skips a colour Designlane already has, by how the code refers to it or by its value", async () => {
     const files = {
       ...APP,
       "src/theme.ts":
@@ -105,7 +105,7 @@ describe("a coding agent's reading", () => {
     const files = {
       ...APP,
       "src/extra.ts": [
-        // Built by calls, so Designmap's own reading doesn't name them.
+        // Built by calls, so Designlane's own reading doesn't name them.
         'export const night = pick("#202125"); export const mist = pick("#ccc");',
         "const cache16161abc = true;",
       ].join("\n"),
@@ -130,11 +130,11 @@ describe("a coding agent's reading", () => {
     expect(onlyInAName.dropped).toEqual(["cache"]);
   });
 
-  it("reads names written in brackets, and never counts Designmap's own folders, nested ones included", async () => {
+  it("reads names written in brackets, and never counts Designlane's own folders, nested ones included", async () => {
     const files = {
       ...APP,
       "src/brand.ts": 'export const colors = build({ "brand-blue": "#1a73e8" });',
-      "apps/web/designmap/agent.json": '{ "colors": { "ghost": { "light": "#999999" } } }',
+      "apps/web/designlane/agent.json": '{ "colors": { "ghost": { "light": "#999999" } } }',
     };
     const { added, dropped } = await merged(
       { colors: { 'colors["brand-blue"]': { light: "#1a73e8" }, ghost: { light: "#999999" } } },
@@ -180,8 +180,8 @@ describe("a coding agent's reading", () => {
   });
 });
 
-describe("designmap prompt and --from-agent", () => {
-  const designmap = async (...argv: string[]) => {
+describe("designlane prompt and --from-agent", () => {
+  const designlane = async (...argv: string[]) => {
     const out: string[] = [];
     const error: string[] = [];
     const code = await run(argv, { out: (t) => out.push(t), error: (t) => error.push(t) });
@@ -189,28 +189,28 @@ describe("designmap prompt and --from-agent", () => {
   };
 
   it("prints the agent's instructions, naming the file and its shape", async () => {
-    const { code, out } = await designmap("prompt");
+    const { code, out } = await designlane("prompt");
     expect(code).toBe(0);
     expect(out).toBe(AGENT_PROMPT);
-    expect(out).toContain("designmap/agent.json");
+    expect(out).toContain("designlane/agent.json");
   });
 
   it("writes the agent's tokens the code bears out, and says what it left out", async () => {
     const root = await tempDir({
       ...APP,
-      "designmap/agent.json": JSON.stringify({
+      "designlane/agent.json": JSON.stringify({
         colors: { "palette.ink": { light: "#16161a" }, "palette.ghost": { light: "#123456" } },
       }),
     });
-    const { code, out, error } = await designmap(
+    const { code, out, error } = await designlane(
       root,
       "--from-agent",
-      path.join(root, "designmap", "agent.json"),
+      path.join(root, "designlane", "agent.json"),
     );
     expect(code).toBe(0);
     expect(out).toContain("Added 1 token from");
     expect(error).toContain("left out 1 token the code doesn't bear out: palette.ghost");
-    const tokens = JSON.parse(await readFile(path.join(root, "designmap", "tokens.json"), "utf8"));
+    const tokens = JSON.parse(await readFile(path.join(root, "designlane", "tokens.json"), "utf8"));
     expect(JSON.stringify(tokens.color)).toContain("palette.ink");
   });
 
@@ -219,7 +219,7 @@ describe("designmap prompt and --from-agent", () => {
       ...APP,
       "agent.json": JSON.stringify({ colors: { "palette.ink": { light: "#16161a" } } }),
     });
-    const { code, out, error } = await designmap(
+    const { code, out, error } = await designlane(
       root,
       "--json",
       "--from-agent",
@@ -233,7 +233,7 @@ describe("designmap prompt and --from-agent", () => {
 
   it("says when the agent's file can't be read", async () => {
     const root = await tempDir(APP);
-    const { code, error } = await designmap(root, "--from-agent", path.join(root, "missing.json"));
+    const { code, error } = await designlane(root, "--from-agent", path.join(root, "missing.json"));
     expect(code).toBe(1);
     expect(error).toContain("couldn't read");
   });

@@ -3,6 +3,7 @@
 
 import type { EditPlan, TextEdit } from "../../src/edit/plan.js";
 import { type ReadSource, readingOnce } from "../../src/edit/read-source.js";
+import { OLD_OUTPUT_DIR } from "../../src/output/old-names.js";
 import { OUTPUT_DIR } from "../../src/output/output-files.js";
 import { editedFiles, planCodeEdits } from "./code-edits.js";
 import { forgetWriteToken, savedConnection, savedWriteToken, saveWriteToken } from "./connection.js";
@@ -125,12 +126,14 @@ function plannedEdit(change: FigmaChange, plan: EditPlan): PlannedEdit {
   return { ok: true, change: change.id, file, line, before, after };
 }
 
-/** The app's folder in the repo: tokens.json sits in its `designmap/` folder. */
+/** The app's folder in the repo: tokens.json sits in its `designlane/` folder, or the `designmap/` of an app set up
+ * before the rename. */
 function appRoot(path: string): string {
   const parts = path.split("/");
-  if (parts[parts.length - 2] !== OUTPUT_DIR) {
+  const folder = parts[parts.length - 2];
+  if (folder !== OUTPUT_DIR && folder !== OLD_OUTPUT_DIR) {
     throw new Error(
-      `Opening a pull request needs the tokens file in the app's ${OUTPUT_DIR}/ folder, where designmap writes it.`,
+      `Opening a pull request needs the tokens file in the app's ${OUTPUT_DIR}/ folder, where designlane writes it.`,
     );
   }
   return parts.slice(0, -2).join("/");

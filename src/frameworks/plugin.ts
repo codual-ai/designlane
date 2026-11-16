@@ -54,7 +54,7 @@ export interface FrameworkFindings {
 }
 
 /**
- * One framework Designmap understands. Supporting a new framework means writing one `scan`: the facts about each of
+ * One framework Designlane understands. Supporting a new framework means writing one `scan`: the facts about each of
  * its views (the shared classifier decides screens from those) and its design tokens, or nothing when the project
  * doesn't use the framework.
  */

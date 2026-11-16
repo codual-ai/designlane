@@ -11,7 +11,7 @@ describe("connecting a GitHub repo", () => {
     const fetch = github(200, tokensJson({ spacing: [8] }));
     await app.session({ type: "connect", id: 1, ...connection });
     expect(fetch).toHaveBeenCalledWith(
-      "https://api.github.com/repos/octo/app/contents/designmap/tokens.json?ref=main",
+      "https://api.github.com/repos/octo/app/contents/designlane/tokens.json?ref=main",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer github_pat_secret" }),
       }),
@@ -44,11 +44,11 @@ describe("connecting a GitHub repo", () => {
   it("keeps each Figma file's own connection, so an iPhone file and an Android file read their own tokens", async () => {
     const app = plugin();
     const fetch = github(200, tokensJson({ spacing: [8] }));
-    const ios = { ...connection, path: "designmap/tokens.ios.json" };
+    const ios = { ...connection, path: "designlane/tokens.ios.json" };
     await app.session({ type: "connect", id: 1, ...ios });
     const iosFile = app.fake.root.getPluginData("connection");
     app.fake.root.setPluginData("connection", ""); // another file, on the same computer
-    await app.session({ type: "connect", id: 2, ...connection, path: "designmap/tokens.android.json" });
+    await app.session({ type: "connect", id: 2, ...connection, path: "designlane/tokens.android.json" });
     app.fake.root.setPluginData("connection", iosFile);
     await app.session({ type: "ready", id: 3 });
     expect(app.sent[app.sent.length - 2]).toEqual({ type: "connection", repo: { ...repo, path: ios.path } });
@@ -56,7 +56,7 @@ describe("connecting a GitHub repo", () => {
     expect(JSON.stringify([...app.fake.stored.values()])).not.toContain("tokens.ios.json");
   });
 
-  it("keeps the file's repo where only Designmap can read it, not in data other plugins share", async () => {
+  it("keeps the file's repo where only Designlane can read it, not in data other plugins share", async () => {
     const app = plugin();
     github(200, tokensJson({ spacing: [8] }));
     await app.session({ type: "connect", id: 1, ...connection });
@@ -107,7 +107,7 @@ describe("connecting a GitHub repo", () => {
   it("forgets this file's connection when disconnected, keeping the token for another file of the same repo", async () => {
     const app = plugin();
     github(200, tokensJson({ spacing: [8] }));
-    await app.session({ type: "connect", id: 1, ...connection, path: "designmap/tokens.ios.json" });
+    await app.session({ type: "connect", id: 1, ...connection, path: "designlane/tokens.ios.json" });
     const iosFile = app.fake.root.getPluginData("connection");
     app.fake.root.setPluginData("connection", "");
     await app.session({ type: "connect", id: 2, ...connection });
@@ -122,7 +122,7 @@ describe("connecting a GitHub repo", () => {
   it("asks only for a token on a computer without one for the repo the file syncs from", async () => {
     const app = plugin();
     const fetch = github(200, tokensJson({ spacing: [8] }));
-    const android = { ...repo, path: "designmap/tokens.android.json" };
+    const android = { ...repo, path: "designlane/tokens.android.json" };
     app.fake.root.setPluginData("connection", JSON.stringify(android));
     await app.session({ type: "ready", id: 1 });
     expect([app.last(), fetch.mock.calls.length]).toEqual([

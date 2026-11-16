@@ -55,7 +55,7 @@ describe("syncing variables into a Figma file", () => {
       tokensJson({ app: "shop", colors: [{ key: "hex-33a854", hex: "#33a854", named: false }] }),
     );
     expect([onlyCollection(app.fake).name, [...app.fake.variables.values()].map((v) => v.name)]).toEqual([
-      "Shop (Designmap)",
+      "Shop (Designlane)",
       ["color/Unnamed/33a854"],
     ]);
   });
@@ -105,7 +105,7 @@ describe("syncing variables into a Figma file", () => {
     spacing54.description = "Hero padding";
     spacing54.hiddenFromPublishing = true;
     await app.sync(tokensJson({ spacing: [8] }));
-    expect(spacing54.description).toBe("Deprecated: Designmap no longer finds this in the code.");
+    expect(spacing54.description).toBe("Deprecated: Designlane no longer finds this in the code.");
     await app.sync(tokensJson({ spacing: [8, 54] }));
     expect([spacing54.description, spacing54.hiddenFromPublishing]).toEqual(["Hero padding", true]);
   });
@@ -173,12 +173,12 @@ describe("syncing variables into a Figma file", () => {
     const app = plugin({ maxModes: 1 });
     const json = tokensJson({ colors: [{ key: "bg", hex: "#ffffff", dark: "#000000" }] });
     expect(await app.sync(json)).toEqual([
-      'Dark values weren\'t added: the collection "Designmap" has as many modes as this Figma plan allows.',
+      'Dark values weren\'t added: the collection "Designlane" has as many modes as this Figma plan allows.',
     ]);
     const again = await app.plan(json);
     expect([again.update, again.unchanged, again.darkLeftOut, again.applicable]).toEqual([[], 1, true, true]);
     expect(await app.apply()).toEqual([
-      'Dark values weren\'t added: the collection "Designmap" has as many modes as this Figma plan allows.',
+      'Dark values weren\'t added: the collection "Designlane" has as many modes as this Figma plan allows.',
     ]);
   });
 
@@ -195,7 +195,7 @@ describe("syncing variables into a Figma file", () => {
     const brand = onlyCollection(app.fake).addMode("Brand");
     const json = tokensJson({ colors: [{ key: "bg", hex: "#ffffff", dark: "#000000" }], spacing: [8] });
     expect(await app.sync(json)).toEqual([
-      'Dark values weren\'t added: the collection "Designmap" has as many modes as this Figma plan allows.',
+      'Dark values weren\'t added: the collection "Designlane" has as many modes as this Figma plan allows.',
     ]);
     onlyCollection(app.fake).removeMode(brand);
     expect((await app.plan(json)).darkLeftOut).toBe(true);
@@ -270,7 +270,7 @@ describe("syncing variables into a Figma file", () => {
     expect(app.last()).toEqual({
       type: "error",
       message:
-        "The sync stopped partway. Pick tokens.json again to see what is left. (The Designmap collection's Light mode was deleted, and this Figma plan can't add it back. Delete a mode from the collection, then sync again.)",
+        "The sync stopped partway. Pick tokens.json again to see what is left. (The Designlane collection's Light mode was deleted, and this Figma plan can't add it back. Delete a mode from the collection, then sync again.)",
     });
   });
 

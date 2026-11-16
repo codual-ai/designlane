@@ -1,4 +1,4 @@
-/** The SwiftUI Shop fixture scanned by designmap, pushed to a GitHub on a local server, and a Figma file connected to
+/** The SwiftUI Shop fixture scanned by designlane, pushed to a GitHub on a local server, and a Figma file connected to
  * it and synced: what the end-to-end design-to-code tests start from. */
 
 import { cp, readdir, readFile, writeFile } from "node:fs/promises";
@@ -15,7 +15,7 @@ import { tempDir } from "./temp.js";
 export const REPO = "octo/shop";
 export const BRANCH = "main";
 /** The Figma collection a sync makes for the app, named after its folder. */
-export const COLLECTION = "Shop (Designmap)";
+export const COLLECTION = "Shop (Designlane)";
 
 const FIXTURE = path.join(process.cwd(), "tests/fixtures/swiftui-app");
 const PAYWALL = "Shop/Views/PaywallView.swift";
@@ -32,11 +32,11 @@ const servers: GitHubServer[] = [];
 /** Stops every server the tests started. */
 export const closeServers = () => Promise.all(servers.splice(0).map((server) => server.close()));
 
-/** Runs the designmap CLI as `node dist/cli/main.js` does, failing on a non-zero exit. */
-export async function designmap(...argv: string[]): Promise<void> {
+/** Runs the designlane CLI as `node dist/cli/main.js` does, failing on a non-zero exit. */
+export async function designlane(...argv: string[]): Promise<void> {
   const error: string[] = [];
   const code = await run(argv, { out: () => {}, error: (text) => error.push(text) });
-  if (code !== 0) throw new Error(`designmap ${argv.join(" ")} exited ${code}: ${error.join("\n")}`);
+  if (code !== 0) throw new Error(`designlane ${argv.join(" ")} exited ${code}: ${error.join("\n")}`);
 }
 
 /** The Shop fixture copied into a temporary folder, its title given a text style, and scanned. */
@@ -47,7 +47,7 @@ async function scannedShop(): Promise<string> {
   if (!paywall.includes(INLINE_FONT)) throw new Error(`the fixture's paywall no longer sets ${INLINE_FONT}`);
   await writeFile(path.join(app, PAYWALL), paywall.replace(INLINE_FONT, ".font(.display)"));
   await writeFile(path.join(app, TYPOGRAPHY), DISPLAY_STYLE);
-  await designmap(app);
+  await designlane(app);
   return app;
 }
 
@@ -158,12 +158,12 @@ export function changedOn(shop: ConnectedShop, branch: string): Map<string, stri
   return new Map([...after].filter(([file, text]) => before.get(file) !== text));
 }
 
-/** The connected branch's files changed by `edit`, scanned by designmap again, and pushed: a developer's change, or a
+/** The connected branch's files changed by `edit`, scanned by designlane again, and pushed: a developer's change, or a
  * pull request merged, with CI writing tokens.json. */
 export async function pushScanned(shop: ConnectedShop, edit: (app: string) => Promise<void>): Promise<void> {
   const app = await copyOf(shop.app, shop.server.filesOn(BRANCH));
   await edit(app);
-  await designmap(app);
+  await designlane(app);
   const onMain = shop.server.filesOn(BRANCH);
   shop.server.push(new Map([...(await filesIn(app))].filter(([file, text]) => onMain.get(file) !== text)));
 }

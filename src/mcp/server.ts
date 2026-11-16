@@ -10,14 +10,14 @@ import { MAX_LISTED, withApp } from "./app.js";
 import { registerComponentTools } from "./component-tools.js";
 import { registerDriftTool } from "./drift-tool.js";
 
-const INSTRUCTIONS = `Designmap reads this app's design system from its code.
+const INSTRUCTIONS = `Designlane reads this app's design system from its code.
 When you build or change UI in this app:
 1. Call get_design_system first. Prefer the app's most used colours, text styles, spacing and corner radii over new values.
 2. Write values the way the app's code does. A token name is only a label: before using a name in code, search the code for it. If it isn't there (like hex-33a854 or system-15-semibold), write the value itself, in the app's own style.
 3. Call find_components before creating a view, and reuse an existing component when one fits; get_component shows its code and parameters.
 4. Call get_screen_links before adding or changing navigation, to open screens the way the app already does.
 5. After writing UI code, call check_drift with the files you changed, and fix what it lists.
-To add pictures to the catalog (designmap/catalog.html), read a component with get_component, then draw it with save_preview.
+To add pictures to the catalog (designlane/catalog.html), read a component with get_component, then draw it with save_preview.
 If a tool says only part of the app was read, its lists are incomplete.`;
 
 const listed = (v: ScreenRef) => `- ${v.name} (${v.kind}) ${v.file}:${v.line}`;
@@ -35,7 +35,7 @@ function views(scan: ScanResult, query?: string, kind?: ScreenRef["kind"]): stri
 
 /** A server reading the app at `defaultRoot`, or at the `repo` a tool call names. */
 export function createServer(defaultRoot: string, version: string): McpServer {
-  const server = new McpServer({ name: "designmap", version }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "designlane", version }, { instructions: INSTRUCTIONS });
   const repo = z
     .string()
     .optional()

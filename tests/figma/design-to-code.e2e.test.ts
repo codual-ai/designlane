@@ -11,7 +11,7 @@ import {
   closeServers,
   connectedShop,
   copyOf,
-  designmap,
+  designlane,
   filesIn,
   REPO,
   withSpanReplaced,
@@ -19,7 +19,7 @@ import {
 import { READ_TOKEN, TOKENS_PATH, WRITE_TOKEN } from "../helpers/shop-repo.js";
 
 const NOW = new Date("2026-11-14T10:00:00Z");
-const BRANCH_NAME = /^designmap\/figma-2026-11-14-[0-9a-f]{7}$/;
+const BRANCH_NAME = /^designlane\/figma-2026-11-14-[0-9a-f]{7}$/;
 const ONE_VALUE = "Design changes from Figma: 1 value";
 const OPENING = ["POST git/blobs", "POST git/trees", "POST git/commits", "POST git/refs", "POST pulls"];
 const BRANCH_IN_PATH = /figma-\S+/;
@@ -33,7 +33,7 @@ interface Case {
   from: string;
   to: string;
   label: string;
-  /** Where tokens.json holds the value, and what it is once designmap reads the edited code. */
+  /** Where tokens.json holds the value, and what it is once designlane reads the edited code. */
   inTokens: string[];
   expected: unknown;
 }
@@ -58,7 +58,7 @@ const CASES: Case[] = [
     from: "#ff5566",
     to: "#200a0c",
     label: "color/Brand's dark colour",
-    inTokens: ["color", "Brand", "$extensions", "designmap", "modes", "dark", "hex"],
+    inTokens: ["color", "Brand", "$extensions", "designlane", "modes", "dark", "hex"],
     expected: "#200a0c",
   },
   {
@@ -98,7 +98,7 @@ describe("design to code, end to end, against GitHub's API on a local server", (
     await closeServers();
   });
 
-  it.each(CASES)("opens a pull request for $title that designmap then reads back", async (testCase) => {
+  it.each(CASES)("opens a pull request for $title that designlane then reads back", async (testCase) => {
     const shop = await connectedShop();
     const { server } = shop;
     const head = server.refs.get(BRANCH) ?? "";
@@ -122,7 +122,7 @@ describe("design to code, end to end, against GitHub's API on a local server", (
 
     const original = (await filesIn(shop.app)).get(edit.file) ?? "";
     const editedByCli = await copyOf(shop.app);
-    await designmap("edit", testCase.token, testCase.property, testCase.to, "--dir", editedByCli);
+    await designlane("edit", testCase.token, testCase.property, testCase.to, "--dir", editedByCli);
     const expected = await readFile(path.join(editedByCli, edit.file), "utf8");
     expect(expected).not.toBe(original);
     expect(withSpanReplaced(original, edit)).toBe(expected);
@@ -153,7 +153,7 @@ describe("design to code, end to end, against GitHub's API on a local server", (
     );
     expect([...committed.keys()]).toEqual([edit.file]);
     const merged = await copyOf(shop.app, committed);
-    await designmap(merged);
+    await designlane(merged);
     const tokensJson = await readFile(path.join(merged, TOKENS_PATH), "utf8");
     expect(valueAt(JSON.parse(tokensJson), testCase.inTokens)).toBe(testCase.expected);
     server.push(new Map([...committed, [TOKENS_PATH, tokensJson]]));
@@ -222,7 +222,7 @@ describe("design to code, end to end, against GitHub's API on a local server", (
       type: "designToCodeError",
       message: "GitHub answered 422. Try again in a moment.",
     });
-    expect(routes(shop)).toEqual([...OPENING, "DELETE git/refs/heads/designmap/figma-…"]);
+    expect(routes(shop)).toEqual([...OPENING, "DELETE git/refs/heads/designlane/figma-…"]);
     expect([...shop.server.refs.keys()]).toEqual([BRANCH]);
     expect(shop.server.pulls).toEqual([]);
   });

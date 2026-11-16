@@ -50,7 +50,7 @@ const refuse = (reason: string): EditPlan => ({ ok: false, reason });
 const at = (span: CodeSpan) => `${span.file}:${span.line}`;
 
 /** The edit that makes `change` in the code, from where `tokensFile` (a parsed tokens.json) says the value is
- * written, reading files with `read`. Throws when `tokensFile` isn't a tokens.json Designmap writes. */
+ * written, reading files with `read`. Throws when `tokensFile` isn't a tokens.json Designlane writes. */
 export async function planEdit(
   tokensFile: unknown,
   readFile: ReadSource,
@@ -120,7 +120,7 @@ async function targetOf(
   const file = await sourceOf(read, location.file);
   const language = languageOf(location.file);
   if ("reason" in file) return file;
-  if (!language) return { reason: `Designmap doesn't edit ${location.file}'s kind of file.` };
+  if (!language) return { reason: `Designlane doesn't edit ${location.file}'s kind of file.` };
   const fileText = file.source;
   const text = spanText(fileText, location);
   if ("reason" in text) return text;
@@ -171,7 +171,7 @@ function spanText(fileText: string, span: CodeSpan): { text: string } | { reason
 
 function changedSince(span: CodeSpan, found?: { text: string } | { reason: string }) {
   const now = found && "text" in found ? ` now reads \`${found.text}\`` : " has changed";
-  return `${at(span)}${now}: the code changed since designmap last ran. Run designmap again.`;
+  return `${at(span)}${now}: the code changed since designlane last ran. Run designlane again.`;
 }
 
 function list(items: string[]): string {
@@ -208,7 +208,7 @@ function rewriteWith<T>(
   if (editor.same(old, to)) return refuse(`${what} is already ${editor.show(to)}.`);
   const readings = editor.readings(value);
   const written = `\`${value.text}\` (${at(value.span)})`;
-  if (readings.length === 0) return refuse(`Designmap can't safely rewrite ${written} for ${what}.`);
+  if (readings.length === 0) return refuse(`Designlane can't safely rewrite ${written} for ${what}.`);
   const matching = readings.filter((reading) => editor.same(reading.value, old));
   if (matching.length === 0) return refuse(changedSince(value.span, value));
   const texts = new Set(matching.map((reading) => reading.write(to, old)));

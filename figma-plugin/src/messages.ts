@@ -21,7 +21,7 @@ const FigmaChange = z.object({
   to: z.string(),
   /** The code changed it too since the two last agreed: the designer keeps the code's value or uses theirs. */
   inCodeToo: z.boolean(),
-  /** The link of an open pull request of Designmap's that already has this value. */
+  /** The link of an open pull request of Designlane's that already has this value. */
   pullRequest: z.string().optional(),
 });
 export type FigmaChange = z.infer<typeof FigmaChange>;

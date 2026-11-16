@@ -58,7 +58,7 @@ function showPlan(id: number, summary: PlanSummary): void {
   const notes = [
     [
       summary.darkLeftOut,
-      "Dark values are left out: the Designmap collection couldn't take a Dark mode on this Figma plan. Apply tries again.",
+      "Dark values are left out: the Designlane collection couldn't take a Dark mode on this Figma plan. Apply tries again.",
     ],
     [summary.partial, "The scan couldn't read the whole app, so nothing is marked deprecated."],
     [summary.renamesSkipped, "Too much changed at once to spot renames, so renamed tokens show as new."],

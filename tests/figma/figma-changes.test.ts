@@ -29,7 +29,7 @@ describe("what a designer changed in Figma", () => {
 
   it("lists a theme's colour with its theme's name, keyed as tokens.json keys the theme", async () => {
     const shop = await syncedShop();
-    shop.recolor("color/brand", "Light", "#aa0000", "Desert (Designmap)");
+    shop.recolor("color/brand", "Light", "#aa0000", "Desert (Designlane)");
     expect(brief(await shop.check())).toEqual(["Desert: color/brand (desert/brand) light #df915e → #aa0000"]);
   });
 

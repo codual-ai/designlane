@@ -1,5 +1,5 @@
-/** A tokens.json in Designmap's format, with just the tokens a test needs; spacing, radii and unnamed colours are
- * as files written before Designmap left them to DESIGN.md hold them. */
+/** A tokens.json in Designlane's format, with just the tokens a test needs; spacing, radii and unnamed colours are
+ * as files written before Designlane left them to DESIGN.md hold them. */
 
 interface ColorToken {
   key: string;
@@ -47,7 +47,7 @@ export function tokensJson({
           $type: "color",
           $value: colorValue(color.hex),
           $extensions: {
-            designmap: {
+            designlane: {
               ...(color.named !== false && { reference: `Theme.${color.key}` }),
               source: "Theme.swift",
               uses: 1,
@@ -61,7 +61,7 @@ export function tokensJson({
     $description: "test",
     ...((partial || app || platform) && {
       $extensions: {
-        designmap: { ...(app && { app }), ...(partial && { partial: true }), ...(platform && { platform }) },
+        designlane: { ...(app && { app }), ...(partial && { partial: true }), ...(platform && { platform }) },
       },
     }),
     ...(colors.length > 0 && { color: colorGroup(colors) }),
@@ -69,7 +69,7 @@ export function tokensJson({
       theme: Object.fromEntries(
         themes.map((theme) => [
           theme.name,
-          { $extensions: { designmap: { name: theme.name } }, color: colorGroup(theme.colors) },
+          { $extensions: { designlane: { name: theme.name } }, color: colorGroup(theme.colors) },
         ]),
       ),
     }),
@@ -88,7 +88,7 @@ export function tokensJson({
         styles.map((style) => [
           style.key,
           {
-            $extensions: { designmap: { name: style.key, reference: `Font.${style.key}`, uses: 1 } },
+            $extensions: { designlane: { name: style.key, reference: `Font.${style.key}`, uses: 1 } },
             fontFamily: { $type: "fontFamily", $value: "SF Pro" },
             ...(style.size !== undefined && {
               fontSize: { $type: "dimension", $value: { value: style.size, unit: "px" } },

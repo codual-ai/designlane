@@ -69,7 +69,7 @@ export function recolor(
   name: string,
   mode: "Light" | "Dark",
   hex: string,
-  collectionName = "Designmap",
+  collectionName = "Designlane",
 ) {
   const collection = [...fake.collections.values()].find((c) => c.name === collectionName);
   const modeId = collection?.modes.find((m) => m.name === mode)?.modeId;

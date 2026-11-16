@@ -73,7 +73,7 @@ const colorGroup = (files: Files, colors: ColorSpec[]) =>
         $type: "color",
         $value: colorValue(light),
         $extensions: {
-          designmap: {
+          designlane: {
             ...(reference ? { reference } : {}),
             source: declared?.file ?? "Theme.swift",
             ...(declared ? { line: spanOf(files, declared).line } : {}),
@@ -100,7 +100,7 @@ export function tokensFile(
       key,
       {
         $extensions: {
-          designmap: {
+          designlane: {
             name: key,
             ...(reference ? { reference } : {}),
             uses: 1,
@@ -116,11 +116,11 @@ export function tokensFile(
   const theme = Object.fromEntries(
     Object.entries(themes).map(([key, list]) => [
       key,
-      { $extensions: { designmap: { name: key } }, color: colorGroup(files, list) },
+      { $extensions: { designlane: { name: key } }, color: colorGroup(files, list) },
     ]),
   );
   return {
-    $description: "Read from the code of Shop by Designmap",
+    $description: "Read from the code of Shop by Designlane",
     color: { $description: "Most used first", ...colorGroup(files, colors) },
     typography: { $description: "Most used first", ...typography },
     theme,

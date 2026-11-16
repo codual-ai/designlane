@@ -28,8 +28,8 @@ export const isDesignToCode = (message: ToWindow): message is DesignToCodeMessag
 function tokenPage(repo: string): string {
   const [owner = ""] = repo.split("/");
   const fields = {
-    name: `Designmap pull requests for ${repo}`,
-    description: "Lets the Designmap Figma plugin open pull requests with design changes.",
+    name: `Designlane pull requests for ${repo}`,
+    description: "Lets the Designlane Figma plugin open pull requests with design changes.",
     target_name: owner,
     contents: "write",
     pull_requests: "write",

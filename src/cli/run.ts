@@ -12,22 +12,23 @@ import { AGENT_PROMPT } from "./agent-prompt.js";
 import { type Output, UsageError } from "./command.js";
 import { EDIT_USAGE, edit } from "./edit.js";
 
-const HELP = `designmap: map a mobile app's design system from its code
+const HELP = `designlane: map a mobile app's design system from its code
 
 Usage
-  designmap [dir]   Read the app in dir (default: here) and write tokens.json, DESIGN.md, catalog.html and drift.md
-                    into designmap/
-  designmap mcp [dir]
+  designlane [dir]  Read the app in dir (default: here) and write tokens.json, DESIGN.md, catalog.html and drift.md
+                    into designlane/
+  designlane mcp [dir]
                     Run the MCP server, so a coding agent reads the app's design system while it builds
-  designmap prompt  Print instructions for a coding agent to read the app's design system into designmap/agent.json
+  designlane prompt
+                    Print instructions for a coding agent to read the app's design system into designlane/agent.json
 ${EDIT_USAGE}
 
-Let a coding agent read an app whose setup Designmap's own reading misses
-  claude -p "$(npx designmap prompt)" --allowedTools Read Glob Grep Write
-  designmap --from-agent designmap/agent.json
+Let a coding agent read an app whose setup Designlane's own reading misses
+  claude -p "$(npx designlane prompt)" --allowedTools Read Glob Grep Write
+  designlane --from-agent designlane/agent.json
 
 Add to Claude Code
-  claude mcp add designmap -- designmap mcp /path/to/app
+  claude mcp add designlane -- designlane mcp /path/to/app
 
 Options
   --out <dir>       Write the files here instead
@@ -53,7 +54,7 @@ export async function run(argv: string[], io: Output): Promise<number> {
     return await (serving ? serve(root) : map(root, values, io));
   } catch (e) {
     if (!(e instanceof UsageError)) throw e;
-    io.error(`designmap: ${e.message}`);
+    io.error(`designlane: ${e.message}`);
     return e.code;
   }
 }
@@ -74,8 +75,8 @@ async function map(
 ): Promise<number> {
   let scan = await scanRepo(root);
   const gaps = readGaps(scan);
-  if (gaps) error(`designmap: ${gaps}`);
-  for (const note of scanNotes(scan)) error(`designmap: ${note}`);
+  if (gaps) error(`designlane: ${gaps}`);
+  for (const note of scanNotes(scan)) error(`designlane: ${note}`);
   const agentFile = values["from-agent"];
   if (agentFile) {
     const merge = await fromAgent(scan, path.resolve(agentFile));
@@ -85,7 +86,7 @@ async function map(
     if (merge.dropped.length) {
       const some = merge.dropped.slice(0, 5).join(", ");
       error(
-        `designmap: left out ${plural(merge.dropped.length, "token")} the code doesn't bear out: ${some}${merge.dropped.length > 5 ? ", …" : ""}`,
+        `designlane: left out ${plural(merge.dropped.length, "token")} the code doesn't bear out: ${some}${merge.dropped.length > 5 ? ", …" : ""}`,
       );
     }
   }
@@ -100,7 +101,7 @@ async function map(
   if (written.removed.length) {
     const now = written.tokens.map(shown).join(" or ");
     error(
-      `designmap: removed ${written.removed.map(shown).join(", ")}, as the repo now has ${scan.frameworks.length === 1 ? "one app" : "more than one app"}: connect each Figma file to ${now}.`,
+      `designlane: removed ${written.removed.map(shown).join(", ")}, as the repo now has ${scan.frameworks.length === 1 ? "one app" : "more than one app"}: connect each Figma file to ${now}.`,
     );
   }
   return 0;

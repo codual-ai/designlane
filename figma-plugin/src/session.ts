@@ -18,7 +18,7 @@ import { darkUnavailable, readDesignFile, withoutDarkMode } from "./design-file.
 import { createDesignToCode } from "./design-to-code.js";
 import { figmaChanges, pairsOf, readAgreed, recordAgreements } from "./figma-changes.js";
 import { darkLeftOutOf, withDarkWhereRoom, withoutMissingFonts } from "./fitted-plan.js";
-import { fetchTokensFile, repoApi } from "./github.js";
+import { fetchTokensFile, findTokensFile, repoApi } from "./github.js";
 import { keptChanges, mayKeepCode, withFigmaValues } from "./kept-in-figma.js";
 import { type FigmaChange, type PlanSummary, type RepoSource, type ToWindow, toPlugin } from "./messages.js";
 import {
@@ -166,11 +166,10 @@ export function createSession(send: (message: ToWindow) => void): (data: unknown
 
   /** Saves a connection once it has read tokens.json, so a mistyped one is never kept. */
   async function connect(id: number, connection: Connection): Promise<void> {
-    const checked = checkConnection(connection);
-    const json = await fetchTokensFile(checked);
-    await saveConnection(connection);
-    send({ type: "connection", repo: repoOf(connection) });
-    await plan(id, json, "repo", await pullRequestsOf(checked));
+    const { json, connection: found } = await findTokensFile(checkConnection(connection));
+    await saveConnection(found);
+    send({ type: "connection", repo: repoOf(found) });
+    await plan(id, json, "repo", await pullRequestsOf(found));
   }
 
   async function fetchPlan(id: number): Promise<void> {

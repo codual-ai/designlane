@@ -950,7 +950,7 @@ describe("Compose views", () => {
       "app/Root.kt": `import com.bumble.appyx.navigation.node.Node\n${plain("Root")}`,
     });
     expect(scanNotes(scan)).toContain(
-      "This app moves between screens with Appyx, which Designmap doesn't read yet: its screens are found by what they contain, and the links between them aren't listed.",
+      "This app moves between screens with Appyx, which Designlane doesn't read yet: its screens are found by what they contain, and the links between them aren't listed.",
     );
   });
 

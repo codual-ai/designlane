@@ -35,7 +35,7 @@ export const APP = {
   ].join("\n"),
 };
 
-/** The tokens Designmap writes for `files`, read back the way a sync reads them. */
+/** The tokens Designlane writes for `files`, read back the way a sync reads them. */
 export async function tokensOf(files: Record<string, string>): Promise<SyncTokens> {
   return readTokensFile(JSON.parse(JSON.stringify(toDesignTokens(await scanRepo(await tempDir(files))))));
 }
@@ -59,7 +59,7 @@ export const color = (identity: string, hex: string, extra: Partial<SyncColor> =
 export const colorEntry = (hex: string, reference: string, source = "A.swift", line?: number) => ({
   $type: "color",
   $value: { colorSpace: "srgb", components: [0, 0, 0], hex },
-  $extensions: { designmap: { reference, source, uses: 1, ...(line ? { line } : {}) } },
+  $extensions: { designlane: { reference, source, uses: 1, ...(line ? { line } : {}) } },
 });
 
 /** A design file as a first sync of `code` leaves it: every token made, with its identity. */

@@ -16,7 +16,7 @@ export async function sourceOf(
 ): Promise<{ source: string } | { reason: string }> {
   const got = await read(file);
   if (got === undefined) return { reason: `${file} isn't in the app any more.` };
-  if (typeof got !== "string") return { reason: `Designmap can't read ${file}: ${got.unreadable}.` };
+  if (typeof got !== "string") return { reason: `Designlane can't read ${file}: ${got.unreadable}.` };
   return { source: got };
 }
 

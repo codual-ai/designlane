@@ -92,38 +92,38 @@ describe("reading tokens.json", () => {
 
   it("refuses a file shaped otherwise, or with no tokens, rather than deprecating everything", () => {
     expect(() => readTokensFile({ swiftui: {}, compose: {} })).toThrow(
-      /^This isn't a tokens\.json Designmap writes/,
+      /^This isn't a tokens\.json Designlane writes/,
     );
     expect(() => readTokensFile({ $description: "empty", color: {} })).toThrow(
-      /has no tokens\. Run designmap/,
+      /has no tokens\. Run designlane/,
     );
   });
 
   it("syncs an app whose code names nothing, unless the scan missed part of it", () => {
     const empty = (partial: boolean) => ({
       $description: "test",
-      $extensions: { designmap: { app: "Shop", ...(partial ? { partial: true } : {}) } },
+      $extensions: { designlane: { app: "Shop", ...(partial ? { partial: true } : {}) } },
     });
     expect(readTokensFile(empty(false))).toMatchObject({ colors: [], textStyles: [], complete: true });
-    expect(() => readTokensFile(empty(true))).toThrow(/has no tokens\. Run designmap/);
+    expect(() => readTokensFile(empty(true))).toThrow(/has no tokens\. Run designlane/);
   });
 
-  it("refuses a token Designmap wouldn't write, naming it and saying what to do", () => {
+  it("refuses a token Designlane wouldn't write, naming it and saying what to do", () => {
     const refusal = (file: object) => () => readTokensFile({ $description: "test", ...file });
     const say = (path: string) =>
-      new RegExp(`Run designmap on the app again[\\s\\S]*${path.replace(".", "\\.")}`);
+      new RegExp(`Run designlane on the app again[\\s\\S]*${path.replace(".", "\\.")}`);
     expect(refusal({ color: { brand: { $type: "color", $value: "blue" } } })).toThrow(say("color.brand"));
     expect(refusal({ color: { brand: "blue" } })).toThrow(say("color"));
-    const ext = { designmap: { name: "empty", uses: 1 } };
+    const ext = { designlane: { name: "empty", uses: 1 } };
     expect(refusal({ typography: { empty: { $extensions: ext } } })).toThrow(say("typography.empty"));
     const tooOpaque = { colorSpace: "srgb", components: [0, 0, 0], hex: "#000000", alpha: 2 };
     const ink = {
       $type: "color",
       $value: tooOpaque,
-      $extensions: { designmap: { source: "A.swift", uses: 1 } },
+      $extensions: { designlane: { source: "A.swift", uses: 1 } },
     };
     expect(refusal({ color: { ink } })).toThrow(say("color.ink"));
-    const darkOnStyle = { designmap: { name: "s", uses: 1, modes: { dark: tooOpaque } } };
+    const darkOnStyle = { designlane: { name: "s", uses: 1, modes: { dark: tooOpaque } } };
     expect(
       refusal({
         typography: { s: { $extensions: darkOnStyle, fontWeight: { $type: "fontWeight", $value: 400 } } },

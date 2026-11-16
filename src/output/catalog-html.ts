@@ -230,7 +230,7 @@ export function toCatalogHtml(
 </head>
 <body>
 <header>
-<div class="eyebrow">Designmap · ${built}</div>
+<div class="eyebrow">Designlane · ${built}</div>
 <h1>${escapeHtml(name)}</h1>
 <p class="sub">${plural(components.filter((c) => c.kind === "component").length, "component")} and ${plural(components.filter((c) => c.kind === "screen").length, "screen")}, with the colours, text styles, spacing and corner radii the code uses. Every value says where in the code it comes from.</p>
 ${partial ? `<p class="sub warn">Only part of the app was read, so this page is incomplete.</p>` : ""}
@@ -241,7 +241,7 @@ ${partial ? `<p class="sub warn">Only part of the app was read, so this page is 
 ${foundations(scan)}
 ${componentSection(components, context)}
 </main>
-<footer>Made by Designmap from the code. ${pictured ? `${pictured} of ${plural(components.length, "view")} have a picture, drawn by a coding agent from the code: close to the real thing, not exact.` : "To add pictures, connect Designmap's MCP server to your coding agent and ask it to draw your components."}</footer>
+<footer>Made by Designlane from the code. ${pictured ? `${pictured} of ${plural(components.length, "view")} have a picture, drawn by a coding agent from the code: close to the real thing, not exact.` : "To add pictures, connect Designlane's MCP server to your coding agent and ask it to draw your components."}</footer>
 <script>${CATALOG_SCRIPT}</script>
 </body>
 </html>
