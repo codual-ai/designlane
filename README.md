@@ -55,8 +55,6 @@ Then keep your design file in step:
 
 ## See it in action
 
-https://github.com/user-attachments/assets/455e8d74-46e9-4bd6-9039-55d72b9a49d1
-
 Real output, run on a small SwiftUI shop app:
 
 ![designmap run on a SwiftUI app: it finds 5 colours and 2 text styles and writes tokens.json and DESIGN.md](.github/assets/cli.gif)

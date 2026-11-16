@@ -3,6 +3,14 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 - 2026-11-15
+
+### Fixed
+
+- The GitHub Action can be listed on the GitHub Marketplace: a description within its 125-character limit, and an
+  icon and colour.
+- The README no longer links a video that isn't there.
+
 ## 0.2.0 - 2026-11-14
 
 ### Added

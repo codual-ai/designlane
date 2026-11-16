@@ -1,5 +1,8 @@
 name: Designmap
-description: Writes an app's design tokens from its code to tokens.json (tokens.ios.json and tokens.android.json for a repo with both apps) and DESIGN.md in the `out` folder, and commits them when they change. Runs on a push to a branch, and sets up Node 22 for the rest of the job.
+description: Keeps your mobile app's design tokens in step with its code, for the Designmap Figma plugin.
+branding:
+  icon: layers
+  color: purple
 inputs:
   app:
     description: The app's folder, from the repo's root.

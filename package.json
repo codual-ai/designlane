@@ -1,6 +1,6 @@
 {
   "name": "designmap",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Keep your design tools in step with your app's code: reads the colours and text styles your SwiftUI, Jetpack Compose or React Native code names and syncs them to Figma.",
   "repository": {
     "type": "git",
