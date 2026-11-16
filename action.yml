@@ -1,4 +1,4 @@
-name: Designlane
+name: Designlane Sync
 description: Keeps your mobile app's design tokens in step with its code, for the Designlane Figma plugin.
 branding:
   icon: layers
