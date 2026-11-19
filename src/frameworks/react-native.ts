@@ -4,6 +4,7 @@ import { palette } from "../scan/palette.js";
 import { namedScales, withScales } from "../scan/scales.js";
 import { appFirst } from "../scan/targets.js";
 import { typeScale } from "../scan/type-scale.js";
+import type { DesignTokens } from "../scan/types.js";
 import { type JsSource, jsSources } from "./js-sources.js";
 import type { FrameworkPlugin, ScanContext } from "./plugin.js";
 import { rnColors } from "./rn-colors.js";
@@ -97,61 +98,72 @@ export const within = (rel: string, roots: string[]) =>
 
 const ranked = (values: number[]) => mostCommon(values, byNumber).map(({ value }) => value);
 
+/** The app's own scripts: inside its React Native packages, not in a package of its own that isn't React Native (a
+ * web embed, a server), nor a tool's config (Tailwind's is kept). */
+async function appScripts(ctx: ScanContext) {
+  const all = await packages(ctx);
+  const roots = all.filter((p) => p.reactNative).map((p) => p.root);
+  const scripts = await jsSources(ctx);
+  // A package whose code imports React Native is the app's (a local native module, which the app provides it to).
+  const others = all
+    .filter((p) => !p.reactNative && p.root !== "" && roots.some((r) => within(`${p.root}/`, [r])))
+    .map((p) => p.root)
+    .filter((o) => !scripts.some((s) => s.reactNative && within(s.rel, [o])));
+  // Where a colour or style is declared twice, the app's own copy comes first, over a widget's.
+  const sources = appFirst(
+    scripts.filter(
+      (s) =>
+        within(s.rel, roots) &&
+        !within(s.rel, others) &&
+        (!TOOL_CONFIG.test(s.rel) || TAILWIND_CONFIG.test(s.rel)),
+    ),
+    (s) => s.rel,
+  );
+  return { all, roots, sources };
+}
+
+/** The design tokens the app's scripts declare. */
+async function appTokens(ctx: ScanContext, sources: JsSource[]): Promise<DesignTokens> {
+  const tailwind = await tailwindColors(ctx, sources);
+  const theme = rnColors(sources, tailwind.files);
+  const type = rnType(sources, tailwind.files);
+  const fontSizes = namedFontSizes(sources.filter((s) => !tailwind.files.has(s.rel)));
+  // Tailwind's classes only in an app using Tailwind: elsewhere `p-4` is just a string.
+  const classes: TailwindType =
+    tailwind.used || tailwind.named.length > 0
+      ? tailwindType(sources, tailwind.fonts)
+      : { uses: [], spacing: [], radii: [] };
+  const scale = typeScale({ uses: [...type.uses, ...classes.uses], helperFonts: type.helperFonts });
+  // A JavaScript copy of a CSS theme's colours (`colors.charcoal[100]` beside `--color-charcoal-100`) is one colour.
+  const inTailwind = new Set(tailwind.named.map((c) => `${c.name}|${c.light}`));
+  return {
+    ...palette({
+      ...theme,
+      named: [...tailwind.named, ...theme.named.filter((c) => !inTailwind.has(`${c.name}|${c.light}`))],
+      references: [...theme.references, ...tailwind.references],
+    }),
+    typeStyles: [...type.named, ...fontSizes, ...scale.typeStyles].sort(
+      (a, b) => b.uses - a.uses || a.name.localeCompare(b.name),
+    ),
+    fonts: scale.fonts,
+    spacing: ranked([...type.spacing, ...classes.spacing]),
+    radii: ranked([...type.radii, ...classes.radii]),
+    ...withScales(namedScales(rnScaleCandidates(sources))),
+  };
+}
+
 /** React Native (and Expo): its colours, text styles, spacing and radii, from theme objects, Tailwind and styles. */
 export const reactNative: FrameworkPlugin = {
   id: "react-native",
   platforms: ["react-native"],
   async scan(ctx) {
-    const all = await packages(ctx);
-    const roots = all.filter((p) => p.reactNative).map((p) => p.root);
-    if (roots.length === 0) return undefined;
-    const scripts = await jsSources(ctx);
-    // A package of its own inside the app that isn't React Native (a web embed, a server) isn't the app; one whose
-    // code imports React Native is (a local native module, which the app provides React Native to).
-    const others = all
-      .filter((p) => !p.reactNative && p.root !== "" && roots.some((r) => within(`${p.root}/`, [r])))
-      .map((p) => p.root)
-      .filter((o) => !scripts.some((s) => s.reactNative && within(s.rel, [o])));
-    // Where a colour or style is declared twice, the app's own copy comes first, over a widget's.
-    const sources = appFirst(
-      scripts.filter(
-        (s) =>
-          within(s.rel, roots) &&
-          !within(s.rel, others) &&
-          (!TOOL_CONFIG.test(s.rel) || TAILWIND_CONFIG.test(s.rel)),
-      ),
-      (s) => s.rel,
-    );
-    if (!sources.some((s) => s.reactNative)) return undefined;
-    const tailwind = await tailwindColors(ctx, sources);
-    const theme = rnColors(sources, tailwind.files);
-    const type = rnType(sources, tailwind.files);
-    const fontSizes = namedFontSizes(sources.filter((s) => !tailwind.files.has(s.rel)));
-    // Tailwind's classes only in an app using Tailwind: elsewhere `p-4` is just a string.
-    const classes: TailwindType =
-      tailwind.used || tailwind.named.length > 0
-        ? tailwindType(sources, tailwind.fonts)
-        : { uses: [], spacing: [], radii: [] };
-    const scale = typeScale({ uses: [...type.uses, ...classes.uses], helperFonts: type.helperFonts });
-    // A JavaScript copy of a CSS theme's colours (`colors.charcoal[100]` beside `--color-charcoal-100`) is one colour.
-    const inTailwind = new Set(tailwind.named.map((c) => `${c.name}|${c.light}`));
+    const { all, roots, sources } = await appScripts(ctx);
+    if (roots.length === 0 || !sources.some((s) => s.reactNative)) return undefined;
     const folders = expoRouteFolders(all, sources);
     return {
       views: rnViews(sources, { folders }, new Set(all.flatMap((p) => p.depends))),
-      tokens: {
-        ...palette({
-          ...theme,
-          named: [...tailwind.named, ...theme.named.filter((c) => !inTailwind.has(`${c.name}|${c.light}`))],
-          references: [...theme.references, ...tailwind.references],
-        }),
-        typeStyles: [...type.named, ...fontSizes, ...scale.typeStyles].sort(
-          (a, b) => b.uses - a.uses || a.name.localeCompare(b.name),
-        ),
-        fonts: scale.fonts,
-        spacing: ranked([...type.spacing, ...classes.spacing]),
-        radii: ranked([...type.radii, ...classes.radii]),
-        ...withScales(namedScales(rnScaleCandidates(sources))),
-      },
+      tokens: await appTokens(ctx, sources),
     };
   },
+  tokens: async (ctx) => appTokens(ctx, (await appScripts(ctx)).sources),
 };

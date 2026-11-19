@@ -7,6 +7,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `designlane/read`, a library entry for reading an app's code from another tool: `readApp(root)` reads the app once;
+  `app.tokensIn(path, text?)` lists every colour, text style, font, spacing and corner radius one file uses, named
+  token or value written in place, each with its exact span; `app.withChanges(files)` gives a copy-on-write view with
+  some files changed, reading only those again; `app.update(path, text)` changes the app itself; and
+  `findFrameworks(root)` tells an app's frameworks from file names and manifests alone. Offline and deterministic,
+  with a zod schema for every result, and none of the command line, MCP server or Figma sync loaded.
 - Spacing and corner radius scales the code names sync to Figma as number variables, scoped to gaps and to corners:
   a Swift type of that name (`enum WMFSpacing`, `Theme.CornerRadius`), a Kotlin object or data class
   (`object Radii { val card = 12.dp }`, `LocalSpacing.current.medium`), or an exported JavaScript object
@@ -17,6 +23,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   variables (`spacing/16`) has each renamed to the named step with its value.
 - DESIGN.md and catalog.html show the named scales with each step's reference and uses, then the values written in
   place.
+
+### Changed
+
+- Scans read Swift and Kotlin a little faster: a file with no `#Preview` isn't searched for one, and comments and
+  strings are blanked in runs rather than one character at a time.
 
 ## 0.3.1 - 2026-11-16
 
