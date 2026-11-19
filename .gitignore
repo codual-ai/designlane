@@ -7,3 +7,4 @@ coverage/
 *.log
 .DS_Store
 figma-plugin/dist/
+.npm-readme-backup.md
