@@ -156,6 +156,82 @@ describe("named spacing and radius scales", () => {
   });
 });
 
+describe("named scales: what isn't a step", () => {
+  it("leaves out a value continued on the next line, and private or deprecated steps", async () => {
+    const { scales: swift } = await scales("swiftui", {
+      "App/AppSpacing.swift": [
+        "import SwiftUI",
+        "enum AppSpacing {",
+        "    static let small: CGFloat = 8",
+        "    static let large: CGFloat = 16",
+        "        * scale",
+        '    @available(*, deprecated, message: "Use large")',
+        "    static let big: CGFloat = 20",
+        "    static let medium: CGFloat = 12",
+        "}",
+      ].join("\n"),
+      "App/Card.swift": "import SwiftUI\nlet a = AppSpacing.small\n",
+    });
+    expect(swift?.spacing.map((s) => s.name)).toEqual(["small", "medium"]);
+    const { scales: kotlin } = await scales("compose", {
+      "app/src/main/kotlin/Spacing.kt": [
+        "import androidx.compose.ui.unit.dp",
+        "object Spacing {",
+        "    val small = 8.dp",
+        "    private val hidden = 10.dp",
+        '    @Deprecated("Use small") val old = 6.dp',
+        "    val large = 16.dp",
+        "        .times(2)",
+        "    val medium = 12.dp",
+        "}",
+      ].join("\n"),
+      "app/src/main/kotlin/Home.kt": "import androidx.compose.runtime.Composable\nval p = Spacing.small\n",
+    });
+    expect(kotlin?.spacing.map((s) => s.name)).toEqual(["small", "medium"]);
+  });
+
+  it("counts a use only toward the scale it names", async () => {
+    const { scales: kotlin } = await scales("compose", {
+      "app/src/main/kotlin/Spacing.kt": [
+        "import androidx.compose.ui.unit.dp",
+        "object Spacing { val small = 8.dp\n val large = 16.dp }",
+        "object OtherSpacing { val small = 4.dp\n val large = 6.dp }",
+      ].join("\n"),
+      "app/src/main/kotlin/Home.kt":
+        "val a = OtherSpacing.small\nval b = OtherSpacing.small\nval c = Spacing.large\n",
+    });
+    expect(kotlin?.spacing.map((s) => [s.reference, s.uses])).toEqual([
+      ["OtherSpacing.small", 2],
+      ["OtherSpacing.large", 0],
+      ["Spacing.small", 0],
+      ["Spacing.large", 1],
+    ]);
+    const { scales: js } = await scales("react-native", {
+      "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+      "src/theme.ts": [
+        "export const theme = { spacing: { sm: 4, md: 8 } };",
+        "export const compact = { spacing: { sm: 2, md: 4 } };",
+      ].join("\n"),
+      "src/Card.tsx": 'import { View } from "react-native";\nexport const p = theme.spacing.md;\n',
+    });
+    expect(js?.spacing.map((s) => s.reference)).toEqual(["theme.spacing.sm", "theme.spacing.md"]);
+  });
+
+  it("gives two steps whose references read the same as a key keys of their own", async () => {
+    const { scan } = await scales("react-native", {
+      "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+      "src/theme.ts": [
+        "export const a = { spacing: { sm: 4, md: 8 } };",
+        "export const b = { spacing: { sm: 2, md: 6 } };",
+      ].join("\n"),
+      "src/Card.tsx":
+        'import { View } from "react-native";\nexport const p = [a.spacing.sm, b.spacing.md];\n',
+    });
+    const file = toDesignTokens(scan);
+    expect(Object.keys(file.spacing ?? {}).filter((k) => !k.startsWith("$"))).toHaveLength(4);
+  });
+});
+
 describe("syncing named scale steps", () => {
   it("updates a step's variable when its value changes, and creates it as a gap variable named by its key", () => {
     const first = planSync(tokens({ spacing: [step("spacing", "AppSpacing.large", 16)] }), {

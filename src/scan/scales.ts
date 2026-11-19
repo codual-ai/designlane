@@ -50,6 +50,7 @@ const MIN_STEPS = 2;
  */
 export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefined {
   const byScale = new Map<string, ScaleCandidate[]>();
+  const seen = new Set<string>();
   for (const candidate of candidates) {
     const { name, value } = candidate.step;
     if (RETIRED.test(name) || NOT_A_STEP.test(name) || value < 0) continue;
@@ -57,7 +58,11 @@ export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefin
     const steps = byScale.get(id) ?? [];
     byScale.set(id, steps);
     // The same name declared twice in one scale (`#if os(iOS)` branches) is the first one.
-    if (!steps.some((s) => s.step.name === candidate.step.name)) steps.push(candidate);
+    const key = `${id}|${name}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      steps.push(candidate);
+    }
   }
   const found: NamedScales = { spacing: [], radii: [] };
   for (const steps of byScale.values()) {
@@ -72,10 +77,12 @@ export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefin
     (first.kind === "radius" ? found.radii : found.spacing).push(...kept);
   }
   // Two scales declaring the same reference (an app's and its widget's copy) are one: the first found stays.
-  const distinct = (steps: ScaleStep[]) =>
-    steps
-      .filter((step, i) => steps.findIndex((s) => s.reference === step.reference) === i)
+  const distinct = (steps: ScaleStep[]) => {
+    const references = new Set<string>();
+    return steps
+      .filter((step) => !references.has(step.reference) && references.add(step.reference))
       .sort((a, b) => a.value - b.value || a.reference.localeCompare(b.reference));
+  };
   const scales = { spacing: distinct(found.spacing), radii: distinct(found.radii) };
   return scales.spacing.length || scales.radii.length ? scales : undefined;
 }
@@ -89,5 +96,47 @@ export function countUse(usedIn: Map<string, number>, file: string): void {
   usedIn.set(file, (usedIn.get(file) ?? 0) + 1);
 }
 
-/** `text` safe to put in a regular expression as it is. */
-export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The most names of a chain a step's use is looked for in: a use is a few names long (`Theme.CornerRadius.card`),
+ * and looking further would make a long chain (`a.b.c…`, thousands long) cost its length squared. */
+const MAX_CHAIN_PARTS = 6;
+
+/** A chain of names, `WMFSpacing.large` or `LocalSpacing.current.medium`, not one continuing another (`a.b`'s `b`). */
+const CHAIN = /(?<![\w$.])[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/g;
+
+/**
+ * Counts uses of steps in one pass over each file: every chain of names in `code` (comments and strings blanked), and
+ * each of its leading parts of two names or more, is given to `stepsAt`, and the steps the first part it knows names
+ * get one use each. Linear in the code's length, however many steps there are.
+ */
+export function countChains(
+  sources: { rel: string; code: string }[],
+  stepsAt: (parts: string[]) => ScaleCandidate[] | undefined,
+): void {
+  for (const source of sources) {
+    for (const chain of source.code.matchAll(CHAIN)) {
+      const parts = chain[0].split(".", MAX_CHAIN_PARTS);
+      for (let length = parts.length; length >= 2; length--) {
+        const steps = stepsAt(parts.slice(0, length));
+        if (!steps) continue;
+        for (const step of steps) countUse(step.usedIn, source.rel);
+        break;
+      }
+    }
+  }
+}
+
+/** Candidates grouped by a key, for `countChains` to look up. */
+export function indexBy(
+  candidates: ScaleCandidate[],
+  keys: (candidate: ScaleCandidate) => string[],
+): Map<string, ScaleCandidate[]> {
+  const index = new Map<string, ScaleCandidate[]>();
+  for (const candidate of candidates) {
+    for (const key of keys(candidate)) {
+      const same = index.get(key);
+      if (same) same.push(candidate);
+      else index.set(key, [candidate]);
+    }
+  }
+  return index;
+}

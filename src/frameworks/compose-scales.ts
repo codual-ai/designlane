@@ -4,14 +4,18 @@
  * through a composition local (`LocalSpacing.current.medium`) or a theme extension (`MaterialTheme.spacing.medium`).
  */
 
-import { countUse, escapeRegExp, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
+import { countChains, indexBy, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
 import { type KotlinSource, spanIn, treeOf } from "./kotlin-sources.js";
 import { valueAt } from "./value-locations.js";
 
 /** `object Spacing`, `data class AppSpacing(`, `class Radii`: a type that may hold a scale. */
 const TYPE = /\b(object|class)\s+([A-Z]\w*)/g;
-/** `val medium = 12.dp` or `val medium: Dp = 12.dp`, the value ending the declaration. */
-const STEP = /\bval\s+(\w+)\s*(?::\s*Dp\s*)?=\s*(\d+(?:\.\d+)?\.dp)(?=\s*(?:[,)};\n]|$))/g;
+/** `val medium = 12.dp` or `val medium: Dp = 12.dp`, with the modifiers and annotations before it, the value ending
+ * the declaration: not continued on the next line by `.` or `?:`. */
+const STEP =
+  /((?:@[\w.]+(?:\([^)\n]*\))?\s*|\b(?:private|protected|internal|public|override)\s+)*)\bval\s+(\w+)\s*(?::\s*Dp\s*)?=\s*(\d+(?:\.\d+)?\.dp)(?=[ \t]*(?:[,)};]|\n(?!\s*[.?])|$))/g;
+/** Modifiers and annotations that keep a step out of the scale: private to its type, or deprecated. */
+const HIDDEN = /\b(?:private|protected)\b|@Deprecated\b/;
 
 /** Every scale step the Kotlin code declares, with the files using each by name. */
 export function composeScaleCandidates(sources: KotlinSource[]): ScaleCandidate[] {
@@ -25,12 +29,13 @@ export function composeScaleCandidates(sources: KotlinSource[]): ScaleCandidate[
       if (!body) continue;
       const tree = treeOf(source);
       for (const step of source.code.slice(body.open + 1, body.close).matchAll(STEP)) {
-        const value = step[2] ?? "";
+        if (HIDDEN.test(step[1] ?? "")) continue;
+        const value = step[3] ?? "";
         const valueStart = body.open + 1 + (step.index ?? 0) + step[0].lastIndexOf(value);
         // Only the type's own values, not one in a function or a nested type inside it.
         if (tree.enclosing[valueStart] !== body.open) continue;
         const span = spanIn(source, valueStart, valueStart + value.length);
-        const name = step[1] ?? "";
+        const name = step[2] ?? "";
         found.push({
           kind,
           scale: owner,
@@ -61,19 +66,20 @@ function bodyOf(source: KotlinSource, from: number): { open: number; close: numb
   return close === undefined ? undefined : { open, close };
 }
 
-/** Counts each step's uses: `Spacing.medium`, `LocalSpacing.current.medium`, `MaterialTheme.spacing.medium`, and for
- * `AppSpacing`, also `appSpacing.medium` and the last word's `spacing.medium`. */
+const lowerFirst = (word: string) => word.charAt(0).toLowerCase() + word.slice(1);
+
+/** Counts each step's uses: `Spacing.medium`, `LocalSpacing.current.medium`, and a theme's extension named for the
+ * type or its last word, `MaterialTheme.spacing.medium` or `.appSpacing.medium` for `AppSpacing`. */
 function countUses(found: ScaleCandidate[], sources: KotlinSource[]): void {
-  for (const candidate of found) {
-    const owner = candidate.scale;
+  if (found.length === 0) return;
+  const index = indexBy(found, ({ scale: owner, step }) => {
     const lastWord = /[A-Z][a-z\d]*$/.exec(owner)?.[0] ?? owner;
-    const eitherCase = (word: string) =>
-      `[${word.charAt(0).toUpperCase()}${word.charAt(0).toLowerCase()}]${escapeRegExp(word.slice(1))}`;
-    const pattern = new RegExp(
-      String.raw`\b\w*(?:${eitherCase(owner)}|${eitherCase(lastWord)})(?:\.current)?\.${escapeRegExp(candidate.step.name)}\b`,
-      "g",
-    );
-    for (const source of sources)
-      for (const _ of source.code.matchAll(pattern)) countUse(candidate.usedIn, source.rel);
-  }
+    const named = [owner, lowerFirst(owner), lowerFirst(lastWord)].map((form) => `${form}|${step.name}`);
+    return [...new Set([...named, `Local${owner}.current|${step.name}`])];
+  });
+  countChains(sources, (parts) => {
+    const name = parts.at(-1) ?? "";
+    const before = parts.at(-2) === "current" ? `${parts.at(-3)}.current` : parts.at(-2);
+    return index.get(`${before}|${name}`);
+  });
 }

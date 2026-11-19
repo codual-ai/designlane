@@ -136,10 +136,22 @@ function countUses(found: ScaleCandidate[], sources: JsSource[]): void {
       const step = stepName(node);
       const scale = step === undefined ? undefined : lastName(node.expression);
       if (step === undefined || scale === undefined) return true;
-      for (const candidate of byTail.get(`${scale}|${step}`) ?? []) countUse(candidate.usedIn, source.rel);
+      for (const candidate of owners(byTail.get(`${scale}|${step}`) ?? [], node))
+        countUse(candidate.usedIn, source.rel);
       return true;
     });
   }
+}
+
+/** Of the steps an access could name, the ones it does: the only one, or when scales share a name, those whose whole
+ * path it ends with (`theme.spacing.md`, not `compact.spacing.md`); none when it can't tell them apart. */
+function owners(
+  candidates: ScaleCandidate[],
+  node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+): ScaleCandidate[] {
+  if (candidates.length < 2) return candidates;
+  const path = renderPath(accessPath(node) ?? []);
+  return candidates.filter((c) => path === c.step.reference || path.endsWith(`.${c.step.reference}`));
 }
 
 /** `spacing|16px` for `padding="16px"`, `radius|card` for `borderRadius={"card"}`: the kind of step a prop takes and

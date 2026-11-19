@@ -121,10 +121,13 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
  * when two scales share a name (`Theme-Spacing-large`). */
 function scale(steps: ScaleStep[], described: string): Group<"spacing"> {
   const group: Group<"spacing"> = { $description: described };
-  const shared = (step: ScaleStep) =>
-    steps.filter((s) => tokenKey(s.name) === tokenKey(step.name)).length > 1;
+  const byName = new Map<string, number>();
+  for (const step of steps) byName.set(tokenKey(step.name), (byName.get(tokenKey(step.name)) ?? 0) + 1);
   for (const step of steps) {
-    const key = tokenKey(shared(step) ? step.reference : step.name);
+    const wanted = tokenKey((byName.get(tokenKey(step.name)) ?? 0) > 1 ? step.reference : step.name);
+    // Two references can still read the same as a key (`a.b` and `a-b`): the later one takes a number.
+    let key = wanted;
+    for (let n = 2; key in group; n++) key = `${wanted}-${n}`;
     group[key] = scaleEntry(step);
   }
   return group;

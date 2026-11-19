@@ -6,7 +6,7 @@
  * apps declare those for one view as often as for the whole app.
  */
 
-import { countUse, escapeRegExp, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
+import { countChains, indexBy, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
 import { locator } from "./source-text.js";
 import { memberOf, ownerAt, qualifiedOwnerAt } from "./swift-owners.js";
 import type { Token } from "./swift-tokens.js";
@@ -64,10 +64,26 @@ export function swiftScaleCandidates(sources: SwiftSource[]): ScaleCandidate[] {
   return found;
 }
 
-/** `static let name: CGFloat = 16`, the value ending the statement (not `= 16 * scale`). */
+/** Tokens that end the declaration before a member's: its own modifiers and attributes come after them. */
+const DECLARATION_START = new Set(["{", "}", ";", "let", "var", "func", "case", "init"]);
+/** How far back a member's modifiers and attributes (`@available(*, deprecated, message: "…")`) are read. */
+const MAX_MODIFIER_TOKENS = 24;
+
+/** Whether the member whose `static` is at `index` is private to its file or type, or marked deprecated. */
+function hidden(tokens: Token[], index: number): boolean {
+  for (let k = index - 1; k >= 0 && k >= index - MAX_MODIFIER_TOKENS; k--) {
+    const text = tokens[k]?.text ?? "";
+    if (DECLARATION_START.has(text)) return false;
+    if (PRIVATE.has(text) || text === "deprecated") return true;
+  }
+  return false;
+}
+
+/** `static let name: CGFloat = 16`, the value ending the statement: not `= 16 * scale`, nor `= 16` continued on the
+ * next line (`* scale`, `.rounded()`). */
 function* declarations(tokens: Token[]): Generator<Declared> {
   for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i]?.text !== "static" || PRIVATE.has(tokens[i - 1]?.text ?? "")) continue;
+    if (tokens[i]?.text !== "static" || hidden(tokens, i)) continue;
     let at = i + 1;
     if (!["let", "var"].includes(tokens[at]?.text ?? "")) continue;
     const name = tokens[++at];
@@ -81,16 +97,15 @@ function* declarations(tokens: Token[]): Generator<Declared> {
     const value = tokens[at + 1];
     if (value?.kind !== "number" || !DECIMAL.test(value.text)) continue;
     const after = tokens[at + 2];
-    if (after && !after.newlineBefore && after.text !== ";" && after.text !== "}") continue;
+    const continues = after?.kind === "operator" || after?.text === ".";
+    if (after && (continues || (!after.newlineBefore && after.text !== ";" && after.text !== "}"))) continue;
     yield { name: name.text, value: Number(value.text.replaceAll("_", "")), at: value, index: i };
   }
 }
 
 /** Counts each step's uses by name in every file: `WMFSpacing.large`. */
 function countUses(found: ScaleCandidate[], sources: SwiftSource[]): void {
-  for (const candidate of found) {
-    const pattern = new RegExp(String.raw`(?<![\w.])${escapeRegExp(candidate.step.reference)}\b`, "g");
-    for (const source of sources)
-      for (const _ of source.code.matchAll(pattern)) countUse(candidate.usedIn, source.rel);
-  }
+  if (found.length === 0) return;
+  const byReference = indexBy(found, (c) => [c.step.reference]);
+  countChains(sources, (parts) => byReference.get(parts.join(".")));
 }
