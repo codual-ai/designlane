@@ -72,6 +72,16 @@ const TypeStyleSchema = z.object({
   locations: TypeLocationsSchema.exactOptional(),
 });
 
+const ScaleStepSchema = z.object({
+  name: z.string(),
+  value: z.number(),
+  reference: z.string(),
+  source: z.string(),
+  line: z.number().int(),
+  uses: z.number().int(),
+  location: ValueLocationSchema,
+});
+
 export const DesignTokensSchema = z.object({
   colors: z.array(ColorTokenSchema),
   themes: z.array(z.object({ name: z.string(), colors: z.array(ColorTokenSchema) })).exactOptional(),
@@ -80,6 +90,7 @@ export const DesignTokensSchema = z.object({
   fonts: z.array(z.string()),
   spacing: z.array(z.number()),
   radii: z.array(z.number()),
+  scales: z.object({ spacing: z.array(ScaleStepSchema), radii: z.array(ScaleStepSchema) }).exactOptional(),
 });
 
 export const FrameworkScanSchema = z.object({

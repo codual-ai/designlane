@@ -59,6 +59,22 @@ export const ColorTokenEntry = z.object({
 });
 
 const DimensionToken = z.object({ $type: z.literal("dimension"), $value: Dimension });
+
+/** A step of a spacing or radius scale the code names (`AppSpacing.large`): how the code refers to it, which a sync
+ * knows it by, and where its value is written. Files written before scales were named hold bare values instead. */
+export const ScaleTokenEntry = DimensionToken.extend({
+  $description: z.string().optional(),
+  $extensions: z
+    .object({
+      designlane: Origin.extend({
+        reference: z.string(),
+        source: z.string(),
+        line: z.number().int().min(1),
+        locations: z.object({ value: ValueLocation }).strict().optional(),
+      }).strict(),
+    })
+    .optional(),
+});
 const FontFamilyToken = z.object({ $type: z.literal("fontFamily"), $value: z.string() });
 
 /** A text style as the values the code sets, at least one of them, under the name the code gives it. */
@@ -128,8 +144,8 @@ const TokensFile = z
     theme: groupOf(ThemeGroup).optional(),
     typography: groupOf(TextStyleGroup).optional(),
     fontFamily: groupOf(FontFamilyToken).optional(),
-    spacing: groupOf(DimensionToken).optional(),
-    radius: groupOf(DimensionToken).optional(),
+    spacing: groupOf(ScaleTokenEntry).optional(),
+    radius: groupOf(ScaleTokenEntry).optional(),
   })
   .strict();
 

@@ -1,7 +1,8 @@
 /**
- * The scan's design system as W3C design tokens (DTCG 2025.10), which Figma, Tokens Studio and Style Dictionary
- * import: only what the code names (`Theme.surface`, a typography style), since a value written in place changes
- * whenever a screen's layout does. DESIGN.md lists those values, and the spacing and radii the code uses.
+ * The scan's design system as W3C design tokens (DTCG 2025.10), which most design-token tools can read: only what
+ * the code names (`Theme.surface`, a typography style, `AppSpacing.large`), since a value written
+ * in place changes whenever a screen's layout does. DESIGN.md lists those values, and every spacing and radius the
+ * code uses.
  */
 
 import path from "node:path";
@@ -13,6 +14,7 @@ import {
   type FrameworkId,
   type FrameworkScan,
   type Platform,
+  type ScaleStep,
   type ScanResult,
   type TypeLocations,
   type TypeStyle,
@@ -25,10 +27,10 @@ import {
   type TypeValues,
   tokenKey,
 } from "./token-names.js";
-import type { ColorTokenEntry, ColorValue, DesignTokensFile } from "./tokens-schema.js";
+import type { ColorTokenEntry, ColorValue, DesignTokensFile, ScaleTokenEntry } from "./tokens-schema.js";
 
 /** A group of the file, as the schema types it. */
-type Group<K extends "color" | "typography" | "theme"> = NonNullable<DesignTokensFile[K]>;
+type Group<K extends "color" | "typography" | "theme" | "spacing"> = NonNullable<DesignTokensFile[K]>;
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const channel = (hex: string, at: number) => round(Number.parseInt(hex.slice(at, at + 2), 16) / 255);
@@ -115,6 +117,39 @@ function typography(all: TypeStyle[], platform: Platform | undefined): Group<"ty
   return group;
 }
 
+/** A scale's steps, smallest first, each keyed by its name in the scale (`large`), or by how the code refers to it
+ * when two scales share a name (`Theme-Spacing-large`). */
+function scale(steps: ScaleStep[], described: string): Group<"spacing"> {
+  const group: Group<"spacing"> = { $description: described };
+  const byName = new Map<string, number>();
+  for (const step of steps) byName.set(tokenKey(step.name), (byName.get(tokenKey(step.name)) ?? 0) + 1);
+  for (const step of steps) {
+    const wanted = tokenKey((byName.get(tokenKey(step.name)) ?? 0) > 1 ? step.reference : step.name);
+    // Two references can still read the same as a key (`a.b` and `a-b`): the later one takes a number.
+    let key = wanted;
+    for (let n = 2; key in group; n++) key = `${wanted}-${n}`;
+    group[key] = scaleEntry(step);
+  }
+  return group;
+}
+
+function scaleEntry(step: ScaleStep): z.input<typeof ScaleTokenEntry> {
+  return {
+    $type: "dimension",
+    $value: px(step.value),
+    $description: `${step.reference}, ${uses(step.uses)}`,
+    $extensions: {
+      designlane: {
+        reference: step.reference,
+        source: step.source,
+        line: step.line,
+        uses: step.uses,
+        locations: { value: step.location },
+      },
+    },
+  };
+}
+
 /** Where the values a text style's group holds are written: none for a value the group leaves out. */
 function locationsOf(style: TypeStyle, values: TypeValues): TypeLocations | undefined {
   const held = Object.entries(style.locations ?? {}).filter(([key]) => key in values);
@@ -158,6 +193,10 @@ function withTokens(file: DesignTokensFile, framework: FrameworkScan): DesignTok
   // A family only styles written in place use is left out; one no style names, a helper mixing several, is kept.
   const inFamily = (f: string) => tokens.typeStyles.filter((s) => s.family === f);
   const fonts = tokens.fonts.filter((f) => inFamily(f).length === 0 || inFamily(f).some(isNamedStyle));
+  if (tokens.scales?.spacing.length)
+    file.spacing = scale(tokens.scales.spacing, "The spacing scale the code names");
+  if (tokens.scales?.radii.length)
+    file.radius = scale(tokens.scales.radii, "The corner radii the code names");
   if (fonts.length) {
     file.fontFamily = Object.fromEntries(fonts.map((f) => [tokenKey(f), { $type: "fontFamily", $value: f }]));
   }

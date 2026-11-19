@@ -7,7 +7,13 @@
 import path from "node:path";
 import { plural } from "../scan/counting.js";
 import { weightLabel } from "../scan/type-scale.js";
-import { FRAMEWORK_NAMES, type FrameworkScan, type ScanResult, SUPPORTED_FRAMEWORKS } from "../scan/types.js";
+import {
+  FRAMEWORK_NAMES,
+  type FrameworkScan,
+  type ScaleStep,
+  type ScanResult,
+  SUPPORTED_FRAMEWORKS,
+} from "../scan/types.js";
 import { linkNotes, namedLinks, OPENING_WORDS } from "./screen-links.js";
 import { dimensionKey, keyedColors, keyedStyles } from "./token-names.js";
 
@@ -159,19 +165,38 @@ function typePart(frameworks: FrameworkScan[], prefix: Prefix): Part {
   return { tokens, prose };
 }
 
+/** A scale's tokens: the steps the code names (`large: 16px`) where it names a scale, otherwise every value the code
+ * writes (`space-16: 16px`); and a line of prose for each framework naming one. */
 function scalePart(
   frameworks: FrameworkScan[],
   prefix: Prefix,
   kind: string,
   values: (f: FrameworkScan) => number[],
+  steps: (f: FrameworkScan) => ScaleStep[] | undefined,
 ) {
   const tokens: Yaml = {};
+  const prose: string[] = [];
   for (const f of frameworks) {
-    for (const v of [...values(f)].sort((a, b) => a - b))
-      tokens[`${prefix(f)}${dimensionKey(kind, v)}`] = px(v);
+    const named = steps(f) ?? [];
+    if (named.length) {
+      const shared = (s: ScaleStep) => named.filter((n) => n.name === s.name).length > 1;
+      for (const s of named) tokens[`${prefix(f)}${shared(s) ? s.reference : s.name}`] = px(s.value);
+      const listed = named.map((s) => `${s.reference} ${px(s.value)} (${plural(s.uses, "use")})`);
+      const where = [...new Set(named.map((s) => s.source))].map((source) => `\`${source}\``).join(", ");
+      prose.push(
+        `The ${kind === "space" ? "spacing" : "corner radius"} scale the code names, in ${where}: ${listed.join(", ")}.`,
+      );
+    } else {
+      for (const v of [...values(f)].sort((a, b) => a - b))
+        tokens[`${prefix(f)}${dimensionKey(kind, v)}`] = px(v);
+    }
   }
-  return tokens;
+  return { tokens, prose };
 }
+
+/** Every value of a kind the UI code writes, smallest first, across frameworks. */
+const written = (frameworks: FrameworkScan[], values: (f: FrameworkScan) => number[]) =>
+  [...new Set(frameworks.flatMap(values))].sort((a, b) => a - b).map(px);
 
 export function toDesignMd(scan: ScanResult): string {
   const name = path.basename(scan.root);
@@ -179,8 +204,20 @@ export function toDesignMd(scan: ScanResult): string {
   const prefix = (f: FrameworkScan) => (frameworks.length > 1 ? `${f.framework}-` : "");
   const colors = colorPart(frameworks, prefix);
   const type = typePart(frameworks, prefix);
-  const spacing = scalePart(frameworks, prefix, "space", (f) => f.tokens.spacing);
-  const rounded = scalePart(frameworks, prefix, "radius", (f) => f.tokens.radii);
+  const spacing = scalePart(
+    frameworks,
+    prefix,
+    "space",
+    (f) => f.tokens.spacing,
+    (f) => f.tokens.scales?.spacing,
+  );
+  const rounded = scalePart(
+    frameworks,
+    prefix,
+    "radius",
+    (f) => f.tokens.radii,
+    (f) => f.tokens.scales?.radii,
+  );
 
   const front: Yaml = {
     version: "alpha",
@@ -191,8 +228,8 @@ export function toDesignMd(scan: ScanResult): string {
   for (const [section, tokens, reason] of [
     ["colors", colors.tokens, "No colours found"],
     ["typography", type.tokens, "No text styles with a font, size or weight the code sets"],
-    ["spacing", spacing, "No spacing values found"],
-    ["rounded", rounded, "No corner radii found"],
+    ["spacing", spacing.tokens, "No spacing values found"],
+    ["rounded", rounded.tokens, "No corner radii found"],
   ] as const) {
     if (Object.keys(tokens).length) front[section] = tokens;
     else omitted.push({ section, reason });
@@ -204,13 +241,19 @@ export function toDesignMd(scan: ScanResult): string {
   if (colors.prose.length) sections.push(`## Colors\n\n${colors.prose.join("\n")}`);
   sections.push(...themesProse(frameworks));
   if (type.prose.length) sections.push(`## Typography\n\n${type.prose.join("\n")}`);
-  if (Object.keys(spacing).length) {
-    const values = Object.values(spacing).join(", ");
-    sections.push(`## Layout\n\nEvery spacing value the UI code uses, smallest first: ${values}.`);
+  const spacingUsed = written(frameworks, (f) => f.tokens.spacing);
+  if (spacing.prose.length || spacingUsed.length) {
+    const used = spacingUsed.length
+      ? [`Every spacing value the UI code uses, smallest first: ${spacingUsed.join(", ")}.`]
+      : [];
+    sections.push(`## Layout\n\n${[...spacing.prose, ...used].join("\n\n")}`);
   }
-  if (Object.keys(rounded).length) {
-    const values = Object.values(rounded).join(", ");
-    sections.push(`## Shapes\n\nEvery corner radius the UI code uses, smallest first: ${values}.`);
+  const radiiUsed = written(frameworks, (f) => f.tokens.radii);
+  if (rounded.prose.length || radiiUsed.length) {
+    const used = radiiUsed.length
+      ? [`Every corner radius the UI code uses, smallest first: ${radiiUsed.join(", ")}.`]
+      : [];
+    sections.push(`## Shapes\n\n${[...rounded.prose, ...used].join("\n\n")}`);
   }
   return `${sections.join("\n\n")}\n`;
 }

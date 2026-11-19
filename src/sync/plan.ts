@@ -4,7 +4,7 @@
  */
 
 import { numberLabel } from "../output/token-names.js";
-import type { Rgba, SyncColor, SyncTheme, SyncTokens, TextValue } from "./tokens-file.js";
+import type { Rgba, SyncColor, SyncDimension, SyncTheme, SyncTokens, TextValue } from "./tokens-file.js";
 
 /** A value a variable holds: a colour (light, and dark when it has one) or a number. */
 export type VariableValue = { light: Rgba; dark?: Rgba } | number;
@@ -25,7 +25,8 @@ export interface DesignFileTheme {
 }
 
 export interface DesignFile {
-  /** The default theme's colours, and spacing and radii a file synced before they left tokens.json may hold. */
+  /** The default theme's colours, and the spacing and radius steps the code names (or, in a file synced before
+   * scales were named, bare values). */
   variables: DesignFileEntry<VariableValue>[];
   /** A design file's text style always has a family, size and weight. */
   textStyles: DesignFileEntry<Required<TextValue>>[];
@@ -76,8 +77,8 @@ const UNNAMED = "Unnamed";
 export function planSync(tokens: SyncTokens, file: DesignFile): SyncPlan {
   const variables: CodeToken<VariableValue>[] = [
     ...tokens.colors.map(colorToken),
-    ...tokens.spacing.map((n) => ({ identity: `spacing:${n}`, name: `spacing/${numberLabel(n)}`, value: n })),
-    ...tokens.radii.map((n) => ({ identity: `radius:${n}`, name: `radius/${numberLabel(n)}`, value: n })),
+    ...tokens.spacing.map((d) => dimensionToken("spacing", d)),
+    ...tokens.radii.map((d) => dimensionToken("radius", d)),
   ];
   const textStyles: CodeToken<TextValue>[] = tokens.textStyles.map((s) => ({
     identity: s.identity,
@@ -99,6 +100,14 @@ const colorToken = (c: SyncColor): CodeToken<VariableValue> => ({
     : `color/${c.key}`,
   value: c.dark ? { light: c.light, dark: c.dark } : { light: c.light },
   ...(c.reference ? { reference: c.reference } : {}),
+});
+
+/** A scale's step named by its key (`spacing/large`); a bare value from an older file by the value (`spacing/16`). */
+const dimensionToken = (kind: "spacing" | "radius", d: SyncDimension): CodeToken<VariableValue> => ({
+  identity: d.identity,
+  name: `${kind}/${d.reference ? d.key : numberLabel(d.value)}`,
+  value: d.value,
+  ...(d.reference ? { reference: d.reference } : {}),
 });
 
 /** Each theme planned on its own, so a colour is matched, renamed or deprecated only within its theme. */

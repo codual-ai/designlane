@@ -155,6 +155,29 @@ export interface ColorTheme {
   colors: ColorToken[];
 }
 
+/** A spacing or corner radius the code names as one step of a scale: `AppSpacing.large`, `spacing.md`. */
+export interface ScaleStep {
+  /** Its name in the scale: `large`, `md`. */
+  name: string;
+  /** In points (dp on Android). */
+  value: number;
+  /** How the code refers to it, which a sync knows it by: `AppSpacing.large`, `theme.spacing.md`. */
+  reference: string;
+  /** The file it's declared in. */
+  source: string;
+  line: number;
+  /** How many places in the code use it by name. */
+  uses: number;
+  /** Where its value is written. */
+  location: ValueLocation;
+}
+
+/** The spacing and corner radius scales the code names, each smallest first. */
+export interface NamedScales {
+  spacing: ScaleStep[];
+  radii: ScaleStep[];
+}
+
 export interface DesignTokens {
   /** Every colour, most used first; for an app with several themes, its default theme's. */
   colors: ColorToken[];
@@ -170,6 +193,8 @@ export interface DesignTokens {
   spacing: number[];
   /** Every corner radius, most common first. */
   radii: number[];
+  /** The spacing and radius scales the code names; present only when it names one. */
+  scales?: NamedScales;
 }
 
 export interface FrameworkScan {
