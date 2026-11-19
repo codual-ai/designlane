@@ -27,14 +27,21 @@ const RN_IMPORT = /^react-native(?:-web)?$/;
 export async function jsSources(ctx: ScanContext): Promise<JsSource[]> {
   const out: JsSource[] = [];
   for (const f of ctx.files) {
-    if (!SCRIPT.test(f.rel) || DECLARATIONS.test(f.rel) || NOT_APP.test(f.rel) || isTestPath(f.rel)) continue;
+    if (!isScript(f.rel) || isTestPath(f.rel)) continue;
     const text = await ctx.read(f);
-    if (!text) continue;
-    const file = ts.createSourceFile(f.rel, text, ts.ScriptTarget.Latest, true, scriptKind(f.rel));
-    out.push({ rel: f.rel, text, file, reactNative: importsReactNative(file) });
+    if (text) out.push(jsSource(f.rel, text));
   }
   return out;
 }
+
+/** One script's text, parsed as the readers read it. */
+export function jsSource(rel: string, text: string): JsSource {
+  const file = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, scriptKind(rel));
+  return { rel, text, file, reactNative: importsReactNative(file) };
+}
+
+/** Whether `rel` is a script the readers read: not a declaration file, a story, or generated or bundled output. */
+export const isScript = (rel: string) => SCRIPT.test(rel) && !DECLARATIONS.test(rel) && !NOT_APP.test(rel);
 
 /** JSX is allowed in every `.js` file, as React Native's own tooling allows it. */
 function scriptKind(rel: string): ts.ScriptKind {

@@ -97,6 +97,7 @@ export const withoutPreviews = (code: string) => blankRanges(code, previewRanges
 
 /** Where each `#Preview { … }` block starts and ends (exclusive), in order, given blanked code (see `codeOnly`). */
 export function previewRanges(code: string): [number, number][] {
+  if (!code.includes("#Preview")) return [];
   const { nextOpen, closeOf } = braceIndex(code);
   const ranges: [number, number][] = [];
   for (const m of code.matchAll(/#Preview\b/g)) {

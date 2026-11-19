@@ -3,6 +3,22 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `designlane/read`, a library entry for reading an app's code from another tool: `readApp(root)` reads the app once;
+  `app.tokensIn(path, text?)` lists every colour, text style, font, spacing and corner radius one file uses, named
+  token or value written in place, each with its exact span; `app.withChanges(files)` gives a copy-on-write view with
+  some files changed, reading only those again; `app.update(path, text)` changes the app itself; and
+  `findFrameworks(root)` tells an app's frameworks from file names and manifests alone. Offline and deterministic,
+  with a zod schema for every result, and none of the command line, MCP server or Figma sync loaded.
+
+### Changed
+
+- Scans read Swift and Kotlin a little faster: a file with no `#Preview` isn't searched for one, and comments and
+  strings are blanked in runs rather than one character at a time.
+
 ## 0.3.1 - 2026-11-16
 
 ### Fixed

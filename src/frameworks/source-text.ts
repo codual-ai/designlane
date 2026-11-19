@@ -9,22 +9,31 @@ import type { CodeSpan } from "../scan/types.js";
 
 /** `code` with each `[start, end)` of `ranges` replaced by spaces, keeping newlines and offsets. */
 export function blankRanges(code: string, ranges: Iterable<readonly [number, number]>): string {
-  const out = code.split("");
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  if (sorted.length === 0) return code;
+  const out: string[] = [];
   // Each character once, however the ranges nest or overlap.
   let done = 0;
-  for (const [start, end] of [...ranges].sort((a, b) => a[0] - b[0])) {
-    for (let k = Math.max(start, done); k < end; k++) if (out[k] !== "\n") out[k] = " ";
-    done = Math.max(done, end);
+  for (const [start, end] of sorted) {
+    if (end <= done) continue;
+    const from = Math.max(start, done);
+    out.push(code.slice(done, from), blanked(code.slice(from, end)));
+    done = end;
   }
+  out.push(code.slice(done));
   return out.join("");
 }
+
+/** `text` with every character but a newline replaced by a space. */
+const blanked = (text: string) => text.replace(/[^\n]/g, " ");
 
 /** Where the comment or string starting at `i` ends, or undefined when none starts there. */
 export type CommentOrStringEnd = (text: string, i: number) => number | undefined;
 
 /** The text with every comment and string `endOf` finds replaced by spaces, so only code is left. */
 export function blankCommentsAndStrings(text: string, endOf: CommentOrStringEnd): string {
-  const out = text.split("");
+  const out: string[] = [];
+  let kept = 0;
   let i = 0;
   while (i < text.length) {
     const end = endOf(text, i);
@@ -32,9 +41,10 @@ export function blankCommentsAndStrings(text: string, endOf: CommentOrStringEnd)
       i++;
       continue;
     }
-    for (let k = i; k < end; k++) if (out[k] !== "\n") out[k] = " ";
-    i = end;
+    out.push(text.slice(kept, i), blanked(text.slice(i, end)));
+    kept = i = end;
   }
+  out.push(text.slice(kept));
   return out.join("");
 }
 

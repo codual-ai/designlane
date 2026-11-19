@@ -24,4 +24,5 @@ export const compose: FrameworkPlugin = {
       ...(unread.length > 0 && { navigationNotRead: unread }),
     };
   },
+  tokens: async (ctx) => composeTokens(ctx, await kotlinSources(ctx)),
 };

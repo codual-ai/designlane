@@ -17,20 +17,18 @@ export interface KotlinSource {
 
 const COMPOSE_IMPORT = /\bimport\s+(?:androidx\.compose|org\.jetbrains\.compose)\./;
 
+/** One Kotlin file's text as the readers read it. */
+export function kotlinSource(rel: string, text: string): KotlinSource {
+  const code = kotlinCodeOnly(text);
+  return { rel, text, code, written: kotlinWithoutComments(text), compose: COMPOSE_IMPORT.test(code) };
+}
+
 /** Every non-test Kotlin file, read once, with comments and strings blanked out. */
 export async function kotlinSources(ctx: ScanContext): Promise<KotlinSource[]> {
   const out: KotlinSource[] = [];
   for (const f of ctx.files.filter((f) => f.rel.endsWith(".kt") && !isTestPath(f.rel))) {
     const text = await ctx.read(f);
-    if (!text) continue;
-    const code = kotlinCodeOnly(text);
-    out.push({
-      rel: f.rel,
-      text,
-      code,
-      written: kotlinWithoutComments(text),
-      compose: COMPOSE_IMPORT.test(code),
-    });
+    if (text) out.push(kotlinSource(f.rel, text));
   }
   return out;
 }
