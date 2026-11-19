@@ -1,9 +1,11 @@
 import { type NamedColor, palette } from "../scan/palette.js";
+import { namedScales, withScales } from "../scan/scales.js";
 import { appFirst } from "../scan/targets.js";
 import { numbersByFrequency } from "../scan/tokens.js";
 import { typeScale } from "../scan/type-scale.js";
 import type { DesignTokens } from "../scan/types.js";
 import type { ScanContext } from "./plugin.js";
+import { swiftScaleCandidates } from "./swift-scales.js";
 import { swiftColors } from "./swiftui-colors.js";
 import type { SwiftSource } from "./swiftui-sources.js";
 import { swiftType } from "./swiftui-type.js";
@@ -27,5 +29,6 @@ export async function swiftuiTokens(ctx: ScanContext, all: SwiftSource[]): Promi
     ...typeScale(swiftType(sources)),
     spacing: numbersByFrequency(ui, SPACING),
     radii: numbersByFrequency(ui, RADIUS),
+    ...withScales(namedScales(swiftScaleCandidates(sources))),
   };
 }

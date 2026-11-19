@@ -6,7 +6,7 @@ import { CATEGORIES, type Category, type ComponentInfo, firstLines } from "../ca
 import { type Preview, previewDocument } from "../previews/previews.js";
 import { plural } from "../scan/counting.js";
 import { weightLabel } from "../scan/type-scale.js";
-import { FRAMEWORK_NAMES, type FrameworkScan, type ScanResult } from "../scan/types.js";
+import { FRAMEWORK_NAMES, type FrameworkScan, type ScaleStep, type ScanResult } from "../scan/types.js";
 import { CATALOG_CSS, CATALOG_SCRIPT } from "./catalog-style.js";
 import { cssFontFamily, isHexColor } from "./css-values.js";
 import { dimensionKey, keyedColors, keyedStyles } from "./token-names.js";
@@ -94,21 +94,42 @@ function typeSection(f: FrameworkScan): string {
   return `<h3>Text styles (${styles.length})</h3>${fonts}<div class="styles">${rows.join("")}</div>`;
 }
 
+/** A value to draw, and its label: a named step's reference and uses, or a bare value's key. */
+interface Drawn {
+  value: number;
+  label: string;
+}
+
+/** The scales the code names, drawn with each step's reference; without one, every value the code writes. A named
+ * scale is followed by the values written in place, listed but not drawn. */
 function scaleSection(f: FrameworkScan): string {
-  const spacing = [...f.tokens.spacing].sort((a, b) => a - b);
-  const radii = [...f.tokens.radii].sort((a, b) => a - b);
-  const widest = Math.max(1, ...spacing);
+  const named = (steps: ScaleStep[] = []): Drawn[] =>
+    steps.map((s) => ({ value: s.value, label: `${s.reference} · ${s.value} · ${plural(s.uses, "use")}` }));
+  const bare = (values: number[], prefix: string): Drawn[] =>
+    [...values].sort((a, b) => a - b).map((v) => ({ value: v, label: `${dimensionKey(prefix, v)} · ${v}` }));
+  const scales = f.tokens.scales;
+  const spacing = scales?.spacing.length ? named(scales.spacing) : bare(f.tokens.spacing, "space");
+  const radii = scales?.radii.length ? named(scales.radii) : bare(f.tokens.radii, "radius");
+  const widest = Math.max(1, ...spacing.map((d) => d.value));
   const bars = spacing.map(
-    (v) =>
-      `<div><span class="bar" style="width:${Math.max(2, (v / widest) * MAX_BAR)}px"></span>${escapeHtml(dimensionKey("space", v))} · ${v}</div>`,
+    (d) =>
+      `<div><span class="bar" style="width:${Math.max(2, (d.value / widest) * MAX_BAR)}px"></span>${escapeHtml(d.label)}</div>`,
   );
   const corners = radii.map(
-    (v) =>
-      `<div><span style="border-radius:${Math.min(v, MAX_DRAWN_RADIUS)}px"></span>${escapeHtml(dimensionKey("radius", v))} · ${v}</div>`,
+    (d) =>
+      `<div><span style="border-radius:${Math.min(d.value, MAX_DRAWN_RADIUS)}px"></span>${escapeHtml(d.label)}</div>`,
   );
+  const inPlace = (values: number[]) =>
+    values.length
+      ? `<p class="sub">Written in place: ${escapeHtml([...values].sort((a, b) => a - b).join(", "))}</p>`
+      : "";
   return [
-    bars.length ? `<h3>Spacing the code uses</h3><div class="scale">${bars.join("")}</div>` : "",
-    corners.length ? `<h3>Corner radii the code uses</h3><div class="radii">${corners.join("")}</div>` : "",
+    bars.length
+      ? `<h3>${scales?.spacing.length ? "Spacing scale" : "Spacing the code uses"}</h3><div class="scale">${bars.join("")}</div>${scales?.spacing.length ? inPlace(f.tokens.spacing) : ""}`
+      : "",
+    corners.length
+      ? `<h3>${scales?.radii.length ? "Corner radius scale" : "Corner radii the code uses"}</h3><div class="radii">${corners.join("")}</div>${scales?.radii.length ? inPlace(f.tokens.radii) : ""}`
+      : "",
   ].join("");
 }
 

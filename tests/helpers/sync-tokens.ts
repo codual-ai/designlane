@@ -11,6 +11,7 @@ import {
 import {
   readTokensFile,
   type SyncColor,
+  type SyncDimension,
   type SyncTokens,
   type TextValue,
 } from "../../src/sync/tokens-file.js";
@@ -40,13 +41,35 @@ export async function tokensOf(files: Record<string, string>): Promise<SyncToken
   return readTokensFile(JSON.parse(JSON.stringify(toDesignTokens(await scanRepo(await tempDir(files))))));
 }
 
-export const tokens = (parts: Partial<SyncTokens>): SyncTokens => ({
+/** Spacing and radii given as bare values are an older file's, known by the value; a step is given as itself. */
+type Dimensions = (number | SyncDimension)[];
+const asDimensions = (kind: "spacing" | "radius", values: Dimensions = []): SyncDimension[] =>
+  values.map((v) =>
+    typeof v === "number" ? { identity: `${kind}:${v}`, key: `${kind}-${v}`, value: v } : v,
+  );
+
+export const tokens = ({
+  spacing,
+  radii,
+  ...parts
+}: Partial<Omit<SyncTokens, "spacing" | "radii">> & {
+  spacing?: Dimensions;
+  radii?: Dimensions;
+}): SyncTokens => ({
   colors: [],
   textStyles: [],
-  spacing: [],
-  radii: [],
   complete: true,
   ...parts,
+  spacing: asDimensions("spacing", spacing),
+  radii: asDimensions("radius", radii),
+});
+
+/** A step of a scale the code names: `step("spacing", "WMFSpacing.large", 16)`. */
+export const step = (kind: "spacing" | "radius", reference: string, value: number): SyncDimension => ({
+  identity: `${kind}:${reference}`,
+  key: reference.split(".").at(-1) ?? reference,
+  value,
+  reference,
 });
 export const color = (identity: string, hex: string, extra: Partial<SyncColor> = {}): SyncColor => ({
   identity,

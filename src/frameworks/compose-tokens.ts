@@ -2,12 +2,14 @@
 
 import { byNumber, mostCommon } from "../scan/counting.js";
 import { palette } from "../scan/palette.js";
+import { namedScales, withScales } from "../scan/scales.js";
 import { appFirst } from "../scan/targets.js";
 import { typeScale } from "../scan/type-scale.js";
 import type { DesignTokens } from "../scan/types.js";
 import { RESOURCE_FILE, resourceColors } from "./android-resources.js";
 import { textAppearances } from "./android-text-appearances.js";
 import { composeColors } from "./compose-colors.js";
+import { composeScaleCandidates } from "./compose-scales.js";
 import { composeType } from "./compose-type.js";
 import { callArguments, Spans } from "./kotlin-calls.js";
 import type { KotlinSource } from "./kotlin-sources.js";
@@ -68,5 +70,6 @@ export async function composeTokens(ctx: ScanContext, all: KotlinSource[]): Prom
     fonts,
     spacing: dpInCalls(ui, SPACING_CALL),
     radii: dpInCalls(ui, RADIUS_CALL),
+    ...withScales(namedScales(composeScaleCandidates(sources))),
   };
 }

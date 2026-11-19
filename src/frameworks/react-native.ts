@@ -1,12 +1,14 @@
 import path from "node:path";
 import { byNumber, mostCommon } from "../scan/counting.js";
 import { palette } from "../scan/palette.js";
+import { namedScales, withScales } from "../scan/scales.js";
 import { appFirst } from "../scan/targets.js";
 import { typeScale } from "../scan/type-scale.js";
 import { type JsSource, jsSources } from "./js-sources.js";
 import type { FrameworkPlugin, ScanContext } from "./plugin.js";
 import { rnColors } from "./rn-colors.js";
 import { namedFontSizes } from "./rn-font-sizes.js";
+import { rnScaleCandidates } from "./rn-scales.js";
 import { rnType } from "./rn-type.js";
 import { rnViews } from "./rn-views.js";
 import { tailwindColors } from "./tailwind-colors.js";
@@ -148,6 +150,7 @@ export const reactNative: FrameworkPlugin = {
         fonts: scale.fonts,
         spacing: ranked([...type.spacing, ...classes.spacing]),
         radii: ranked([...type.radii, ...classes.radii]),
+        ...withScales(namedScales(rnScaleCandidates(sources))),
       },
     };
   },
