@@ -155,13 +155,13 @@ export interface ColorTheme {
   colors: ColorToken[];
 }
 
-/** A spacing or corner radius the code names as one step of a scale: `WMFSpacing.large`, `spacing.md`. */
+/** A spacing or corner radius the code names as one step of a scale: `AppSpacing.large`, `spacing.md`. */
 export interface ScaleStep {
   /** Its name in the scale: `large`, `md`. */
   name: string;
   /** In points (dp on Android). */
   value: number;
-  /** How the code refers to it, which a sync knows it by: `WMFSpacing.large`, `theme.spacing.md`. */
+  /** How the code refers to it, which a sync knows it by: `AppSpacing.large`, `theme.spacing.md`. */
   reference: string;
   /** The file it's declared in. */
   source: string;

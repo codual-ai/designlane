@@ -64,7 +64,7 @@ export const tokens = ({
   radii: asDimensions("radius", radii),
 });
 
-/** A step of a scale the code names: `step("spacing", "WMFSpacing.large", 16)`. */
+/** A step of a scale the code names: `step("spacing", "AppSpacing.large", 16)`. */
 export const step = (kind: "spacing" | "radius", reference: string, value: number): SyncDimension => ({
   identity: `${kind}:${reference}`,
   key: reference.split(".").at(-1) ?? reference,

@@ -97,7 +97,7 @@ system as swatches and type samples.
 | Colours | Every colour the code names, from asset catalogs, theme objects, colour resources and Tailwind, as Figma variables |
 | Light and dark | A colour's light and dark values as one variable with two modes |
 | Text styles | The app's type scale and named styles: family, size and weight, as Figma text styles |
-| Spacing and corner radii | The scales the code names (`WMFSpacing.large`, `spacing.md`), as Figma number variables for gaps and corners |
+| Spacing and corner radii | The scales the code names (`AppSpacing.large`, `spacing.md`), as Figma number variables for gaps and corners |
 | A plan you apply | What's new, what changed and what the code no longer uses, each with how the code refers to it |
 | Safe renames | A token renamed in the code, or a whole theme renamed, keeps its variable and every design using it |
 | Several themes | An app whose users pick a theme gets a Figma collection for each, with Light and Dark modes |
@@ -213,7 +213,7 @@ as long; `readApp` takes as long as a scan. Every result has a zod schema export
 
 The design system is what the code names: a colour declared with a name (`Theme.surface`, an asset, a colour
 resource), a text style the code defines (a typography style, the app's own font helper), and a spacing or corner
-radius scale (`enum WMFSpacing { static let large: CGFloat = 16 }`, `object Radii { val card = 12.dp }`,
+radius scale (`enum AppSpacing { static let large: CGFloat = 16 }`, `object Radii { val card = 12.dp }`,
 `export const spacing = { md: 12 }`). Values written in place in a screen's layout (`.padding(16)`) are listed in
 `DESIGN.md`, so editing a screen doesn't change your design system.
 

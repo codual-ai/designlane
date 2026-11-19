@@ -1,6 +1,6 @@
 /**
  * Reads a tokens.json that Designlane wrote into the tokens a sync works with. Each token's identity is how the code
- * refers to it (`Theme.surface`, `WMFSpacing.large`), so a sync finds it again whatever it's called in the design file.
+ * refers to it (`Theme.surface`, `AppSpacing.large`), so a sync finds it again whatever it's called in the design file.
  * Designlane writes only what the code names; a file written before it did may hold values known by the value itself
  * (an inline `#ff0000`, a spacing of 8), which sync as before until the next run drops them.
  */

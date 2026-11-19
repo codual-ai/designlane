@@ -1,7 +1,7 @@
 /**
  * Spacing and corner radius scales declared in Swift: numbers a type of that name declares as its own,
- * `enum WMFSpacing { static let large: CGFloat = 16 }`, at the top level or inside the app's theme
- * (`enum Theme { enum Spacing { … } }`). One nested in a screen's or feature's own type (`UX.Onboarding.Spacing`) is
+ * `enum AppSpacing { static let large: CGFloat = 16 }`, at the top level or inside the app's theme
+ * (`enum Theme { enum Spacing { … } }`). One nested in a screen's or feature's own type (`Onboarding.Spacing`) is
  * that screen's constants, and `CGFloat` members (`extension CGFloat { static let margin = 16 }`) are left out too:
  * apps declare those for one view as often as for the whole app.
  */
@@ -103,7 +103,7 @@ function* declarations(tokens: Token[]): Generator<Declared> {
   }
 }
 
-/** Counts each step's uses by name in every file: `WMFSpacing.large`. */
+/** Counts each step's uses by name in every file: `AppSpacing.large`. */
 function countUses(found: ScaleCandidate[], sources: SwiftSource[]): void {
   if (found.length === 0) return;
   const byReference = indexBy(found, (c) => [c.step.reference]);

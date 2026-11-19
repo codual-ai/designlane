@@ -1,5 +1,5 @@
 /**
- * The spacing and corner radius scales an app's code names (`enum WMFSpacing { static let large: CGFloat = 16 }`,
+ * The spacing and corner radius scales an app's code names (`enum AppSpacing { static let large: CGFloat = 16 }`,
  * `export const spacing = { md: 12 }`), which every framework's reader finds as candidates and this file keeps or
  * drops by one set of rules. Values written in place (`.padding(16)`) never make a scale: they change whenever a
  * screen's layout does, so they stay in DESIGN.md.
@@ -12,13 +12,13 @@ export type ScaleKind = "spacing" | "radius";
 /** One step a reader found, and the files using it by name with how many times each. */
 export interface ScaleCandidate {
   kind: ScaleKind;
-  /** The scale it belongs to (`WMFSpacing`, `theme.spacing`): steps are kept or dropped a whole scale at a time. */
+  /** The scale it belongs to (`AppSpacing`, `theme.spacing`): steps are kept or dropped a whole scale at a time. */
   scale: string;
   step: Omit<ScaleStep, "uses">;
   usedIn: Map<string, number>;
 }
 
-/** A name holding a corner radius scale: `CornerRadius`, `WMFCornerRadius`, `radii`, `borderRadius`, `Corners`. */
+/** A name holding a corner radius scale: `CornerRadius`, `AppCornerRadius`, `radii`, `borderRadius`, `Corners`. */
 const RADIUS_NAME = /(?:radius|radii|radiuses|corners?|rounded|rounding)$/i;
 /** A name holding a spacing scale: `Spacing`, `AppSpacing`, `space`, `Padding`, `Insets`, `Margins`, `Gaps`. */
 const SPACING_NAME = /(?:spacings?|spaces?|paddings?|insets?|margins?|gaps?|gutters?)$/i;
@@ -100,7 +100,7 @@ export function countUse(usedIn: Map<string, number>, file: string): void {
  * and looking further would make a long chain (`a.b.c…`, thousands long) cost its length squared. */
 const MAX_CHAIN_PARTS = 6;
 
-/** A chain of names, `WMFSpacing.large` or `LocalSpacing.current.medium`, not one continuing another (`a.b`'s `b`). */
+/** A chain of names, `AppSpacing.large` or `LocalSpacing.current.medium`, not one continuing another (`a.b`'s `b`). */
 const CHAIN = /(?<![\w$.])[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/g;
 
 /**

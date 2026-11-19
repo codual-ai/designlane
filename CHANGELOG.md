@@ -14,7 +14,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   `findFrameworks(root)` tells an app's frameworks from file names and manifests alone. Offline and deterministic,
   with a zod schema for every result, and none of the command line, MCP server or Figma sync loaded.
 - Spacing and corner radius scales the code names sync to Figma as number variables, scoped to gaps and to corners:
-  a Swift type of that name (`enum WMFSpacing`, `Theme.CornerRadius`), a Kotlin object or data class
+  a Swift type of that name (`enum AppSpacing`, `Theme.CornerRadius`), a Kotlin object or data class
   (`object Radii { val card = 12.dp }`, `LocalSpacing.current.medium`), or an exported JavaScript object
   (`export const space = { "8px": 8 }`, `theme.radii.card`). Each step in tokens.json records how the code refers to
   it, its uses and where its value is written, so a changed value updates its variable and a renamed step keeps it.

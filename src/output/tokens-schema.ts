@@ -60,7 +60,7 @@ export const ColorTokenEntry = z.object({
 
 const DimensionToken = z.object({ $type: z.literal("dimension"), $value: Dimension });
 
-/** A step of a spacing or radius scale the code names (`WMFSpacing.large`): how the code refers to it, which a sync
+/** A step of a spacing or radius scale the code names (`AppSpacing.large`): how the code refers to it, which a sync
  * knows it by, and where its value is written. Files written before scales were named hold bare values instead. */
 export const ScaleTokenEntry = DimensionToken.extend({
   $description: z.string().optional(),
