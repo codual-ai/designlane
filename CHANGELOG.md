@@ -8,7 +8,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - A Swift colour given its opacity keeps it: `UIColor(0x000000, alpha: 0.05)` and `UIColor(hex: "#3366CC", alpha: 0.3)`
-  were read as opaque, and so was a colour with `.withAlphaComponent(0.7)` or `.opacity(0.5)` after it. Wikipedia's
+  were read as opaque, and so was a colour with `.withAlphaComponent(0.7)` (which sets the opacity) or `.opacity(0.5)` (which multiplies it) after it. A colour whose opacity is an expression (`alpha: 0.5 * fade`) is left out, not read as opaque. Wikipedia's
   iOS app has 15 such colours. A colour with opacity chained after it records no place its value is written, so an edit
   refuses it rather than changing the colour without its opacity.
 

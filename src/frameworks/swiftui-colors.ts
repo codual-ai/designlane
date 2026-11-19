@@ -15,7 +15,10 @@ const NUMBER = String.raw`(\d+(?:\.\d+)?)`;
 const CHANNEL = String.raw`${NUMBER}(?:\s*\/\s*(255)(?:\.0)?)?`;
 const NEXT = String.raw`\s*,\s*`;
 const labelled = (label: string, value: string) => String.raw`${label}:\s*${value}`;
-const ALPHA = `(?:${NEXT}${labelled("(?:opacity|alpha)", NUMBER)})?`;
+/** An opacity argument written as a number, which ends there (`alpha: 0.5`, not `alpha: 0.5 * fade`). */
+const ALPHA = `(?:${NEXT}${labelled("(?:opacity|alpha)", NUMBER)}(?=\\s*[,)]))?`;
+/** An opacity argument the call still has after what a pattern read: one written as an expression. */
+const OPACITY_LEFT = /\b(?:opacity|alpha)\s*:/;
 const pattern = (...parts: string[]) => new RegExp(parts.join(""), "g");
 
 /** `Color(red: …)`, its UIKit and AppKit forms, `UIColor(displayP3Red: …)`, `#colorLiteral(…)` and `.init(red: …)`. */
@@ -45,7 +48,7 @@ const HEX_TEXT = pattern(COLOR_CALL, String.raw`(?:hex:\s*"#?|"#)([0-9A-Fa-f]{3,
 /** `Color(hex: 0x3366E6)` or `UIColor(0x3366E6, alpha: 0.3)`. */
 const HEX_NUMBER = pattern(COLOR_CALL, String.raw`(?:hex:\s*)?0x([0-9A-Fa-f]{6,8})\b`, ALPHA);
 /** Opacity applied to a colour just made: `UIColor(0x3366CC).withAlphaComponent(0.7)`, `Color(…).opacity(0.5)`. */
-const CHAINED_ALPHA = /^\s*\.(?:withAlphaComponent|opacity)\(\s*(\d+(?:\.\d+)?)\s*\)/;
+const CHAINED_ALPHA = /\s*\.(withAlphaComponent|opacity)\(\s*(\d+(?:\.\d+)?)\s*\)/y;
 /** A hex helper that takes opacity from the top byte (`a = (argb & 0xFF000000) >> 24`, `(a, r, g, b) = …`) means the
  * app writes eight hex digits opacity first, as on Android; otherwise they're read opacity last, as in CSS. */
 const OPACITY_FIRST =
@@ -226,26 +229,32 @@ function* literals(source: SwiftSource, opacityFirst: boolean) {
   };
   // Opacity chained after the call is part of the colour; its span is only the call's, so it has none: an edit there
   // would change the colour without its opacity.
-  const found = (hex: string, m: RegExpMatchArray) => {
+  // A colour whose opacity is an expression isn't read: its value is worked out as the app runs.
+  function* found(hex: string, m: RegExpMatchArray) {
     const place = at(m);
-    const chained = place.end === undefined ? undefined : CHAINED_ALPHA.exec(source.text.slice(place.end));
-    if (!chained) return { hex, ...place };
+    if (place.end !== undefined && OPACITY_LEFT.test(source.text.slice(place.start + m[0].length, place.end)))
+      return;
+    const chain = place.end === undefined ? undefined : chainedOpacity(hex, source.text, place.end);
+    if (!chain) {
+      yield { hex, ...place };
+      return;
+    }
     const { end: _, ...withoutEnd } = place;
-    return { hex: withOpacity(hex, Number(chained[1])), ...withoutEnd };
-  };
+    yield { hex: chain, ...withoutEnd };
+  }
   const channel = (value?: string, per255?: string) => Number(value ?? 0) / (per255 ? 255 : 1);
   const alpha = (value?: string) => (value === undefined ? 1 : Number(value));
   for (const m of matchesInCode(source, RGB)) {
     const [r, g, b] = [channel(m[1], m[2]), channel(m[3], m[4]), channel(m[5], m[6])];
-    yield found(rgbToHex(r, g, b, alpha(m[7])), m);
+    yield* found(rgbToHex(r, g, b, alpha(m[7])), m);
   }
   for (const m of matchesInCode(source, WHITE)) {
     const white = Number(m[1]);
-    yield found(rgbToHex(white, white, white, alpha(m[2])), m);
+    yield* found(rgbToHex(white, white, white, alpha(m[2])), m);
   }
   for (const m of matchesInCode(source, HSB)) {
     const [r, g, b] = hsbToRgb(Number(m[1]), Number(m[2]), Number(m[3]));
-    yield found(rgbToHex(r, g, b, alpha(m[4])), m);
+    yield* found(rgbToHex(r, g, b, alpha(m[4])), m);
   }
   // The app's own helper decides the order of eight hex digits, text or number alike.
   const ordered = (digits: string) =>
@@ -253,9 +262,28 @@ function* literals(source: SwiftSource, opacityFirst: boolean) {
   for (const hexPattern of [HEX_TEXT, HEX_NUMBER]) {
     for (const m of matchesInCode(source, hexPattern)) {
       const hex = normalizeHex(ordered(m[1] ?? ""));
-      if (hex) yield found(m[2] === undefined ? hex : withOpacity(hex, Number(m[2])), m);
+      if (hex) yield* found(m[2] === undefined ? hex : withOpacity(hex, Number(m[2])), m);
     }
   }
+}
+
+/**
+ * `hex` with the opacity calls chained after its colour at `from` applied in order: `.withAlphaComponent(0.7)` sets the
+ * opacity and `.opacity(0.5)` multiplies it, as UIKit and SwiftUI do. Undefined when nothing is chained.
+ */
+function chainedOpacity(hex: string, text: string, from: number): string | undefined {
+  let value: string | undefined;
+  CHAINED_ALPHA.lastIndex = from;
+  // Sticky, so each call is read where the last one ended, without copying the rest of the file.
+  for (let call = CHAINED_ALPHA.exec(text); call; call = CHAINED_ALPHA.exec(text)) {
+    const before = value ?? hex;
+    const opacity = Number(call[2]);
+    value =
+      call[1] === "withAlphaComponent"
+        ? withOpacity(before.slice(0, 7), opacity)
+        : withOpacity(before, opacity);
+  }
+  return value;
 }
 
 /** `hex` with its opacity multiplied by `opacity` (0–1): `#3366cc` at 0.3 is `#3366cc4d`. */

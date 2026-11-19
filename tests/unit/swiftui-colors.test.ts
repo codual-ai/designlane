@@ -26,6 +26,9 @@ describe("colour values", () => {
         "  static let match = UIColor(0xFFFFFF).withAlphaComponent(0.7)",
         "  static let glass = Color(hex: 0x3366CC80).opacity(0.5)",
         "  static let solid = UIColor(0x3366CC)",
+        "  static let replaced = UIColor(red: 1, green: 0, blue: 0, alpha: 0.2).withAlphaComponent(0.5)",
+        "  static let twice = Color(hex: 0x3366CC).opacity(0.5).opacity(0.5)",
+        '  static let computed = UIColor(hex: "#3366CC", alpha: 0.5 * fade)',
         "}",
       ].join("\n"),
     );
@@ -35,6 +38,10 @@ describe("colour values", () => {
     expect(byName.match?.light).toBe("#ffffffb3");
     expect(byName.glass?.light).toBe("#3366cc40");
     expect(byName.solid?.light).toBe("#3366cc");
+    expect(byName.replaced?.light).toBe("#ff000080");
+    expect(byName.twice?.light).toBe("#3366cc40");
+    // An opacity worked out as the app runs isn't a value to sync.
+    expect(byName.computed).toBeUndefined();
     // An argument is part of the call an edit rewrites; opacity chained after it isn't, so that colour has no span.
     expect(byName.border?.locations?.light).toMatchObject({ kind: "expression" });
     expect(byName.match?.locations).toBeUndefined();
