@@ -17,6 +17,29 @@ async function tokens(code: string, extra: Record<string, string> = {}) {
 }
 
 describe("colour values", () => {
+  it("keeps the opacity a hex colour is given, as an argument or chained after it", async () => {
+    const { colors } = await tokens(
+      [
+        "enum Palette {",
+        "  static let border = UIColor(0x000000, alpha: 0.05)",
+        '  static let tint = UIColor(hex: "#3366CC", alpha: 0.3)',
+        "  static let match = UIColor(0xFFFFFF).withAlphaComponent(0.7)",
+        "  static let glass = Color(hex: 0x3366CC80).opacity(0.5)",
+        "  static let solid = UIColor(0x3366CC)",
+        "}",
+      ].join("\n"),
+    );
+    const byName = Object.fromEntries(colors.map((c) => [c.name, c]));
+    expect(byName.border?.light).toBe("#0000000d");
+    expect(byName.tint?.light).toBe("#3366cc4d");
+    expect(byName.match?.light).toBe("#ffffffb3");
+    expect(byName.glass?.light).toBe("#3366cc40");
+    expect(byName.solid?.light).toBe("#3366cc");
+    // An argument is part of the call an edit rewrites; opacity chained after it isn't, so that colour has no span.
+    expect(byName.border?.locations?.light).toMatchObject({ kind: "expression" });
+    expect(byName.match?.locations).toBeUndefined();
+  });
+
   it("collects colours pasted inline, most used first", async () => {
     const { colors } = await tokens(
       [

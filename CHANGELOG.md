@@ -3,6 +3,15 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- A Swift colour given its opacity keeps it: `UIColor(0x000000, alpha: 0.05)` and `UIColor(hex: "#3366CC", alpha: 0.3)`
+  were read as opaque, and so was a colour with `.withAlphaComponent(0.7)` or `.opacity(0.5)` after it. Wikipedia's
+  iOS app has 15 such colours. A colour with opacity chained after it records no place its value is written, so an edit
+  refuses it rather than changing the colour without its opacity.
+
 ## 0.3.1 - 2026-11-16
 
 ### Fixed

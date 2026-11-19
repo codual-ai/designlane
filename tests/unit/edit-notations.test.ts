@@ -55,6 +55,14 @@ describe("a colour written as hex digits", () => {
     );
   });
 
+  it("keeps a hex number's opacity argument as it is", async () => {
+    const code = "static let tint = UIColor(0x3366CC, alpha: 0.3)";
+    const call = expression("UIColor(0x3366CC, alpha: 0.3)");
+    expect(await recolored("Theme.swift", code, call, "#3366cc4d", "#de2413")).toBe(
+      "UIColor(0xDE2413, alpha: 0.3)",
+    );
+  });
+
   it("reads eight digits in a Swift helper the way that gives the value tokens.json has", async () => {
     const code = "static let brand = Color(hex: 0x11223380)";
     const call = expression("Color(hex: 0x11223380)");
