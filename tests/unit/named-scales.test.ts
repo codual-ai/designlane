@@ -13,7 +13,7 @@ const SWIFT_SPACING = [
   "public enum AppSpacing {",
   "    public static let small: CGFloat = 8",
   "    public static let large: CGFloat = 16",
-  "    public static let buttonHeight: CGFloat = 44",
+  "    public static let rowHeight: CGFloat = 44",
   "}",
   "",
 ].join("\n");
@@ -115,18 +115,18 @@ describe("named spacing and radius scales", () => {
     const { scales: found } = await scales("react-native", {
       "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
       "src/theme.ts": [
-        "export const space = { '4px': 4, '8px': 8, '15px (Deprecated)': 15 } as const;",
+        "export const space = { sm: 4, '2xl': 8, 'lg (Deprecated)': 15 } as const;",
         "export const theme = { radii: { card: 12, pill: 999 } };",
         "const local = { spacing: { a: 1, b: 2 } };",
       ].join("\n"),
       "src/Card.tsx": [
         'import { View } from "react-native";',
-        'export const Card = () => <Box padding="8px" style={{ borderRadius: theme.radii.card, margin: space["4px"] }} />;',
+        'export const Card = () => <Box padding="2xl" style={{ borderRadius: theme.radii.card, margin: space.sm }} />;',
       ].join("\n"),
     });
     expect(found?.spacing.map((s) => [s.reference, s.uses])).toEqual([
-      ['space["4px"]', 1],
-      ['space["8px"]', 1],
+      ["space.sm", 1],
+      ['space["2xl"]', 1],
     ]);
     expect(found?.radii.map((s) => [s.reference, s.uses])).toEqual([
       ["theme.radii.card", 1],

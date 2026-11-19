@@ -2,7 +2,7 @@
  * Spacing and corner radius scales declared in JavaScript: an object of numbers named for one, exported from a file
  * (`export const spacing = { sm: 8, md: 12 }`), since one a file keeps to itself is that file's own constants, or
  * inside a theme object exported there
- * (`const theme = { radii: { card: 12 } }`), reached by name: `spacing.md`, `theme.radii.card`, `space["16px"]`.
+ * (`const theme = { radii: { card: 12 } }`), reached by name: `spacing.md`, `theme.radii.card`, `space["2xl"]`.
  */
 
 import ts from "typescript";
@@ -99,7 +99,7 @@ function numberOf(node: ts.Expression): number | undefined {
   return ts.isNumericLiteral(node) ? Number(node.text) : undefined;
 }
 
-/** A component prop taking a spacing step by its name (`<Box padding="16px">`, `gap="md"`), or a radius one
+/** A component prop taking a spacing step by its name (`<Box padding="lg">`, `gap="md"`), or a radius one
  * (`borderRadius="card"`), as design-system components built on a scale take them. */
 const SPACING_PROP = /^(?:padding|margin|gap|space|spacing|inset)\w*$/i;
 const RADIUS_PROP = /^(?:borderRadius|radius|rounded|cornerRadius)\w*$/i;
@@ -107,7 +107,7 @@ const RADIUS_PROP = /^(?:borderRadius|radius|rounded|cornerRadius)\w*$/i;
 /**
  * Counts each step's uses: an access whose path ends with the step's own (`spacing.md` is used by `theme.spacing.md`
  * and `t.spacing.md`, since a theme is often reached through a hook), each access counted once, at its full path; and
- * a component prop naming a step of its kind (`padding="16px"`).
+ * a component prop naming a step of its kind (`padding="lg"`).
  */
 function countUses(found: ScaleCandidate[], sources: JsSource[]): void {
   if (found.length === 0) return;
@@ -154,7 +154,7 @@ function owners(
   return candidates.filter((c) => path === c.step.reference || path.endsWith(`.${c.step.reference}`));
 }
 
-/** `spacing|16px` for `padding="16px"`, `radius|card` for `borderRadius={"card"}`: the kind of step a prop takes and
+/** `spacing|lg` for `padding="lg"`, `radius|card` for `borderRadius={"card"}`: the kind of step a prop takes and
  * the step it names, or none for any other prop. */
 function propOf(node: ts.JsxAttribute): string | undefined {
   const name = ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -167,7 +167,7 @@ function propOf(node: ts.JsxAttribute): string | undefined {
     : undefined;
 }
 
-/** The name an access reaches: `md` in `spacing.md`, `16px` in `space["16px"]`. */
+/** The name an access reaches: `md` in `spacing.md`, `2xl` in `space["2xl"]`. */
 function stepName(node: ts.PropertyAccessExpression | ts.ElementAccessExpression): string | undefined {
   if (ts.isPropertyAccessExpression(node)) return ts.isIdentifier(node.name) ? node.name.text : undefined;
   const key = unwrapped(node.argumentExpression);

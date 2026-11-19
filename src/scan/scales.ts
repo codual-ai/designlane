@@ -27,17 +27,17 @@ const NOT_A_SCALE = /(?:namespace|workspace|colou?rspace|keyspace|whitespace)$/i
 
 /** The kind of scale a container's name holds, `CornerRadius` a radius one and `Spacing` a spacing one, or none. */
 export function scaleKindOf(name: string): ScaleKind | undefined {
-  // `HOME_PADDING` is one screen's constant, not a scale a design system names.
+  // `CARD_PADDING` is one screen's constant, not a scale a design system names.
   if (NOT_A_SCALE.test(name) || name.includes("_")) return undefined;
   if (RADIUS_NAME.test(name)) return "radius";
   if (SPACING_NAME.test(name)) return "spacing";
   return undefined;
 }
 
-/** A step's name that says the code no longer wants it used: `'15px (Deprecated)'`, `legacyLarge`. */
+/** A step's name that says the code no longer wants it used: `'lg (Deprecated)'`, `legacyLarge`. */
 const RETIRED = /deprecated|legacy|unused/i;
 
-/** A step's name that says it's a size, not a spacing or radius: `buttonHeight`, `cardShadowRadius`, `iconSize`. */
+/** A step's name that says it's a size, not a spacing or radius: `rowHeight`, `shadowRadius`, `iconSize`. */
 const NOT_A_STEP = /height|width|size|shadow|blur|offset|opacity|alpha|duration|scale|line|border(?!radius)/i;
 
 /** Fewer steps than this is a pair of constants, not a scale. */
@@ -46,7 +46,7 @@ const MIN_STEPS = 2;
 /**
  * The scales among `candidates`, each smallest first. A scale is kept when it has at least two steps and code outside
  * the file declaring it uses one of them by name: that's what tells a design system's scale from one screen's own
- * constants (`struct UX { static let padding = 16 }` inside a view). A step the code marks deprecated is left out.
+ * constants (`struct CardLayout { static let padding = 16 }` inside a view). A step the code marks deprecated is left out.
  */
 export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefined {
   const byScale = new Map<string, ScaleCandidate[]>();

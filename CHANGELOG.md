@@ -16,9 +16,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Spacing and corner radius scales the code names sync to Figma as number variables, scoped to gaps and to corners:
   a Swift type of that name (`enum AppSpacing`, `Theme.CornerRadius`), a Kotlin object or data class
   (`object Radii { val card = 12.dp }`, `LocalSpacing.current.medium`), or an exported JavaScript object
-  (`export const space = { "8px": 8 }`, `theme.radii.card`). Each step in tokens.json records how the code refers to
+  (`export const space = { md: 8 }`, `theme.radii.card`). Each step in tokens.json records how the code refers to
   it, its uses and where its value is written, so a changed value updates its variable and a renamed step keeps it.
-  A scale needs two steps and a use outside its own file; steps marked deprecated, and sizes (`buttonHeight`), are left
+  A scale needs two steps and a use outside its own file; steps marked deprecated, and sizes (`rowHeight`), are left
   out. Values written in place stay in DESIGN.md only, as before. A Figma file an older version synced with bare spacing
   variables (`spacing/16`) has each renamed to the named step with its value.
 - DESIGN.md and catalog.html show the named scales with each step's reference and uses, then the values written in

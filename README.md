@@ -218,7 +218,7 @@ radius scale (`enum AppSpacing { static let large: CGFloat = 16 }`, `object Radi
 `DESIGN.md`, so editing a screen doesn't change your design system.
 
 A scale counts when it has two or more steps and code outside its own file uses one by name: a screen's own constants
-(an enum nested in a view, `private` members, `buttonHeight`) aren't the app's scale.
+(an enum nested in a view, `private` members, `rowHeight`) aren't the app's scale.
 
 - **SwiftUI:** asset catalog colours, colours declared in code, the app's own font helpers and text styles.
 - **Jetpack Compose:** the Material colour scheme (each role with its Light and Dark value), the type scale and named
