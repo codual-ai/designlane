@@ -62,4 +62,7 @@ export interface FrameworkPlugin {
   id: FrameworkId;
   platforms: Platform[];
   scan(ctx: ScanContext): Promise<FrameworkFindings | undefined>;
+  /** Only the design tokens the files declare, read without deciding whether the project uses the framework: for
+   * reading a few changed files again. */
+  tokens(ctx: ScanContext): Promise<DesignTokens>;
 }

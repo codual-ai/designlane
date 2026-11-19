@@ -114,7 +114,7 @@ const isSystem = (name: string) => SWIFTUI_SYSTEM.has(name) || UIKIT_SYSTEM.test
 
 /** Every colour the Swift code defines, names, pastes inline or takes from the platform. */
 export function swiftColors(sources: SwiftSource[], assets: NamedColor[]): ColorFindings {
-  const opacityFirst = sources.some((s) => OPACITY_FIRST.test(s.code));
+  const opacityFirst = opacityFirstIn(sources);
   const found: ColorFindings = { named: [...assets], references: [], literals: [], system: [] };
   // Colours declared on a type (`static let red`), which take over the platform colour of the same name, and the
   // type each is declared on, so `Theme.surface` counts as a use of `surface`.
@@ -216,15 +216,31 @@ function* colorNames(source: SwiftSource) {
   }
 }
 
+/** Whether the app's hex helper reads eight digits opacity first (see `OPACITY_FIRST`). */
+export const opacityFirstIn = (sources: SwiftSource[]) => sources.some((s) => OPACITY_FIRST.test(s.code));
+
+/** Where the call whose `(` is at `open` ends, just past its `)`, or undefined when it doesn't close. */
+export type CallEnd = (open: number) => number | undefined;
+
+/** `CallEnd` from the file's tokens, which every reader of it shares. */
+const tokenCallEnd =
+  (source: SwiftSource): CallEnd =>
+  (open) => {
+    const tokens = tokensOf(source);
+    return tokens.tokens[tokens.match[tokenIndexAt(tokens, open)] ?? -1]?.end;
+  };
+
 /** Colour values anywhere in the file, including calls split over lines, with the text just before each and where
- * the call ends, when it does. */
-function* literals(source: SwiftSource, opacityFirst: boolean) {
-  const tokens = tokensOf(source);
+ * the call ends (found by `callEnd`), when it does. */
+export function* literals(
+  source: SwiftSource,
+  opacityFirst: boolean,
+  callEnd: CallEnd = tokenCallEnd(source),
+) {
   const at = (m: RegExpMatchArray) => {
     const start = m.index ?? 0;
     const prefix = source.text.slice(Math.max(0, start - DECLARED_CHARS), start);
-    const close = tokens.match[tokenIndexAt(tokens, start + m[0].indexOf("("))] ?? -1;
-    const end = tokens.tokens[close]?.end;
+    const end = callEnd(start + m[0].indexOf("("));
     return { prefix, isInit: source.text.startsWith(".init", start), start, ...(end ? { end } : {}) };
   };
   // Opacity chained after the call is part of the colour; its span is only the call's, so it has none: an edit there

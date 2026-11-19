@@ -9,7 +9,7 @@ import { listFiles, readText, type SourceFile } from "./files.js";
 import { screenLinks } from "./screen-links.js";
 import type { FrameworkId, ScanResult, ScreenRef } from "./types.js";
 
-const frameworks: readonly FrameworkPlugin[] = [swiftui, compose, reactNative];
+export const frameworks: readonly FrameworkPlugin[] = [swiftui, compose, reactNative];
 
 export async function createContext(root: string): Promise<ScanContext> {
   const abs = path.resolve(root);
@@ -39,7 +39,11 @@ const withFiles = (ctx: ScanContext, keep: (rel: string) => boolean): ScanContex
 
 /** Finds every supported framework in the project, its screens (best first) and its design tokens. */
 export async function scanRepo(root: string): Promise<ScanResult> {
-  const ctx = await createContext(root);
+  return scanContext(await createContext(root));
+}
+
+/** `scanRepo` over files a context lists and reads, which may be in memory. */
+export async function scanContext(ctx: ScanContext): Promise<ScanResult> {
   const result: ScanResult = {
     root: ctx.root,
     frameworks: [],

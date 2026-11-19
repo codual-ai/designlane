@@ -170,6 +170,35 @@ colour is a named or computed one (`.white`, `Brand.copy(alpha = 0.5f)`), the we
 there), a value can't be copied in place of a name safely (it's in another file, or Swift's `.init(…)`), or a text
 style's value comes from a style it builds on. `--tokens` is read relative to `--dir`.
 
+## Use it as a library
+
+`designlane/read` answers questions about an app's code from your own tool, offline and with the same answer every
+time: no AI, no network, and none of the command line or the Figma sync is loaded.
+
+```ts
+import { readApp } from "designlane/read";
+
+const app = await readApp("path/to/app");
+app.tokensIn("Shop/Views/Card.swift");
+// { colors: [{ token: { key: "brand", reference: "Color.brand" }, value: "#3366e6", span: { file, line, start, end } }, …],
+//   typeStyles, fonts, spacing, radii }
+const variant = await app.withChanges({ "Shop/Theme.swift": newText }); // the app is left as it was
+variant.tokensIn("Shop/Views/Card.swift");
+```
+
+- `tokensIn(path, text?)` lists every colour, text style, font, spacing and corner radius one file uses, in the order
+  they're written: the named token each one is, if it is one, its value, and exactly where it's written. Colours are
+  lowercase `#rrggbb`, or `#rrggbbaa` when not fully opaque. Pass `text` to read a version of the file that isn't on
+  disk.
+- `withChanges(files)` gives a view of the app with some files changed (or `null` for deleted), reading only those
+  files again; a view that changes a theme names its tokens by the new theme. Views can be made from views.
+- `update(path, text)` changes the app itself, for a working tree being edited.
+- `findFrameworks(root)` says which frameworks an app is built with from its file names and manifests, before it's
+  read.
+
+Reading a file takes a few milliseconds (about 20 ms for a 2,000-line one) and a view of a few changed files about
+as long; `readApp` takes as long as a scan. Every result has a zod schema exported beside it.
+
 ## Supported
 
 | | Today | Next |

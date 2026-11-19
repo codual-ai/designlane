@@ -72,6 +72,7 @@ export const swiftui: FrameworkPlugin = {
     if (swiftUI.length === 0) return undefined;
     return { ...viewsIn(swiftUI, sources), tokens: await swiftuiTokens(ctx, sources) };
   },
+  tokens: async (ctx) => swiftuiTokens(ctx, await swiftSources(ctx)),
 };
 
 /** The views declared in the SwiftUI files, with how the app shows them (read from every Swift file), and the links
