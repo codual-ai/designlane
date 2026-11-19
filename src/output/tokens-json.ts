@@ -1,6 +1,6 @@
 /**
- * The scan's design system as W3C design tokens (DTCG 2025.10), which Figma, Tokens Studio and Style Dictionary
- * import: only what the code names (`Theme.surface`, a typography style, `AppSpacing.large`), since a value written
+ * The scan's design system as W3C design tokens (DTCG 2025.10), which most design-token tools can read: only what
+ * the code names (`Theme.surface`, a typography style, `AppSpacing.large`), since a value written
  * in place changes whenever a screen's layout does. DESIGN.md lists those values, and every spacing and radius the
  * code uses.
  */

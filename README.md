@@ -20,8 +20,8 @@ names it (`Theme.accent`).*
   with you. Bring your own coding agent only if you want to.
 
 > [!NOTE]
-> Designlane works with **Figma** today, with **Penpot** and **Sketch** next. It writes standard W3C design tokens,
-> which Tokens Studio and Style Dictionary already import.
+> Designlane works with **Figma** today, with **Penpot** and **Sketch** next. Tokens are written in the W3C design
+> tokens format, which most design-token tools can read.
 
 Designlane was called Designmap until 0.3.0: what it set up then keeps working (see the [changelog](CHANGELOG.md)).
 
@@ -207,7 +207,7 @@ as long; `readApp` takes as long as a scan. Every result has a zod schema export
 | **Code** | SwiftUI, Jetpack Compose, React Native | more to come |
 | **Design tools** | Figma | Penpot, Sketch |
 | **Direction** | code to design; design to code, from Figma as a pull request ([plugin](figma-plugin/README.md#changes-made-in-figma)) or with `designlane edit` | |
-| **Token formats** | W3C design tokens (Tokens Studio, Style Dictionary) | |
+| **Token formats** | W3C design tokens | |
 
 ## What it reads
 
