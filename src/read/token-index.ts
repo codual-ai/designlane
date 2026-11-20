@@ -9,7 +9,9 @@ import type { TokenRef, TypeValue } from "./schema.js";
 
 export type Named =
   | { kind: "color"; token: TokenRef; value: string; declared?: Declared }
-  | { kind: "typeStyle"; token: TokenRef; value: TypeValue; declared?: Declared };
+  | { kind: "typeStyle"; token: TokenRef; value: TypeValue; declared?: Declared }
+  /** A color or text style read from a theme declared outside the app, so its value isn't in the code. */
+  | { kind: "unresolved"; of: "color" | "typeStyle"; token: TokenRef };
 
 /** Where a token is declared, so its own declaration isn't counted as a use of it. */
 interface Declared {
@@ -31,6 +33,11 @@ export interface TokenIndex {
   /** Each token's key, by its group (colours of one theme, or text styles) and what it is, a line apart: for a view
    * to keep the keys its base gave. */
   keys: Map<string, string>;
+  /** Colors the app's themes declare, by their member's name: read through whichever theme the user picks (`theme.tintColor`,
+   * `colors.tintColor`), so through a variable of any name. */
+  themed: Map<string, Named[]>;
+  /** Theme objects the code reads from that are declared outside the app (`CompanyTheme`). */
+  outside: readonly string[];
 }
 
 /** A reference that's a call on a name, `colorResource(R.color.brand)`, by what it's called with. */
@@ -112,6 +119,7 @@ export function tokenIndex(
   framework: FrameworkId,
   platform: Platform,
   previous?: TokenIndex,
+  outside: readonly string[] = [],
 ): TokenIndex {
   const index: TokenIndex = {
     paths: new Map(),
@@ -120,15 +128,25 @@ export function tokenIndex(
     fonts: tokens.fonts,
     definitions: new Map(),
     keys: new Map(),
+    themed: new Map(),
+    outside,
   };
+  // A default color another theme declares too is the same member in each (`ColorSet.tintColor`), so which one the
+  // code reads depends on the theme the user picks.
+  const inThemes = new Set((tokens.themes ?? []).flatMap((t) => t.colors.flatMap((c) => c.reference ?? [])));
   const keyOf = keeper(index, previous);
   const colorRef = (color: ColorToken, theme: string | undefined, fresh: string): TokenRef => ({
     key: keyOf(`color|${theme ?? ""}`, color.reference ?? color.name, fresh),
     ...(theme && { theme }),
     ...(color.reference && { reference: color.reference }),
   });
-  for (const { color, key } of keyedColors(tokens.colors))
-    addColor(index, color, colorRef(color, undefined, key), framework);
+  for (const { color, key } of keyedColors(tokens.colors)) {
+    const themed = color.reference !== undefined && inThemes.has(color.reference);
+    const token = { ...colorRef(color, undefined, key), ...(themed && { themed: true as const }) };
+    addColor(index, color, token, framework);
+    const member = color.reference?.split(".").at(-1);
+    if (themed && member) add(index.themed, member, { kind: "color", token, value: color.light });
+  }
   for (const { theme } of keyedThemes(tokens.themes ?? []))
     for (const { color, key } of keyedColors(theme.colors))
       addColor(index, color, colorRef(color, theme.name, key), framework);

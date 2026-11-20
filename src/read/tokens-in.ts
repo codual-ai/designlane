@@ -75,11 +75,20 @@ export function tokensIn(reading: Reading, rel: string, text: string): FileToken
     value,
     span: at(use.start, use.end),
   });
-  const colors: TokenUse<string>[] = [];
+  const colors: FileTokens["colors"] = [];
   const typeStyles: FileTokens["typeStyles"] = [];
-  const fonts: TokenUse<string>[] = [];
+  const fonts: FileTokens["fonts"] = [];
   for (const use of named) {
-    if (use.named.kind === "color") colors.push(asUse(use, use.named.value));
+    if (use.named.kind === "unresolved") {
+      const unresolved = {
+        token: use.named.token,
+        value: null,
+        unresolved: true as const,
+        span: at(use.start, use.end),
+      };
+      if (use.named.of === "color") colors.push(unresolved);
+      else typeStyles.push(unresolved);
+    } else if (use.named.kind === "color") colors.push(asUse(use, use.named.value));
     else {
       typeStyles.push(asUse(use, use.named.value));
       const family = use.named.value.family;

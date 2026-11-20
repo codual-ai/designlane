@@ -111,14 +111,16 @@ describe("tokensIn: the values one file uses", () => {
   });
 
   it("names a colour every theme has by the app's own theme, and reads eight hex digits as the app's helper does", async () => {
-    const set = (name: string, tint: string) =>
-      `public struct ${name}: ColorSet {\n  public var tintColor: Color = ${tint}\n  public init() {}\n}`;
+    const set = (name: string, scheme: string, tint: string) =>
+      `public struct ${name}: ColorSet {\n  public var scheme: ColorScheme = .${scheme}\n  public var tintColor: Color = ${tint}\n  public init() {}\n}`;
     const app = await readApp(
       await appIn({
         "App/ColorSet.swift": swift(
-          "public protocol ColorSet { var tintColor: Color { get set } }",
-          set("OceanLight", ".init(hex: 0x3366CC)"),
-          set("DesertLight", ".init(hex: 0xDF915E)"),
+          "public protocol ColorSet { var scheme: ColorScheme { get }\n var tintColor: Color { get set } }",
+          set("OceanDark", "dark", ".init(hex: 0x101523)"),
+          set("OceanLight", "light", ".init(hex: 0x3366CC)"),
+          set("DesertDark", "dark", ".init(hex: 0x433744)"),
+          set("DesertLight", "light", ".init(hex: 0xDF915E)"),
         ),
         "App/Hex.swift": swift(
           "extension Color { init(hex argb: UInt32) { let a = Double((argb & 0xFF000000) >> 24) / 255 } }",

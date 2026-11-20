@@ -97,7 +97,13 @@ function framework({ scan, plugin, tokens, helpers }: Parts, before?: Framework)
     files: tokenFiles(tokens),
     reading: {
       framework: scan.framework,
-      index: tokenIndex(tokens, scan.framework, scan.platforms[0] ?? "ios", before?.reading.index),
+      index: tokenIndex(
+        tokens,
+        scan.framework,
+        scan.platforms[0] ?? "ios",
+        before?.reading.index,
+        scan.themesOutside,
+      ),
       opacityFirst: helpers.size > 0,
     },
   };

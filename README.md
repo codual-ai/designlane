@@ -190,7 +190,8 @@ variant.tokensIn("Shop/Views/Card.swift");
 - `tokensIn(path, text?)` lists every colour, text style, font, spacing and corner radius one file uses, in the order
   they're written: the named token each one is, if it is one, its value, and exactly where it's written. Colours are
   lowercase `#rrggbb`, or `#rrggbbaa` when not fully opaque. Pass `text` to read a version of the file that isn't on
-  disk.
+  disk. A color read through the theme the user picks (`theme.tintColor`) is `themed`, with its default theme's
+  value; one from a theme declared in a library is `unresolved`, with no value.
 - `withChanges(files)` gives a view of the app with some files changed (or `null` for deleted), reading only those
   files again; a view that changes a theme names its tokens by the new theme. Views can be made from views.
 - `update(path, text)` changes the app itself, for a working tree being edited.

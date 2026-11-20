@@ -24,6 +24,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - DESIGN.md and catalog.html show the named scales with each step's reference and uses, then the values written in
   place.
 
+- `tokensIn` names a color the app's themes declare when the code reads it through the theme the user picks
+  (`theme.tintColor`), with its default theme's value and `themed: true`; and a color or text style read from a theme
+  declared in a library (`CompanyTheme.colors.primary`) as `unresolved`, named as the code writes it, with no value.
+
 ### Changed
 
 - Scans read Swift and Kotlin a little faster: a file with no `#Preview` isn't searched for one, and comments and

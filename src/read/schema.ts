@@ -11,6 +11,9 @@ export const TokenRefSchema = z.object({
   reference: z.string().optional(),
   /** The theme it's from, for an app with several; missing for the default theme's. */
   theme: z.string().optional(),
+  /** Read through a theme the user picks (`theme.tintColor`): its value changes with that theme, and the value given
+   * is the default theme's. */
+  themed: z.literal(true).optional(),
 });
 
 export const TypeValueSchema = z.object({
@@ -24,12 +27,19 @@ export const TypeValueSchema = z.object({
 /** One place a file uses a value: the named token it names, if it names one, the value, and where it's written. */
 const useOf = <V extends z.ZodType>(value: V) =>
   z.object({ token: TokenRefSchema.optional(), value, span: CodeSpanSchema });
+/** A color or text style may come from a theme declared outside the app (in a library): then it's `unresolved`, named
+ * as the code writes it, with no value. */
+const unresolvedOr = <V extends z.ZodType>(value: V) =>
+  z.union([
+    useOf(value),
+    z.object({ token: TokenRefSchema, value: z.null(), unresolved: z.literal(true), span: CodeSpanSchema }),
+  ]);
 
 /** A colour as lowercase `#rrggbb`, or `#rrggbbaa` when it isn't fully opaque: one colour is always written one way. */
 const COLOR_VALUE = /^#[0-9a-f]{6}(?:(?!ff)[0-9a-f]{2})?$/;
 
-export const ColorUseSchema = useOf(z.string().regex(COLOR_VALUE));
-export const TypeStyleUseSchema = useOf(TypeValueSchema);
+export const ColorUseSchema = unresolvedOr(z.string().regex(COLOR_VALUE));
+export const TypeStyleUseSchema = unresolvedOr(TypeValueSchema);
 export const FontUseSchema = useOf(z.string());
 export const DimensionUseSchema = useOf(z.number());
 
@@ -55,7 +65,8 @@ export const FoundFrameworkSchema = z.object({
 
 export type TokenRef = z.infer<typeof TokenRefSchema>;
 export type TypeValue = z.infer<typeof TypeValueSchema>;
-/** One use, with its value's type: a colour's `string`, a text style's `TypeValue`. */
-export type TokenUse<V> = Omit<z.infer<typeof FontUseSchema>, "value"> & { value: V };
+type Span = z.infer<typeof CodeSpanSchema>;
+/** One use, with its value's type: a color's `string`, a text style's `TypeValue`. */
+export type TokenUse<V> = { token?: TokenRef; value: V; span: Span };
 export type FileTokens = z.infer<typeof FileTokensSchema>;
 export type FoundFramework = z.infer<typeof FoundFrameworkSchema>;
