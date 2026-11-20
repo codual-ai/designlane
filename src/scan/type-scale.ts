@@ -5,7 +5,7 @@
  */
 
 import { byText, mostCommon } from "./counting.js";
-import type { DesignTokens, TypeLocations, TypeStyle } from "./types.js";
+import type { DesignTokens, Inherited, TypeLocations, TypeStyle } from "./types.js";
 
 /** One place the code sets a font. `style` names a platform text style (`headline`) or an app's own helper. */
 export interface TypeUse {
@@ -21,11 +21,19 @@ export interface TypeUse {
   line?: number;
   /** Where its values are written, for one of the app's helpers. */
   locations?: TypeLocations;
+  /** What it doesn't set, taken from the text around it. */
+  inherits?: Inherited[];
 }
 
 /** A weight the code works out as it runs (`weight: isOn ? .bold : .regular`). */
 export const COMPUTED = "computed";
 export const weightLabel = (weight: string) => (weight === COMPUTED ? "computed weight" : weight);
+
+/** The values a style leaves to the text around it, or undefined when it sets both. */
+export function inherited({ family, weight }: { family: boolean; weight: boolean }): Inherited[] | undefined {
+  const out: Inherited[] = [...(family ? ["family" as const] : []), ...(weight ? ["weight" as const] : [])];
+  return out.length ? out : undefined;
+}
 
 export interface TypeFindings {
   uses: TypeUse[];
@@ -47,12 +55,18 @@ export function typeScale({ uses, helperFonts }: TypeFindings): TypeScale {
       ...(use.size === undefined ? {} : { size: use.size }),
       weight: use.weight,
       ...(use.reference ? { reference: use.reference } : {}),
+      ...(use.inherits?.length ? { inherits: use.inherits } : {}),
     };
     const key = [style.kind, style.name, style.family, style.size, style.weight, style.reference].join("|");
     const found = merged.get(key);
-    // Every use of one helper has its places, so the first use's are the style's.
-    if (found) found.uses++;
-    else merged.set(key, { ...style, uses: 1, ...(use.locations ? { locations: use.locations } : {}) });
+    // Every use of one helper has its places, so the first use's are the style's. A value one use sets is the style's,
+    // so a merged style inherits only what every use leaves out.
+    if (found) {
+      found.uses++;
+      const both = found.inherits?.filter((value) => style.inherits?.includes(value));
+      if (both?.length) found.inherits = both;
+      else delete found.inherits;
+    } else merged.set(key, { ...style, uses: 1, ...(use.locations ? { locations: use.locations } : {}) });
   }
   const ranked = [...merged.values()].sort((a, b) => b.uses - a.uses || a.name.localeCompare(b.name));
   // Custom families by use, then those written only inside the app's helpers.

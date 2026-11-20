@@ -5,7 +5,7 @@
  */
 
 import ts from "typescript";
-import type { TypeFindings, TypeUse } from "../scan/type-scale.js";
+import { inherited, type TypeFindings, type TypeUse } from "../scan/type-scale.js";
 import type { TypeStyle } from "../scan/types.js";
 import {
   defaultExport,
@@ -82,13 +82,14 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
   }
   countUses(read, index, inStyles);
   const styles = named.map((n): TypeStyle => {
-    const { family, size, weight } = useOf(n.font);
+    const { family, size, weight, inherits } = useOf(n.font);
     return {
       name: n.path[n.path.length - 1] ?? "",
       kind: "app",
       family,
       ...(size === undefined ? {} : { size }),
       weight,
+      ...(inherits && { inherits }),
       reference: renderPath(n.path),
       uses: n.uses,
       ...withLocations(styleLocations(n.font)),
@@ -106,17 +107,23 @@ export function rnType(sources: JsSource[], skip: Set<string> = new Set()): RnTy
   };
 }
 
-/** A font as a use of the type scale: the system font when it names none, an unknown one when the code works it out,
- * and the family and weight a font file's name carries (`Inter-SemiBold`). */
+/** A font as a use of the type scale: an unknown one when the code works it out, the family and weight a font file's
+ * name carries (`Inter-SemiBold`), and a family or weight it doesn't set inherited from the text around it, which
+ * sets the app's own font as often as the system's. */
 function useOf(font: Font): TypeUse {
   const read = typeof font.family === "string" ? familyAndWeight(font.family) : undefined;
   const family = read?.family ?? (font.family === UNKNOWN ? "" : "System");
   const weight = font.weight === UNKNOWN ? "computed" : (font.weight ?? read?.weight ?? "regular");
+  const inherits = inherited({
+    family: font.family === undefined,
+    weight: font.weight === undefined && !read?.weight,
+  });
   return {
     kind: family === "System" ? "system" : "custom",
     family,
     ...(typeof font.size === "number" ? { size: font.size } : {}),
     weight,
+    ...(inherits && { inherits }),
   };
 }
 
@@ -174,8 +181,9 @@ function sheetIn(node: ts.Expression): ts.ObjectLiteralExpression | undefined {
 function once(named: Named[]): Named[] {
   const seen = new Set<string>();
   return named.filter((n) => {
-    const { family, size, weight } = useOf(n.font);
-    const key = [n.path.join("\0"), family.toLowerCase().replace(/[^a-z0-9]/g, ""), size, weight].join("|");
+    const { family, size, weight, inherits } = useOf(n.font);
+    const familyKey = family.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const key = [n.path.join("\0"), familyKey, size, weight, inherits].join("|");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

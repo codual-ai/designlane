@@ -146,7 +146,14 @@ export interface TypeStyle {
   uses: number;
   /** Where a named style's values are written, each one the style sets in one place. */
   locations?: TypeLocations;
+  /** What the style doesn't set, which the text takes from around it (a parent's style, the app's default font):
+   * `family` and `weight` here are then the platform's defaults, and left out of tokens. */
+  inherits?: Inherited[];
 }
+
+/** A text style's values the code can leave to the text around it. */
+export const INHERITABLE = ["family", "weight"] as const;
+export type Inherited = (typeof INHERITABLE)[number];
 
 /** One of the app's themes beside its default one (`Desert` beside `Ocean`): the same colours, each with its own
  * Light and Dark value. */

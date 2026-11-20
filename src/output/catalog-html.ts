@@ -81,7 +81,7 @@ function typeSection(f: FrameworkScan): string {
     const described = [
       values.fontFamily,
       values.fontSize !== undefined && `${values.fontSize}pt`,
-      weightLabel(style.weight),
+      !style.inherits?.includes("weight") && weightLabel(style.weight),
     ]
       .filter(Boolean)
       .join(" ");

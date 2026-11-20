@@ -2,7 +2,7 @@
  * process). Each one's type is the matching type in `types.ts`, which a test checks. */
 
 import { z } from "zod";
-import { OPENINGS, PLATFORMS, VALUE_KINDS } from "./types.js";
+import { INHERITABLE, OPENINGS, PLATFORMS, VALUE_KINDS } from "./types.js";
 
 export const FrameworkIdSchema = z.enum(["swiftui", "compose", "react-native"]);
 
@@ -70,6 +70,7 @@ const TypeStyleSchema = z.object({
   reference: z.string().exactOptional(),
   uses: z.number().int(),
   locations: TypeLocationsSchema.exactOptional(),
+  inherits: z.array(z.enum(INHERITABLE)).exactOptional(),
 });
 
 const ScaleStepSchema = z.object({

@@ -4,7 +4,7 @@
  */
 
 import ts from "typescript";
-import type { TypeUse } from "../scan/type-scale.js";
+import { inherited, type TypeUse } from "../scan/type-scale.js";
 import { type JsSource, lineOf, propertyName, unwrapped } from "./js-sources.js";
 import { familyAndWeight } from "./rn-fonts.js";
 import { eachClassList } from "./tailwind-classes.js";
@@ -111,6 +111,8 @@ function readClasses(classes: string[], scales: Scales, found: TailwindType, { s
   let size: number | undefined;
   let weight: string | undefined;
   let family: string | undefined;
+  // Whether a class sets the family, though not one Designlane can name (`font-mono`).
+  let familySet = false;
   let ownText = only === undefined;
   for (const c of classes) {
     const own = only === undefined || only.includes(c);
@@ -126,10 +128,21 @@ function readClasses(classes: string[], scales: Scales, found: TailwindType, { s
     if (own && sets) ownText = true;
     if (text && scales.sizes[text] !== undefined) size = scales.sizes[text];
     if (fontWord && FONT_WEIGHTS[fontWord]) weight = FONT_WEIGHTS[fontWord];
-    else if (fontWord && scales.families[fontWord] !== undefined) family = scales.families[fontWord];
+    else if (fontWord && scales.families[fontWord] !== undefined) {
+      family = scales.families[fontWord];
+      familySet = true;
+    }
+    // Tailwind's own stacks: `font-sans` is the platform's font; its serif and monospace stacks have no one family.
+    else if (fontWord === "sans") [family, familySet] = ["System", true];
+    else if (fontWord === "serif" || fontWord === "mono") [family, familySet] = [undefined, true];
+    // `font-[Inter]`, `font-[Open_Sans]`: a family of its own, with spaces written as underscores.
+    else if (fontWord?.startsWith("[") && fontWord.endsWith("]"))
+      [family, familySet] = [fontWord.slice(1, -1).replace(/_/g, " "), true];
     // A family class neither the config nor a `@theme` declares (`font-inter`) names the family it loads.
-    else if (fontWord && /^[a-z][a-z0-9-]*$/.test(fontWord) && !GENERIC_CLASS.test(fontWord))
+    else if (fontWord && /^[a-z][a-z0-9-]*$/.test(fontWord) && !GENERIC_CLASS.test(fontWord)) {
       family = fontWord.replace(/(?:^|-)(\w)/g, (_, c: string) => c.toUpperCase());
+      familySet = true;
+    }
     if (!own) continue;
     const space = c.match(SPACING)?.[1];
     if (space) {
@@ -146,12 +159,18 @@ function readClasses(classes: string[], scales: Scales, found: TailwindType, { s
     }
   }
   if (size === undefined || !ownText) return;
-  const read = family === undefined ? { family: "System" } : familyAndWeight(family);
+  const read: { family: string; weight?: string } = !familySet
+    ? { family: "System" }
+    : family === undefined
+      ? { family: "" }
+      : familyAndWeight(family);
+  const inherits = inherited({ family: !familySet, weight: weight === undefined && !read.weight });
   found.uses.push({
     kind: read.family === "System" ? "system" : "custom",
     family: read.family,
     size,
     weight: weight ?? read.weight ?? "regular",
+    ...(inherits && { inherits }),
     file: source.rel,
     line: lineOf(node),
   });

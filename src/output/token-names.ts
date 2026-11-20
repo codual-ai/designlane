@@ -2,7 +2,7 @@
 
 import { byCode } from "../scan/counting.js";
 import { isOtherTarget } from "../scan/targets.js";
-import type { ColorTheme, ColorToken, Platform, TypeStyle } from "../scan/types.js";
+import type { ColorTheme, ColorToken, Inherited, Platform, TypeStyle } from "../scan/types.js";
 
 /** A token's key: the app's own name, or `hex-33a854` for a colour the code never names. Anything but letters,
  * digits, `_` and `-` becomes `-`, since keys can't contain `.`, `{` or `}` in either format. */
@@ -133,9 +133,11 @@ export function keyedStyles(styles: TypeStyle[], platform: Platform = "ios"): Ke
   const reference = (s: TypeStyle) => s.reference ?? s.name;
   const identity = (s: TypeStyle) => `${reference(s)}|${s.name}`;
   return keysOf(styles, typeStyleKey, reference, identity, claimed()).map(({ item: style, key }) => {
-    const weight = WEIGHT_NUMBERS[style.weight];
-    // An empty family (a helper mixing several) has none.
-    const family = style.family === "System" ? SYSTEM_FONT[platform] : style.family;
+    // A value the style leaves to the text around it isn't the style's; an empty family (a helper mixing several) has
+    // none.
+    const inherits = (value: Inherited) => style.inherits?.includes(value) ?? false;
+    const weight = inherits("weight") ? undefined : WEIGHT_NUMBERS[style.weight];
+    const family = inherits("family") ? "" : style.family === "System" ? SYSTEM_FONT[platform] : style.family;
     const values: TypeValues = {
       ...(family ? { fontFamily: family } : {}),
       ...(style.size !== undefined ? { fontSize: style.size } : {}),

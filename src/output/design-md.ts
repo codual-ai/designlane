@@ -149,7 +149,8 @@ function typePart(frameworks: FrameworkScan[], prefix: Prefix): Part {
         ...(fontSize !== undefined ? { fontSize: px(fontSize) } : {}),
         ...(fontWeight !== undefined ? { fontWeight } : {}),
       };
-      const value = [fontFamily, fontSize !== undefined && px(fontSize), weightLabel(style.weight)];
+      const weight = !style.inherits?.includes("weight") && weightLabel(style.weight);
+      const value = [fontFamily, fontSize !== undefined && px(fontSize), weight];
       const via = style.reference ? `, as \`${style.reference}\`` : "";
       const described = value.filter(Boolean).join(" ");
       lines.push({

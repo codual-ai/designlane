@@ -33,6 +33,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A React Native or Tailwind text style that sets no font family or weight takes them from the text around it, so
+  they're no longer written as the platform's font and the regular weight (`SF Pro`, 400): tokens.json, Figma and
+  DESIGN.md leave them out, and the scan records them under `inherits`. A style in Figma keeps the font it has. A
+  text style a coding agent gives without a weight is no longer taken for the regular one.
 - Scans read Swift and Kotlin a little faster: a file with no `#Preview` isn't searched for one, and comments and
   strings are blanked in runs rather than one character at a time.
 

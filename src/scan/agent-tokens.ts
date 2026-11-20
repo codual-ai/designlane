@@ -116,13 +116,15 @@ export async function mergeAgentTokens(scan: ScanResult, json: unknown): Promise
       continue;
     }
     if (styles.some((t) => t.reference === reference)) continue;
-    const weight = s.weight && WEIGHTS.has(s.weight) ? s.weight : "regular";
+    // A weight the agent doesn't give is left to the text around the style, not taken for the regular one.
+    const weight = s.weight && WEIGHTS.has(s.weight) ? s.weight : undefined;
     styles.push({
       name: nameOf(reference),
       kind: "app",
       family: s.family ?? "",
       ...(s.size ? { size: s.size } : {}),
-      weight,
+      weight: weight ?? "regular",
+      ...(weight ? {} : { inherits: ["weight" as const] }),
       reference,
       uses: 0,
     });
