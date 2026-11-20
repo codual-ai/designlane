@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RelatedFileSchema, readApp } from "../../src/read/index.js";
+import { readApp, ScreenFileSchema } from "../../src/read/index.js";
 import { kotlin, swift, tsx } from "../helpers/catalog.js";
 import { appIn, COMPOSE_APP, RN_APP, SHOP, SWIFT_APP, THEMES } from "../helpers/read-apps.js";
 
@@ -121,7 +121,7 @@ describe("filesFor", () => {
     const [screen] = app.screens().filter((s) => s.name === "CartScreen");
     const files = app.filesFor(screen ?? "");
     expect(files).toEqual(app.filesFor(screen?.id ?? ""));
-    expect(files.every((f) => RelatedFileSchema.safeParse(f).success)).toBe(true);
+    expect(files.every((f) => ScreenFileSchema.safeParse(f).success)).toBe(true);
   });
 
   it("counts only the tokens a screen's own code uses, not another view's in its file", async () => {

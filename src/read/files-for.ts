@@ -11,7 +11,7 @@ import { Modules } from "../frameworks/rn-modules.js";
 import { structs } from "../frameworks/swift-source.js";
 import { groupBy } from "../scan/counting.js";
 import type { DesignTokens, FrameworkScan, ScreenRef, ValueLocation } from "../scan/types.js";
-import type { FileTokens, RelatedFile } from "./schema.js";
+import type { FileTokens, ScreenFile } from "./schema.js";
 import { type Reading, tokensIn } from "./tokens-in.js";
 
 /** A type declared in Swift or Kotlin, in blanked code. */
@@ -21,8 +21,8 @@ const TYPE_DECLARATION = /\b(?:class|struct|actor|object|interface|enum)\s+([A-Z
 const STATE_HOLDER = /\w(?:ViewModel|Model|Store|Presenter|State)$/;
 const IDENTIFIER = /[A-Za-z_]\w{0,200}/g;
 
-/** One framework of a view, as `filesFor` reads it; each part is worked out once, when first needed. */
-export interface Explaining {
+/** What `filesFor` reads for one framework, built on its first call. */
+export interface FilesForInput {
   scan: FrameworkScan;
   tokens: DesignTokens;
   reading: Reading;
@@ -39,8 +39,8 @@ interface Code {
   code: string;
 }
 
-/** What `filesFor` works out once per framework of a view and shares between its screens. */
-interface Known {
+/** What `filesFor` works out once per framework of a view, on its first call, and shares between its screens. */
+interface ScreenIndex {
   reader: ComponentReader;
   files: Map<string, Code>;
   /** Every placement of one of the framework's views, by file. */
@@ -49,8 +49,9 @@ interface Known {
   /** Each state holder's name, with the files declaring it. */
   holders: Map<string, Set<string>>;
   /** The files declaring each token, by how the code refers to it. */
-  tokenFiles: Map<string, Set<string>>;
+  filesByToken: Map<string, Set<string>>;
   modules: Modules | undefined;
+  reading: Reading;
   /** Each file's token uses, read once. */
   uses: Map<string, FileTokens>;
 }
@@ -62,7 +63,7 @@ const COMPONENT =
   /\bfunction\s+([A-Z]\w{0,100})\s*\(|\b(?:const|let)\s+([A-Z]\w{0,100})\s*(?::[^=\n]{0,100})?=\s*(?:\(|function\b|(?:React\.)?memo\b|forwardRef\b)/g;
 
 /** The views `rel` declares, by name and offset, for a file the scan didn't read as it is. */
-function declaredViews(framework: Explaining["scan"]["framework"], { code }: Code): [string, number][] {
+function declaredViews(framework: FilesForInput["scan"]["framework"], { code }: Code): [string, number][] {
   if (framework === "swiftui")
     return structs(code)
       .filter((s) => s.conformances.includes("View"))
@@ -72,7 +73,7 @@ function declaredViews(framework: Explaining["scan"]["framework"], { code }: Cod
 }
 
 /** The scan's views, with those declared in the files edited since in place of the scan's own for those files. */
-function viewsOf(framework: Explaining, files: Map<string, Code>): ScreenRef[] {
+function viewsOf(framework: FilesForInput, files: Map<string, Code>): ScreenRef[] {
   const { scan, edited } = framework;
   const added = [...edited].flatMap((rel): ScreenRef[] => {
     const file = files.get(rel);
@@ -115,13 +116,13 @@ const filesOf = (...locations: (ValueLocation | undefined)[]) =>
   );
 
 /** Each token's files by its reference: a theme's color shares its default's reference, so it adds its own files. */
-function tokenFilesOf(tokens: DesignTokens): Map<string, Set<string>> {
+function filesByToken(tokens: DesignTokens): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   const add = (reference: string | undefined, files: string[]) => {
     if (!reference) return;
-    const known = out.get(reference) ?? new Set<string>();
-    for (const file of files) known.add(file);
-    out.set(reference, known);
+    const declaring = out.get(reference) ?? new Set<string>();
+    for (const file of files) declaring.add(file);
+    out.set(reference, declaring);
   };
   for (const color of [...tokens.colors, ...(tokens.themes ?? []).flatMap((t) => t.colors)])
     add(color.reference, [color.source, ...filesOf(color.locations?.light, color.locations?.dark)]);
@@ -130,7 +131,7 @@ function tokenFilesOf(tokens: DesignTokens): Map<string, Set<string>> {
   return out;
 }
 
-function know(framework: Explaining): Known {
+function indexScreens(framework: FilesForInput): ScreenIndex {
   const reader = readerOf(framework.sources);
   const files = codeOf(framework.sources);
   const views = groupBy(viewsOf(framework, files), (s) => s.name);
@@ -140,16 +141,17 @@ function know(framework: Explaining): Known {
     placements: groupBy(reader.placements(new Set(views.keys())), (p) => p.rel),
     views,
     holders: holdersIn(files, views),
-    tokenFiles: tokenFilesOf(framework.tokens),
+    filesByToken: filesByToken(framework.tokens),
     modules:
       framework.sources.framework === "react-native"
         ? new Modules(framework.sources.files, new Set(framework.packages))
         : undefined,
+    reading: framework.reading,
     uses: new Map(),
   };
 }
 
-interface Shown {
+interface Reached {
   view: ScreenRef;
   /** Where its declaration is in its file, when it could be found. */
   range: { start: number; end: number } | undefined;
@@ -157,46 +159,49 @@ interface Shown {
 
 /** The views a placement may mean: those of its name declared nearest it, all of them when equally near; none whose
  * file the view deleted. */
-function placedViews(known: Known, placement: Placement): ScreenRef[] {
-  const named = (known.views.get(placement.name) ?? []).filter((view) => known.files.has(view.file));
+function placedViews(index: ScreenIndex, placement: Placement): ScreenRef[] {
+  const named = (index.views.get(placement.name) ?? []).filter((view) => index.files.has(view.file));
   const near = named.map((view) => nearness(view.file, placement.rel));
   const most = Math.max(...near);
   return named.filter((_, i) => near[i] === most);
 }
 
 /** `view` and every view placed in its code, at any depth, each once, in the order they're reached. */
-function viewsShown(known: Known, view: ScreenRef): Shown[] {
-  const shown = (v: ScreenRef): Shown => ({ view: v, range: known.reader.declaration(v) });
+function viewsReached(index: ScreenIndex, view: ScreenRef): Reached[] {
+  const reached = (v: ScreenRef): Reached => ({ view: v, range: index.reader.declaration(v) });
   const seen = new Set([view.id]);
-  const out = [shown(view)];
+  const out = [reached(view)];
   for (let i = 0; i < out.length; i++) {
-    const { view: current, range } = out[i] as Shown;
+    const { view: current, range } = out[i] as Reached;
     if (!range) continue;
-    const placed = (known.placements.get(current.file) ?? []).filter(
+    const placed = (index.placements.get(current.file) ?? []).filter(
       (p) => p.at >= range.start && p.at < range.end,
     );
-    for (const child of placed.flatMap((p) => placedViews(known, p)))
+    for (const child of placed.flatMap((p) => placedViews(index, p)))
       if (!seen.has(child.id)) {
         seen.add(child.id);
-        out.push(shown(child));
+        out.push(reached(child));
       }
   }
   return out;
 }
 
 /** The part of its file each view's declaration covers, as written and blanked. */
-function ownCode(known: Known, shown: Shown[]): (Code & { rel: string; start: number; end: number })[] {
-  return shown.flatMap(({ view, range }) => {
-    const file = known.files.get(view.file);
+function declarations(
+  index: ScreenIndex,
+  reached: Reached[],
+): (Code & { rel: string; start: number; end: number })[] {
+  return reached.flatMap(({ view, range }) => {
+    const file = index.files.get(view.file);
     return file && range ? [{ ...file, rel: view.file, ...range }] : [];
   });
 }
 
-function stateFiles(known: Known, shown: Shown[]): string[] {
+function stateFiles(index: ScreenIndex, reached: Reached[]): string[] {
   const named = new Set(
-    ownCode(known, shown).flatMap((own) => own.code.slice(own.start, own.end).match(IDENTIFIER) ?? []),
+    declarations(index, reached).flatMap((own) => own.code.slice(own.start, own.end).match(IDENTIFIER) ?? []),
   );
-  return [...named].flatMap((name) => [...(known.holders.get(name) ?? [])]);
+  return [...named].flatMap((name) => [...(index.holders.get(name) ?? [])]);
 }
 
 function importsOf(modules: Modules, source: JsSource): string[] {
@@ -206,47 +211,44 @@ function importsOf(modules: Modules, source: JsSource): string[] {
   });
 }
 
-function importedFiles(known: Known, shown: Shown[]): string[] {
-  const { modules } = known;
+function importedFiles(index: ScreenIndex, reached: Reached[]): string[] {
+  const { modules } = index;
   if (!modules) return [];
   const sources = new Map(modules.sources.map((s) => [s.rel, s]));
-  return [...new Set(shown.map(({ view }) => view.file))].flatMap((rel) => {
+  return [...new Set(reached.map(({ view }) => view.file))].flatMap((rel) => {
     const source = sources.get(rel);
     return source ? importsOf(modules, source) : [];
   });
 }
 
 /** The files declaring the colors and text styles the views' own code uses. */
-function tokenFiles(known: Known, reading: Reading, shown: Shown[]): string[] {
-  return ownCode(known, shown).flatMap(({ rel, text, start, end }) => {
-    const uses = known.uses.get(rel) ?? tokensIn(reading, rel, text);
-    known.uses.set(rel, uses);
+function tokenFilesUsed(index: ScreenIndex, reached: Reached[]): string[] {
+  return declarations(index, reached).flatMap(({ rel, text, start, end }) => {
+    const uses = index.uses.get(rel) ?? tokensIn(index.reading, rel, text);
+    index.uses.set(rel, uses);
     return [...uses.colors, ...uses.typeStyles]
       .filter((use) => use.span.start >= start && use.span.end <= end)
-      .flatMap((use) => [...(known.tokenFiles.get(use.token?.reference ?? "") ?? [])]);
+      .flatMap((use) => [...(index.filesByToken.get(use.token?.reference ?? "") ?? [])]);
   });
 }
 
-/** `filesFor` for one view of an app: it works out what its screens share once, on the first call. */
-export function filesFinder(framework: () => Explaining) {
-  let known: { framework: Explaining; known: Known } | undefined;
-  return (view: ScreenRef): RelatedFile[] => {
-    if (!known) {
-      const f = framework();
-      known = { framework: f, known: know(f) };
-    }
-    const shown = viewsShown(known.known, view);
-    const out = new Map<string, RelatedFile["why"]>([[view.file, "declaration"]]);
-    const add = (files: string[], why: RelatedFile["why"]) => {
+/** `filesFor` for one view of an app. */
+export function makeFilesFor(input: () => FilesForInput) {
+  let index: ScreenIndex | undefined;
+  return (view: ScreenRef): ScreenFile[] => {
+    index ??= indexScreens(input());
+    const reached = viewsReached(index, view);
+    const out = new Map<string, ScreenFile["why"]>([[view.file, "declaration"]]);
+    const add = (files: string[], why: ScreenFile["why"]) => {
       for (const file of files) if (!out.has(file)) out.set(file, why);
     };
     add(
-      shown.slice(1).map((s) => s.view.file),
+      reached.slice(1).map((s) => s.view.file),
       "child-view",
     );
-    if (view.framework !== "react-native") add(stateFiles(known.known, shown), "view-model");
-    add(tokenFiles(known.known, known.framework.reading, shown), "tokens");
-    add(importedFiles(known.known, shown), "import");
+    if (view.framework !== "react-native") add(stateFiles(index, reached), "view-model");
+    add(tokenFilesUsed(index, reached), "tokens");
+    add(importedFiles(index, reached), "import");
     return [...out].map(([file, why]) => ({ file, why }));
   };
 }

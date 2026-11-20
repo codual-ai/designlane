@@ -18,8 +18,8 @@ import { createContext, frameworks as plugins, scanContext } from "../scan/index
 import { isTestPath } from "../scan/test-paths.js";
 import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
-import { filesFinder } from "./files-for.js";
-import type { FileTokens, RelatedFile } from "./schema.js";
+import { makeFilesFor } from "./files-for.js";
+import type { FileTokens, ScreenFile } from "./schema.js";
 import { tokenIndex } from "./token-index.js";
 import { type Reading, tokensIn } from "./tokens-in.js";
 
@@ -40,7 +40,7 @@ export interface AppView {
    * related, its own file first: the views it places at any depth, the types holding its state, the project's files
    * it imports, and where the tokens it uses are declared; a view declared in a file this view adds or changes is
    * followed too. `screen` is one the scan found: throws for one this view doesn't have, or whose file it deletes. */
-  filesFor(screen: string | ScreenRef): RelatedFile[];
+  filesFor(screen: string | ScreenRef): ScreenFile[];
   /** A view of this one with `changes` made: each path's new text, or null for a file deleted. */
   withChanges(changes: Readonly<Record<string, string | null>>): Promise<AppView>;
 }
@@ -225,7 +225,7 @@ function viewOf(state: State): AppView {
   const finders = new Map(
     [...state.frameworks].map(([id, f]) => [
       id,
-      filesFinder(() => ({
+      makeFilesFor(() => ({
         scan: f.scan,
         tokens: f.tokens,
         reading: f.reading,
