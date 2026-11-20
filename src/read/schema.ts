@@ -72,11 +72,15 @@ export type FileTokens = z.infer<typeof FileTokensSchema>;
 export type FoundFramework = z.infer<typeof FoundFrameworkSchema>;
 
 /**
- * Why a file explains a screen: it declares the screen, declares a view the screen places (at any depth), declares a
- * type the screen's code names that holds its state (`CartViewModel`, `CartStore`), is one of the project's files a
- * React Native screen's code imports, or declares a token the screen's code uses.
+ * Why a file explains a screen:
+ * - `declaration`: it declares the screen.
+ * - `child-view`: it declares a view the screen places, at any depth.
+ * - `state`: it declares a type the screen's code names that holds its state (`CartViewModel`, `CartStore`,
+ *   `CartState`).
+ * - `import`: it's one of the project's files a React Native screen's code imports.
+ * - `tokens`: it declares a color or text style the screen's code uses.
  */
-export const SCREEN_FILE_REASONS = ["declaration", "child-view", "view-model", "import", "tokens"] as const;
+export const SCREEN_FILE_REASONS = ["declaration", "child-view", "state", "import", "tokens"] as const;
 
 export const ScreenFileSchema = z.object({ file: z.string(), why: z.enum(SCREEN_FILE_REASONS) });
 export type ScreenFile = z.infer<typeof ScreenFileSchema>;

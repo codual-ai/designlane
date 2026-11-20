@@ -246,7 +246,7 @@ export function makeFilesFor(input: () => FilesForInput) {
       reached.slice(1).map((s) => s.view.file),
       "child-view",
     );
-    if (view.framework !== "react-native") add(stateFiles(index, reached), "view-model");
+    if (view.framework !== "react-native") add(stateFiles(index, reached), "state");
     add(tokenFilesUsed(index, reached), "tokens");
     add(importedFiles(index, reached), "import");
     return [...out].map(([file, why]) => ({ file, why }));

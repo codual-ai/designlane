@@ -11,7 +11,7 @@ describe("filesFor", () => {
     expect(await related(SWIFT_APP, "swiftui:App/CartScreen.swift#CartScreen")).toEqual([
       { file: "App/CartScreen.swift", why: "declaration" },
       { file: "App/CartRow.swift", why: "child-view" },
-      { file: "App/CartModel.swift", why: "view-model" },
+      { file: "App/CartModel.swift", why: "state" },
       { file: "App/Theme.swift", why: "tokens" },
     ]);
   });
@@ -20,7 +20,7 @@ describe("filesFor", () => {
     expect(await related(COMPOSE_APP, "compose:app/src/main/java/a/cart/CartScreen.kt#CartScreen")).toEqual([
       { file: "app/src/main/java/a/cart/CartScreen.kt", why: "declaration" },
       { file: "app/src/main/java/a/cart/CartRow.kt", why: "child-view" },
-      { file: "app/src/main/java/a/cart/CartViewModel.kt", why: "view-model" },
+      { file: "app/src/main/java/a/cart/CartViewModel.kt", why: "state" },
       { file: "app/src/main/java/a/ui/theme/Color.kt", why: "tokens" },
       { file: "app/src/main/java/a/ui/theme/Type.kt", why: "tokens" },
     ]);
@@ -80,7 +80,7 @@ describe("filesFor", () => {
     );
     expect(files).toEqual([
       { file: "app/src/main/java/a/Home.kt", why: "declaration" },
-      { file: "app/src/main/java/a/HomeViewModel.kt", why: "view-model" },
+      { file: "app/src/main/java/a/HomeViewModel.kt", why: "state" },
     ]);
   });
 
@@ -172,9 +172,7 @@ describe("filesFor", () => {
     const view = await app.withChanges({
       "AppTests/CartModelTests.swift": swift("final class CartModel {}"),
     });
-    expect(view.filesFor("swiftui:App/CartScreen.swift#CartScreen").map((f) => f.why)).not.toContain(
-      "view-model",
-    );
+    expect(view.filesFor("swiftui:App/CartScreen.swift#CartScreen").map((f) => f.why)).not.toContain("state");
     const rn = await related(
       {
         ...RN_APP,
@@ -296,7 +294,7 @@ describe("filesFor", () => {
       expect(view.filesFor("swiftui:App/CartScreen.swift#CartScreen")).toEqual([
         { file: "App/CartScreen.swift", why: "declaration" },
         { file: "App/BenefitTile.swift", why: "child-view" },
-        { file: "App/CartModel.swift", why: "view-model" },
+        { file: "App/CartModel.swift", why: "state" },
         { file: "App/Theme.swift", why: "tokens" },
       ]);
     });
@@ -313,7 +311,7 @@ describe("filesFor", () => {
       expect(view.filesFor(`compose:${screen}#CartScreen`).map((f) => [f.file, f.why])).toEqual([
         [screen, "declaration"],
         ["app/src/main/java/a/cart/BenefitTile.kt", "child-view"],
-        ["app/src/main/java/a/cart/CartViewModel.kt", "view-model"],
+        ["app/src/main/java/a/cart/CartViewModel.kt", "state"],
         ["app/src/main/java/a/ui/theme/Color.kt", "tokens"],
       ]);
     });
