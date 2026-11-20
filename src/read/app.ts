@@ -5,17 +5,21 @@
  */
 
 import path from "node:path";
+import type { FrameworkSources } from "../catalog/sources.js";
 import { RESOURCE_FILE } from "../frameworks/android-resources.js";
-import { isScript } from "../frameworks/js-sources.js";
+import { isScript, type JsSource, jsSource } from "../frameworks/js-sources.js";
+import { type KotlinSource, kotlinSource } from "../frameworks/kotlin-sources.js";
 import type { FrameworkPlugin, ScanContext } from "../frameworks/plugin.js";
 import { opacityFirstIn } from "../frameworks/swiftui-colors.js";
-import { swiftSource } from "../frameworks/swiftui-sources.js";
+import { type SwiftSource, swiftSource } from "../frameworks/swiftui-sources.js";
 import { isColorset } from "../frameworks/xcode-colors.js";
 import type { SourceFile } from "../scan/files.js";
 import { createContext, frameworks as plugins, scanContext } from "../scan/index.js";
+import { isTestPath } from "../scan/test-paths.js";
 import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
-import type { FileTokens } from "./schema.js";
+import { filesFinder } from "./files-for.js";
+import type { FileTokens, RelatedFile } from "./schema.js";
 import { tokenIndex } from "./token-index.js";
 import { type Reading, tokensIn } from "./tokens-in.js";
 
@@ -32,6 +36,11 @@ export interface AppView {
    * file as this view has it. Undefined for a file that isn't code of one of the app's frameworks. `text` is read
    * with the tokens as this view has them: to read a changed theme, make a view with it (`withChanges`). */
   tokensIn(rel: string, text?: string): FileTokens | undefined;
+  /** The files that explain the screen or component `screen` (its id, or itself), each once, by the first reason it's
+   * related, its own file first: the views it places at any depth, the types holding its state, the project's files
+   * it imports, and where the tokens it uses are declared; a view declared in a file this view adds or changes is
+   * followed too. `screen` is one the scan found: throws for one this view doesn't have, or whose file it deletes. */
+  filesFor(screen: string | ScreenRef): RelatedFile[];
   /** A view of this one with `changes` made: each path's new text, or null for a file deleted. */
   withChanges(changes: Readonly<Record<string, string | null>>): Promise<AppView>;
 }
@@ -60,7 +69,14 @@ interface State {
   texts: ReadonlyMap<string, string>;
   frameworks: ReadonlyMap<FrameworkId, Framework>;
   scan: ScanResult;
+  /** Each file parsed, by path, once something has needed it: shared with the views made from this one, which drop
+   * the files they change. */
+  parsed: Map<string, Parsed>;
+  /** Files changed since the app was scanned. */
+  edited: ReadonlySet<string>;
 }
+
+type Parsed = SwiftSource | KotlinSource | JsSource;
 
 const EXTENSIONS: Record<FrameworkId, (rel: string) => boolean> = {
   swiftui: (rel) => rel.endsWith(".swift"),
@@ -120,6 +136,40 @@ function helpersAfter(helpers: ReadonlySet<string>, texts: Iterable<[string, str
   return out;
 }
 
+/** `framework`'s source files in `state`, as the catalog reads them, each parsed once; tests left out. */
+function sourcesOf(state: State, framework: FrameworkId): FrameworkSources {
+  const parse = framework === "swiftui" ? swiftSource : framework === "compose" ? kotlinSource : jsSource;
+  const files: Parsed[] = [];
+  for (const { rel } of state.files) {
+    const text = state.texts.get(rel);
+    if (!text || !EXTENSIONS[framework](rel) || isTestPath(rel)) continue;
+    const source = state.parsed.get(rel) ?? parse(rel, text);
+    state.parsed.set(rel, source);
+    files.push(source);
+  }
+  if (framework === "compose") return { framework, files: files as KotlinSource[] };
+  if (framework === "react-native") return { framework, files: files as JsSource[] };
+  return { framework, files: files as SwiftSource[] };
+}
+
+/** The packages `state`'s package.json files depend on. */
+function packagesOf(state: State): Set<string> {
+  const out = new Set<string>();
+  for (const { rel } of state.files) {
+    if (rel !== "package.json" && !rel.endsWith("/package.json")) continue;
+    try {
+      const manifest = JSON.parse(state.texts.get(rel) ?? "{}") as Record<string, unknown>;
+      for (const field of ["dependencies", "devDependencies", "peerDependencies"]) {
+        const list = manifest[field];
+        if (typeof list === "object" && list !== null) for (const name of Object.keys(list)) out.add(name);
+      }
+    } catch {
+      // A package.json that isn't JSON names no packages.
+    }
+  }
+  return out;
+}
+
 /** A context listing `state`'s files and reading their texts from it, with nothing read from disk. */
 function contextOf(state: State): ScanContext {
   return {
@@ -142,7 +192,10 @@ async function changed(state: State, changes: ReadonlyMap<string, string | null>
     else texts.set(rel, text);
     if (text !== null && !listed.has(rel)) files.push({ rel, abs: path.join(state.root, rel) });
   }
-  const next: State = { ...state, files, texts };
+  const parsed = new Map(state.parsed);
+  for (const rel of changes.keys()) parsed.delete(rel);
+  const edited = new Set([...state.edited, ...changes.keys()]);
+  const next: State = { ...state, files, texts, parsed, edited };
   const ctx = contextOf(next);
   const frameworks = new Map<FrameworkId, Framework>();
   for (const [id, before] of state.frameworks) {
@@ -169,6 +222,19 @@ async function changed(state: State, changes: ReadonlyMap<string, string | null>
 function viewOf(state: State): AppView {
   const scans = [...state.frameworks.values()].map((f) => f.scan);
   const byId = new Map(scans.flatMap((f) => f.screens.map((s) => [s.id, s] as const)));
+  const finders = new Map(
+    [...state.frameworks].map(([id, f]) => [
+      id,
+      filesFinder(() => ({
+        scan: f.scan,
+        tokens: f.tokens,
+        reading: f.reading,
+        sources: sourcesOf(state, id),
+        packages: packagesOf(state),
+        edited: state.edited,
+      })),
+    ]),
+  );
   return {
     root: state.root,
     frameworks: scans,
@@ -179,6 +245,15 @@ function viewOf(state: State): AppView {
       const framework = frameworkOf(state, rel);
       const source = text ?? state.texts.get(rel);
       return framework && source !== undefined ? tokensIn(framework.reading, rel, source) : undefined;
+    },
+    filesFor(screen) {
+      const id = typeof screen === "string" ? screen : screen.id;
+      const found = byId.get(id);
+      const finder = found && finders.get(found.framework);
+      // A view that deletes a screen's file has no screen there, though its scan, read before, lists it.
+      if (!found || !finder || !state.texts.has(found.file))
+        throw new Error(`No screen ${id} in the app: pass an id from app.screens().`);
+      return finder(found);
     },
     withChanges: async (changes) => viewOf(await changed(state, new Map(Object.entries(changes)))),
   };
@@ -214,7 +289,15 @@ export async function readApp(root: string): Promise<App> {
         }),
       );
   }
-  let state: State = { root: disk.root, files: disk.files, texts, frameworks, scan };
+  let state: State = {
+    root: disk.root,
+    files: disk.files,
+    texts,
+    frameworks,
+    scan,
+    parsed: new Map(),
+    edited: new Set(),
+  };
   let view = viewOf(state);
   let updating = Promise.resolve();
   const app: App = {
@@ -227,6 +310,7 @@ export async function readApp(root: string): Promise<App> {
     screens: (framework) => view.screens(framework),
     screen: (id) => view.screen(id),
     tokensIn: (rel, text) => view.tokensIn(rel, text),
+    filesFor: (screen) => view.filesFor(screen),
     withChanges: (changes) => view.withChanges(changes),
     // Each update starts from the one before, so two made at once both land; one that fails doesn't stop the next.
     update(rel, text) {

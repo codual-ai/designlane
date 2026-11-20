@@ -80,7 +80,7 @@ interface ViewPlacements {
 }
 
 /** How near a placement in `rel` is to a view declared in `file`: the same file, else the folders they share. */
-function nearness(file: string, rel: string): number {
+export function nearness(file: string, rel: string): number {
   if (file === rel) return Number.POSITIVE_INFINITY;
   const declared = file.split("/");
   const placed = rel.split("/");

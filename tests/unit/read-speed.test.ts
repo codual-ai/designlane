@@ -6,7 +6,7 @@ import { speedIt } from "../helpers/speed.js";
 
 /** How fast the reads must be: fast enough to run beside every variant an app generates, with room for a slower CI
  * machine (a long file reads in about 15 ms on a laptop and 25 ms in CI). */
-const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50 };
+const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50, filesFor: 50 };
 const LINES = 2000;
 /** An app the size of a large one's design system: many colours and screens using them. */
 const COLORS = 300;
@@ -72,6 +72,27 @@ describe("designlane/read speed", () => {
       expect(await fastest(() => app.tokensIn("App/Screens/Screen0.swift", text))).toBeLessThan(
         BUDGET_MS.tokensIn,
       );
+    },
+    120_000,
+  );
+
+  speedIt(
+    "lists a screen's files within the budget, once the app's files are parsed, and again in a view",
+    async () => {
+      const app = await bigApp();
+      const id = "swiftui:App/Screens/Screen0.swift#Screen0";
+      const started = performance.now();
+      expect(app.filesFor(id).map((f) => f.file)).toEqual(["App/Screens/Screen0.swift", "App/Theme.swift"]);
+      const first = performance.now() - started;
+      expect(await fastest(() => app.filesFor(id))).toBeLessThan(BUDGET_MS.filesFor);
+      // A view parses only the file it changed, and shares the rest with the app.
+      const views = await Promise.all(
+        Array.from({ length: 5 }, (_, i) =>
+          app.withChanges({ "App/Screens/S100.swift": swift(`let a${i} = 1`) }),
+        ),
+      );
+      let view = 0;
+      expect(await fastest(() => views[view++]?.filesFor(id))).toBeLessThan(first / 2);
     },
     120_000,
   );

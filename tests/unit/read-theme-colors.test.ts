@@ -1,27 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FileTokensSchema, readApp } from "../../src/read/index.js";
 import { kotlin, swift } from "../helpers/catalog.js";
-import { appIn, SWIFT_APP } from "../helpers/read-apps.js";
-
-/** An app whose users pick a theme, each with a light and a dark set of the same colors. */
-const set = (name: string, scheme: string, tint: string) =>
-  [
-    `public struct ${name}: ColorSet {`,
-    `  public var scheme: ColorScheme = .${scheme}`,
-    `  public var tintColor: Color = ${tint}`,
-    "  public init() {}",
-    "}",
-  ].join("\n");
-const THEMES = swift(
-  "public protocol ColorSet {",
-  "  var scheme: ColorScheme { get }",
-  "  var tintColor: Color { get set }",
-  "}",
-  set("OceanDark", "dark", ".init(hex: 0x101523)"),
-  set("OceanLight", "light", ".init(hex: 0x3366CC)"),
-  set("DesertDark", "dark", ".init(hex: 0x433744)"),
-  set("DesertLight", "light", ".init(hex: 0xDF915E)"),
-);
+import { appIn, SWIFT_APP, THEMES } from "../helpers/read-apps.js";
 
 /** Each use as the text its span covers, its key, whether it's themed or unresolved, and its value. */
 function uses(

@@ -192,6 +192,10 @@ variant.tokensIn("Shop/Views/Card.swift");
   lowercase `#rrggbb`, or `#rrggbbaa` when not fully opaque. Pass `text` to read a version of the file that isn't on
   disk. A color read through the theme the user picks (`theme.tintColor`) is `themed`, with its default theme's
   value; one from a theme declared in a library is `unresolved`, with no value.
+- `filesFor(screen)` lists the files that explain a screen or component, each with why: where it's declared, the
+  views it places at any depth, the types holding its state (`CartViewModel`), the project's files a React Native
+  screen imports, and where the tokens it uses are declared. For giving an agent or a variant generator what it needs
+  to change a screen, and no more.
 - `withChanges(files)` gives a view of the app with some files changed (or `null` for deleted), reading only those
   files again; a view that changes a theme names its tokens by the new theme. Views can be made from views.
 - `update(path, text)` changes the app itself, for a working tree being edited.
@@ -199,7 +203,8 @@ variant.tokensIn("Shop/Views/Card.swift");
   read.
 
 Reading a file takes a few milliseconds (about 20 ms for a 2,000-line one) and a view of a few changed files about
-as long; `readApp` takes as long as a scan. Every result has a zod schema exported beside it.
+as long; `readApp` takes as long as a scan. The first `filesFor` parses the app's code once (about 100 ms for 400
+screens), and each one after takes as long as reading the screen's files. Every result has a zod schema exported beside it.
 
 ## Supported
 

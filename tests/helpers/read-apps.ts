@@ -67,5 +67,25 @@ export const RN_APP = {
   ),
 };
 
+/** An app whose users pick a theme, each with a light and a dark set of the same colors. */
+const set = (name: string, scheme: string, tint: string) =>
+  [
+    `public struct ${name}: ColorSet {`,
+    `  public var scheme: ColorScheme = .${scheme}`,
+    `  public var tintColor: Color = ${tint}`,
+    "  public init() {}",
+    "}",
+  ].join("\n");
+export const THEMES = swift(
+  "public protocol ColorSet {",
+  "  var scheme: ColorScheme { get }",
+  "  var tintColor: Color { get set }",
+  "}",
+  set("OceanDark", "dark", ".init(hex: 0x101523)"),
+  set("OceanLight", "light", ".init(hex: 0x3366CC)"),
+  set("DesertDark", "dark", ".init(hex: 0x433744)"),
+  set("DesertLight", "light", ".init(hex: 0xDF915E)"),
+);
+
 /** `files` written to a temporary folder. */
 export const appIn = (files: Record<string, string>) => tempDir(files);

@@ -70,3 +70,13 @@ type Span = z.infer<typeof CodeSpanSchema>;
 export type TokenUse<V> = { token?: TokenRef; value: V; span: Span };
 export type FileTokens = z.infer<typeof FileTokensSchema>;
 export type FoundFramework = z.infer<typeof FoundFrameworkSchema>;
+
+/**
+ * Why a file explains a screen: it declares the screen, declares a view the screen places (at any depth), declares a
+ * type the screen's code names that holds its state (`CartViewModel`, `CartStore`), is one of the project's files a
+ * React Native screen's code imports, or declares a token the screen's code uses.
+ */
+export const RELATED_REASONS = ["declaration", "child-view", "view-model", "import", "tokens"] as const;
+
+export const RelatedFileSchema = z.object({ file: z.string(), why: z.enum(RELATED_REASONS) });
+export type RelatedFile = z.infer<typeof RelatedFileSchema>;
