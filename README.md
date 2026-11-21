@@ -192,6 +192,10 @@ variant.tokensIn("Shop/Views/Card.swift");
   lowercase `#rrggbb`, or `#rrggbbaa` when not fully opaque. Pass `text` to read a version of the file that isn't on
   disk. A color read through the theme the user picks (`theme.tintColor`) is `themed`, with its default theme's
   value; one from a theme declared in a library is `unresolved`, with no value.
+- `stringsIn(path, text?)` lists the text one file shows people, with exactly where it's written: words written
+  in the code (`literal`), and translated strings it names by key (`localized`), with their English text (or Xcode's
+  base localization's) from its strings files (Xcode string catalogs and `.strings`, Android `strings.xml`, JSON
+  locale files), or `null` when none has it.
 - `filesFor(screen)` lists the files that explain a screen or component, each with why: where it's declared, the
   views it places at any depth, the types holding its state (`CartViewModel`), the project's files a React Native
   screen imports, and where the tokens it uses are declared. For giving an agent or a variant generator what it needs

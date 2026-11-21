@@ -6,7 +6,7 @@ import { speedIt } from "../helpers/speed.js";
 
 /** How fast the reads must be: fast enough to run beside every variant an app generates, with room for a slower CI
  * machine (a long file reads in about 15 ms on a laptop and 25 ms in CI). */
-const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50, filesFor: 50 };
+const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50, filesFor: 50, stringsIn: 50 };
 const LINES = 2000;
 /** An app the size of a large one's design system: many colours and screens using them. */
 const COLORS = 300;
@@ -93,6 +93,21 @@ describe("designlane/read speed", () => {
       );
       let view = 0;
       expect(await fastest(() => views[view++]?.filesFor(id))).toBeLessThan(first / 2);
+    },
+    120_000,
+  );
+
+  speedIt(
+    `lists a ${LINES}-line file's text within the budget`,
+    async () => {
+      const app = await bigApp();
+      const text = screen(0);
+      expect(app.stringsIn("App/Screens/Screen0.swift", text)).toHaveLength(
+        Math.ceil((LINES - 6) / USE_EVERY),
+      );
+      expect(await fastest(() => app.stringsIn("App/Screens/Screen0.swift", text))).toBeLessThan(
+        BUDGET_MS.stringsIn,
+      );
     },
     120_000,
   );

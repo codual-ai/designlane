@@ -84,3 +84,17 @@ export const SCREEN_FILE_REASONS = ["declaration", "child-view", "state", "impor
 
 export const ScreenFileSchema = z.object({ file: z.string(), why: z.enum(SCREEN_FILE_REASONS) });
 export type ScreenFile = z.infer<typeof ScreenFileSchema>;
+
+/** A piece of text a file shows people, and exactly where it's written (a string's contents, without its quotes; a
+ * translated string's key). `literal` is written in the code. `localized` is a translated string named by `key`,
+ * with its text in the app's default language, or null when no strings file of the app has one. */
+export const StringUseSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("literal"), text: z.string(), span: CodeSpanSchema }),
+  z.object({
+    kind: z.literal("localized"),
+    key: z.string(),
+    text: z.string().nullable(),
+    span: CodeSpanSchema,
+  }),
+]);
+export type StringUse = z.infer<typeof StringUseSchema>;

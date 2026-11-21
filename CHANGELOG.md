@@ -27,6 +27,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `tokensIn` names a color the app's themes declare when the code reads it through the theme the user picks
   (`theme.tintColor`), with its default theme's value and `themed: true`; and a color or text style read from a theme
   declared in a library (`CompanyTheme.colors.primary`) as `unresolved`, named as the code writes it, with no value.
+- `app.stringsIn(path, text?)` lists the text one file shows people, each with its exact span: words written in the
+  code, and translated strings named by key, with their default-language text from the app's strings files, or
+  `null` when none has it.
 - `app.filesFor(screen)` lists the files that explain a screen or component, each with why: its declaration, the
   views it places at any depth, the types holding its state, the project's files a React Native screen imports, and
   where the tokens it uses are declared. Views answer for their changes, following a view in a file they add.

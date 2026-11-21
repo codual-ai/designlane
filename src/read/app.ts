@@ -4,6 +4,7 @@
  * reading only those files again; `update` changes the app itself, for a working tree being edited.
  */
 
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { FrameworkSources } from "../catalog/sources.js";
 import { RESOURCE_FILE } from "../frameworks/android-resources.js";
@@ -19,7 +20,16 @@ import { isTestPath } from "../scan/test-paths.js";
 import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
 import { makeFilesFor } from "./files-for.js";
-import type { FileTokens, ScreenFile } from "./schema.js";
+import type { FileTokens, ScreenFile, StringUse } from "./schema.js";
+import {
+  decodeStrings,
+  isStringsFile,
+  type StringsFile,
+  type StringTable,
+  stringsFile,
+  stringTable,
+} from "./string-table.js";
+import { stringsIn } from "./strings-in.js";
 import { tokenIndex } from "./token-index.js";
 import { type Reading, tokensIn } from "./tokens-in.js";
 
@@ -36,6 +46,11 @@ export interface AppView {
    * file as this view has it. Undefined for a file that isn't code of one of the app's frameworks. `text` is read
    * with the tokens as this view has them: to read a changed theme, make a view with it (`withChanges`). */
   tokensIn(rel: string, text?: string): FileTokens | undefined;
+  /** The text the file at `rel` shows people, read from `text` when given, else from the file as this view has it, in
+   * the order it's written: words written in the code, and translated strings it names by key, with their text from
+   * the app's strings files as this view has them. Undefined for a file that isn't code of one of the app's
+   * frameworks. */
+  stringsIn(rel: string, text?: string): StringUse[] | undefined;
   /** The files that explain the screen or component `screen` (its id, or itself), each once, by the first reason it's
    * related, its own file first: the views it places at any depth, the types holding its state, the project's files
    * it imports, and where the tokens it uses are declared; a view declared in a file this view adds or changes is
@@ -74,6 +89,14 @@ interface State {
   parsed: Map<string, Parsed>;
   /** Files changed since the app was scanned. */
   edited: ReadonlySet<string>;
+  /** The app's strings files, each read once it's needed, and their table: shared with the views made from this one
+   * until one changes a strings file. */
+  strings: Strings;
+}
+
+interface Strings {
+  files: Map<string, StringsFile>;
+  table?: StringTable;
 }
 
 type Parsed = SwiftSource | KotlinSource | JsSource;
@@ -170,6 +193,38 @@ function packagesOf(state: State): Set<string> {
   return out;
 }
 
+/** `state`'s strings table, worked out once it's needed. */
+function tableOf(state: State): StringTable {
+  const { strings } = state;
+  if (strings.table) return strings.table;
+  const files: StringsFile[] = [];
+  for (const { rel } of state.files) {
+    const text = state.texts.get(rel);
+    if (text === undefined || !isStringsFile(rel)) continue;
+    const file = strings.files.get(rel) ?? stringsFile(rel, text);
+    strings.files.set(rel, file);
+    files.push(file);
+  }
+  strings.table = stringTable(files);
+  return strings.table;
+}
+
+/** The largest strings file read: a string catalog holding every language can be several megabytes. */
+const MAX_STRINGS_BYTES = 32 * 1024 * 1024;
+
+/** The app's strings files the scan didn't read, read into `texts`. */
+async function readStrings(files: readonly SourceFile[], texts: Map<string, string>): Promise<void> {
+  for (const file of files) {
+    if (texts.has(file.rel) || !isStringsFile(file.rel)) continue;
+    try {
+      if ((await stat(file.abs)).size <= MAX_STRINGS_BYTES)
+        texts.set(file.rel, decodeStrings(await readFile(file.abs)));
+    } catch {
+      // A strings file that can't be read (gone, or not permitted) gives no text: its keys read as null.
+    }
+  }
+}
+
 /** A context listing `state`'s files and reading their texts from it, with nothing read from disk. */
 function contextOf(state: State): ScanContext {
   return {
@@ -195,7 +250,10 @@ async function changed(state: State, changes: ReadonlyMap<string, string | null>
   const parsed = new Map(state.parsed);
   for (const rel of changes.keys()) parsed.delete(rel);
   const edited = new Set([...state.edited, ...changes.keys()]);
-  const next: State = { ...state, files, texts, parsed, edited };
+  const strings = [...changes.keys()].some(isStringsFile)
+    ? { files: new Map([...state.strings.files].filter(([rel]) => !changes.has(rel))) }
+    : state.strings;
+  const next: State = { ...state, files, texts, parsed, edited, strings };
   const ctx = contextOf(next);
   const frameworks = new Map<FrameworkId, Framework>();
   for (const [id, before] of state.frameworks) {
@@ -246,6 +304,13 @@ function viewOf(state: State): AppView {
       const source = text ?? state.texts.get(rel);
       return framework && source !== undefined ? tokensIn(framework.reading, rel, source) : undefined;
     },
+    stringsIn(rel, text) {
+      const framework = frameworkOf(state, rel);
+      const source = text ?? state.texts.get(rel);
+      return framework && source !== undefined
+        ? stringsIn(framework.scan.framework, rel, source, tableOf(state))
+        : undefined;
+    },
     filesFor(screen) {
       const id = typeof screen === "string" ? screen : screen.id;
       const found = byId.get(id);
@@ -275,6 +340,7 @@ export async function readApp(root: string): Promise<App> {
     },
   };
   const scan = await scanContext(ctx);
+  await readStrings(disk.files, texts);
   const frameworks = new Map<FrameworkId, Framework>();
   for (const found of scan.frameworks) {
     const plugin = plugins.find((p) => p.id === found.framework);
@@ -297,6 +363,7 @@ export async function readApp(root: string): Promise<App> {
     scan,
     parsed: new Map(),
     edited: new Set(),
+    strings: { files: new Map() },
   };
   let view = viewOf(state);
   let updating = Promise.resolve();
@@ -310,6 +377,7 @@ export async function readApp(root: string): Promise<App> {
     screens: (framework) => view.screens(framework),
     screen: (id) => view.screen(id),
     tokensIn: (rel, text) => view.tokensIn(rel, text),
+    stringsIn: (rel, text) => view.stringsIn(rel, text),
     filesFor: (screen) => view.filesFor(screen),
     withChanges: (changes) => view.withChanges(changes),
     // Each update starts from the one before, so two made at once both land; one that fails doesn't stop the next.
