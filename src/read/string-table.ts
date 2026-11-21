@@ -54,12 +54,17 @@ const STRINGS_TOKEN = /"(?:[^"\\\n]|\\.){0,20000}"|\/\*[\s\S]*?(?:\*\/|$)|\/\/[^
 /** `"key" = "value";`, each part a string with its escapes. */
 const STRINGS_ENTRY = /"((?:[^"\\\n]|\\.){0,2000})"\s*=\s*"((?:[^"\\]|\\.){0,20000})"\s*;/g;
 
-/** C-style escapes as `.strings` files write them: `\n`, `\"`, `\U00E9`, `é`. */
-const unescapeC = (s: string) =>
-  s.replace(/\\([uU][0-9a-fA-F]{4}|.)/g, (_, c: string) =>
+const C_ESCAPES: Record<string, string> = { n: "\n", t: "\t", r: "\r", "0": "\0" };
+/** C-style escapes, `\n`, `\"` and `é`, read as `escapes` matches them: a `\u` escape and its four digits, or a
+ * backslash and the character after it. */
+const unescapeWith = (escapes: RegExp) => (s: string) =>
+  s.replace(escapes, (_, c: string) =>
     c.length === 5 ? String.fromCharCode(Number.parseInt(c.slice(1), 16)) : (C_ESCAPES[c] ?? c),
   );
-const C_ESCAPES: Record<string, string> = { n: "\n", t: "\t", r: "\r", "0": "\0" };
+/** Escapes as `.strings` files write them, where `\U00E9` is `é` too. */
+const unescapeC = unescapeWith(/\\([uU][0-9a-fA-F]{4}|.)/g);
+/** Escapes as Android strings write them. */
+const unescapeAndroid = unescapeWith(/\\(u[0-9a-fA-F]{4}|.)/g);
 
 function dotStrings(text: string): [string, string][] {
   const blanked = text.replace(STRINGS_TOKEN, (token) =>
@@ -87,16 +92,15 @@ export const decodeEntities = (s: string, named: Record<string, string> = XML_EN
 /** An Android string's text as the app shows it: markup and quotes taken out, entities and escapes read; a CDATA
  * section's text is kept as written. */
 const androidText = (s: string) =>
-  s
-    .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
-    .map((part) =>
-      part.startsWith("<![CDATA[") ? part.slice(9, -3) : decodeEntities(part.replace(/<[^>]+>/g, "")),
-    )
-    .join("")
-    .replace(/^"([\s\S]*)"$/, "$1")
-    .replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_, c: string) =>
-      c.length === 5 ? String.fromCharCode(Number.parseInt(c.slice(1), 16)) : (C_ESCAPES[c] ?? c),
-    );
+  unescapeAndroid(
+    s
+      .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
+      .map((part) =>
+        part.startsWith("<![CDATA[") ? part.slice(9, -3) : decodeEntities(part.replace(/<[^>]+>/g, "")),
+      )
+      .join("")
+      .replace(/^"([\s\S]*)"$/, "$1"),
+  );
 
 /** A plural's items by quantity, found by scanning, so unclosed ones stay linear. */
 function pluralItems(body: string): { quantity: string; text: string }[] {
