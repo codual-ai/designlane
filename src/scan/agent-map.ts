@@ -17,6 +17,7 @@ import {
   lineAt,
   numberValue,
   textStyleValue,
+  valueAfter,
   withoutComments,
 } from "./map-values.js";
 import type {
@@ -293,7 +294,11 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
 }
 
 /** The last name in a reference: `surface` in `Theme.surface`, `md` in `spacing.md`. */
-const nameOf = (reference: string) => reference.match(/[A-Za-z_$][\w$-]*/g)?.at(-1) ?? reference;
+const nameOf = (reference: string) => namesOf(reference).at(-1) ?? reference;
+
+/** A reference's names, a bracket's string as one: `textSizes['10pt']` is `textSizes`, `10pt`. */
+const namesOf = (reference: string) =>
+  [...reference.matchAll(/\[\s*["']([^"']+)["']\s*\]|[A-Za-z_$][\w$-]*/g)].map((m) => m[1] ?? m[0]);
 
 type Read<T> = T | { why: string; at: string };
 
@@ -314,11 +319,7 @@ async function definitionAt(
   if (!span) return { why: `the file has no line ${line}`, at };
   // An asset catalog's color is the entry opening at the line, not a name.
   if (language === "json") return { file, line, code, definition: { name: nameOf(reference), ...span } };
-  const names =
-    reference
-      .match(/[A-Za-z_$][\w$-]*/g)
-      ?.slice(-2)
-      .reverse() ?? [];
+  const names = namesOf(reference).slice(-2).reverse();
   const definition = definitionOnLine(code, line, language, names, appearance);
   if (!definition) return { why: `no ${nameOf(reference)} is defined there`, at };
   return { file, line, code, definition };
@@ -431,6 +432,32 @@ async function numberAt(
   };
 }
 
+/** Where a Compose family's font is written: in its value (`FontFamily(Font(R.font.inter))`), or in the value of
+ * the family it names, defined in the same file (`fontFamily = appFontFamily`). */
+function fontOf(
+  code: string,
+  family: { value: string; start: number; end: number },
+): { start: number; end: number } {
+  if (!/^[A-Za-z_]\w*$/.test(family.value)) return family;
+  const defined = new RegExp(`\\bval\\s+${family.value}\\s*(?::[^=\\n]+)?=\\s*`).exec(code);
+  const value = defined && valueAfter(code, defined.index + defined[0].length);
+  return value ?? family;
+}
+
+/** Whether a font resource's name (`roboto_regular_mono`) is of `family` (`roboto mono`): its words, in order,
+ * starting with the first. */
+function namesFont(resource: string, family: string): boolean {
+  const words = family
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter(Boolean);
+  const parts = resource.toLowerCase().split("_");
+  if (words[0] !== parts[0]) return false;
+  let at = 0;
+  for (const part of parts) if (part === words[at]) at++;
+  return at === words.length;
+}
+
 /** How an agent names the platform's font. */
 const PLATFORM_FONT = /^(?:system|default)$/i;
 
@@ -477,10 +504,22 @@ async function textStyleAt(
     const family = written.family;
     const wanted = style.family.toLowerCase();
     const named = family?.kind === "literal" ? family.value.toLowerCase() : undefined;
-    // A font's file name names its family and weight: `Inter-SemiBold`.
-    const kind = named === wanted ? "literal" : named?.startsWith(`${wanted}-`) ? "family-name" : undefined;
-    if (!family || !kind) return { why: `the family ${style.family} isn't written there`, at: style.at };
-    locations.fontFamily = locationOf(at.file, at.line, { ...family, kind });
+    // Compose's font is a resource the family names: `FontFamily(Font(R.font.inter_variable))` for Inter.
+    const font = family?.kind === "identifier" ? fontOf(at.code, family) : undefined;
+    const resource = font && /\bR\.font\.(\w+)/.exec(at.code.slice(font.start, font.end));
+    if (family && font && resource && namesFont(resource[1] ?? "", wanted)) {
+      const start = font.start + resource.index + resource[0].length - (resource[1] ?? "").length;
+      locations.fontFamily = locationOf(at.file, at.line, {
+        start,
+        end: start + (resource[1] ?? "").length,
+        kind: "family-name",
+      });
+    } else {
+      // A font's file name names its family and weight: `Inter-SemiBold`.
+      const kind = named === wanted ? "literal" : named?.startsWith(`${wanted}-`) ? "family-name" : undefined;
+      if (!family || !kind) return { why: `the family ${style.family} isn't written there`, at: style.at };
+      locations.fontFamily = locationOf(at.file, at.line, { ...family, kind });
+    }
   }
   if (style.weight) {
     const wanted = WEIGHT_VALUES[style.weight];

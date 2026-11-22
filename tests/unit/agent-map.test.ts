@@ -916,4 +916,89 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
     );
     expect(reading.unconfirmed.map((u) => u.reference)).toEqual(["light"]);
   });
+
+  it("reads Swift's argument labels, but not those inside a value nor a parameter's label for its default", async () => {
+    expect(
+      await leftOut(
+        "swift",
+        [
+          "static let palette = ColorPalette(accent: .black, contrastingLabel: .white)",
+          "private let _background: Color = .init(red: 1, green: 1, blue: 1)",
+          "static let surface = Color(hex: 0x121212)",
+          "init(width: CGFloat, cornerRadius: CGFloat = 4) {}",
+        ],
+        {
+          colors: {
+            "Palette.contrastingLabel": color("#ffffff", 1),
+            "Palette.accent": color("#000000", 1),
+            "ThemedColor.themedBackground": color("#ffffff", 2),
+            "Theme.surface": color("#121212", 3),
+            "Theme.red": color("#ffffff", 2),
+          },
+          radii: { "Frame.cornerRadius": { value: 4, at: "@4" } },
+        },
+      ),
+    ).toEqual(["Theme.red"]);
+  });
+
+  it("reads a quoted key that starts with a digit, by the name in its brackets", async () => {
+    expect(
+      await leftOut("js", ["export const space = {", "  '4px': 4,", "  '8px (Deprecated)': 8,", "};"], {
+        spacing: {
+          "space['4px']": { value: 4, at: "@2" },
+          "space['8px (Deprecated)']": { value: 8, at: "@3" },
+          "space['12px']": { value: 4, at: "@2" },
+        },
+      }),
+    ).toEqual(["space['12px']"]);
+  });
+
+  it("reads a size call's one argument, not one of several or of another call", async () => {
+    expect(
+      await leftOut(
+        "kotlin",
+        [
+          "val card = RoundedCornerShape(size = 12.dp)",
+          "val chip = RoundedCornerShape(8.dp)",
+          "val top = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)",
+          "val dialog = PaddingValues(vertical = 24.dp)",
+          "val other = Spacer(size = 8.dp)",
+        ],
+        {
+          radii: {
+            card: { value: 12, at: "@1" },
+            chip: { value: 8, at: "@2" },
+            top: { value: 8, at: "@3" },
+            other: { value: 8, at: "@5" },
+          },
+          spacing: { dialog: { value: 24, at: "@4" } },
+        },
+      ),
+    ).toEqual(["other", "top"]);
+  });
+
+  it("reads a Compose family from its font resource, or the family variable it's given", async () => {
+    expect(
+      await leftOut(
+        "kotlin",
+        [
+          "val appFont = FontFamily(Font(R.font.roboto_regular_mono))",
+          "val Code = TextStyle(fontFamily = appFont, fontSize = 14.sp)",
+          "val Body = TextStyle(fontFamily = FontFamily(Font(R.font.inter_variable)), fontSize = 16.sp)",
+          "val Other = TextStyle(fontFamily = FontFamily(Font(R.font.lato)), fontSize = 16.sp)",
+          "val Mono = TextStyle(fontFamily = appFont, fontSize = 14.sp)",
+          "val Serif = TextStyle(fontFamily = appFont, fontSize = 14.sp)",
+        ],
+        {
+          textStyles: {
+            Code: { family: "Roboto Mono", size: 14, at: "@2" },
+            Body: { family: "Inter", size: 16, at: "@3" },
+            Other: { family: "Inter", size: 16, at: "@4" },
+            Mono: { family: "Mono", size: 14, at: "@5" },
+            Serif: { family: "Roboto Serif", size: 14, at: "@6" },
+          },
+        },
+      ),
+    ).toEqual(["Mono", "Other", "Serif"]);
+  });
 });

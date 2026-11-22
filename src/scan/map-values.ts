@@ -134,7 +134,7 @@ const ASSIGNED = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*(?::\s*[\w.<>?[\] ]{1,60}?\s*)
 /** A computed property: `var tint: Color {`. */
 const COMPUTED = /\b(?:var|val)\s+([A-Za-z_$][\w$]*)\s*:\s*[\w.<>?]+\s*\{/g;
 /** A key given a value: `surface:` and `"surface":` in JavaScript and JSON, `color:` in CSS. */
-const KEYED = /(?<![\w$.-])(["']?)([A-Za-z_$-][\w$-]*)\1\s*:(?!:)/g;
+const KEYED = /(?<![\w$.-])(?:(["'])([^"'\n]+)\1|([A-Za-z_$-][\w$-]*))\s*:(?!:)/g;
 /** An Android resource: `<color name="accent">#FF3366CC</color>`, `<dimen name="md">16dp</dimen>`. */
 const RESOURCE = /<(?:color|dimen|integer|item)\b[^>]*\bname="([^"]+)"[^>]*>([^<]*)</g;
 
@@ -163,12 +163,22 @@ export function definitionsAt(code: string, line: number, language: Language): D
   if (language !== "css" && language !== "json")
     for (const m of text.matchAll(ASSIGNED))
       add(m[1] ?? "", valueAfter(code, span.start + (m.index ?? 0) + m[0].length));
-  if (language === "js" || language === "css" || language === "json")
+  // Swift's argument labels give a value too: `ColorPalette(accent: .blue, contrastingLabel: .white)`.
+  const opens = language === "swift" ? /[{,;([]$/ : /[{,;]$/;
+  if (language !== "kotlin")
     for (const m of text.matchAll(KEYED)) {
-      // A key starts an object's entry or a CSS declaration: after `{`, `,`, `;` or at its line's start, not a ternary's `:` or a type's.
+      // A key starts an entry, an argument or a CSS declaration: after `{`, `,`, `;` or at its line's start (in Swift,
+      // after `(` or `[` too), not a ternary's `:` or a type's.
       const before = code.slice(span.start, span.start + (m.index ?? 0)).trimEnd();
-      if (before !== "" && !/[{,;]$/.test(before)) continue;
-      add(m[2] ?? "", valueAfter(code, span.start + (m.index ?? 0) + m[0].length));
+      if (before !== "" && !opens.test(before)) continue;
+      // A quoted key's name is read from the code, its strings being blanked where definitions are looked for.
+      const at = m.index ?? 0;
+      const name = m[2] === undefined ? (m[3] ?? "") : written.slice(at + 1, at + 1 + m[2].length);
+      const value = valueAfter(code, span.start + at + m[0].length);
+      // A parameter's default, `cornerRadius: CGFloat = 4`, is its `=` definition's, read already.
+      if (value && out.some((d) => d.name === name && d.start >= value.start && d.start <= value.end))
+        continue;
+      add(name, value);
     }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -206,15 +216,18 @@ export function definitionAt(
     );
     if (holding.length === 1) return holding[0];
   }
-  const [only] = own;
+  // The line's own definitions, not those within one's value (`hex:` in `surface = Color(hex: 0x121212)`).
+  const top = own.filter((d) => !own.some((o) => o !== d && o.start <= d.start && d.end <= o.end));
+  const [only] = top;
   const [name = ""] = names;
-  return own.length === 1 && only && related(only.name, name, appearance) ? only : undefined;
+  return top.length === 1 && only && related(only.name, name, appearance) ? only : undefined;
 }
 
 /** Whether one name holds the other, as `scaledTitle` does `title`, or `surfaceDark` the dark `surface`, but not its
  * light one. */
 function related(defined: string, name: string, appearance?: "light" | "dark"): boolean {
-  const a = defined.toLowerCase();
+  // A private constant's underscore isn't part of the name: `_background` is the one `themedBackground` is made of.
+  const a = defined.replace(/^_+/, "").toLowerCase();
   const b = name.toLowerCase();
   if (a === b || !(a.includes(b) || b.includes(a))) return false;
   const rest = a.replace(b, "");
@@ -480,7 +493,9 @@ export function numberValue(
   single = true,
 ): Found<number> | undefined {
   const value = code.slice(span.start, span.end);
-  const whole = NUMBER.exec(value);
+  const whole = NUMBER.exec(value) ?? undefined;
+  const sized = whole ? undefined : sizeArgument(code, span);
+  if (sized) return numberValue(code, sized);
   if (whole) return { value: Number(whole[1]), ...span, kind: value === whole[1] ? "literal" : "expression" };
   const inner = label
     ? labelled(code, span, new RegExp(`(?<![\\w$.])${escaped(label)}\\s*[:=]\\s*`, "g"))
@@ -495,6 +510,23 @@ export function numberValue(
     if (n) return numberValue(code, s);
   }
   return undefined;
+}
+
+/** Calls whose one argument is a size: `RoundedCornerShape(12.dp)`, `RoundedCornerShape(size = 12.dp)`,
+ * `RoundedRectangle(cornerRadius: 8)`, `PaddingValues(vertical = 24.dp)`. */
+const SIZE_CALL =
+  /^(?:RoundedCornerShape|RoundedRectangle|CornerSize|PaddingValues|BorderRadius\.circular|Radius\.circular)\(/;
+
+/** The one argument of a size-holding call, without its label, when it's written whole there. */
+function sizeArgument(code: string, span: Span): Span | undefined {
+  const value = code.slice(span.start, span.end);
+  const call = SIZE_CALL.exec(value);
+  if (!call || closeOf(value) !== value.length - 1) return undefined;
+  const argument = valueAfter(code, span.start + call[0].length);
+  // One argument: it ends where the call does.
+  if (!argument || argument.end !== trimmed(code, span.start, span.end - 1).end) return undefined;
+  const label = /^[A-Za-z_]\w*\s*[:=]\s*/.exec(code.slice(argument.start, argument.end));
+  return label ? { start: argument.start + label[0].length, end: argument.end } : argument;
 }
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
