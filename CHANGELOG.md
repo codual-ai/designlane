@@ -7,6 +7,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Compose constants named for a spacing or a corner radius (`val ThumbnailCornerRadius = 3.dp`, `DEFAULT_PADDING`,
+  `object MailDimens { val SnackbarOuterMargin = 12.dp }`) and shapes (`val CardShape = RoundedCornerShape(12.dp)`) are
+  named in `scales`, each when code outside its file uses it, wherever it's declared but in a function or as private.
 - A coding agent's map of the design system: `designlane --from-agent` reads an `agent.json` of version 1, which gives
   each color (with its dark value and its themes), text style, spacing and corner radius with the file and line it's
   written on. Designlane reads each value there with its own readers, following a color written as another's name
@@ -21,7 +24,6 @@ and versions follow [Semantic Versioning](https://semver.org/).
   scheme) gets its Material roles from the theme the code names as its default (`AppTheme.DEFAULT to …`,
   `getOrDefault(theme, …)`, `else -> …`), or one named default, not the fullest; and each theme's light scheme pairs
   with its own dark one.
-
 
 ## 0.5.0 - 2026-11-22
 

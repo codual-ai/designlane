@@ -16,6 +16,9 @@ export interface ScaleCandidate {
   scale: string;
   step: Omit<ScaleStep, "uses">;
   usedIn: Map<string, number>;
+  /** Its kind is its own name's (`ThumbnailCornerRadius`, `layoutPadding`), not its container's: it's kept on its own
+   * when code outside its file uses it, however few steps its container has. */
+  named?: boolean;
 }
 
 /** A name holding a corner radius scale: `CornerRadius`, `AppCornerRadius`, `radii`, `borderRadius`, `Corners`. */
@@ -31,6 +34,79 @@ export function scaleKindOf(name: string): ScaleKind | undefined {
   if (NOT_A_SCALE.test(name) || name.includes("_")) return undefined;
   if (RADIUS_NAME.test(name)) return "radius";
   if (SPACING_NAME.test(name)) return "spacing";
+  return undefined;
+}
+
+/** The words of a name that say what a constant is: `ThumbnailCornerRadius`, `layoutPadding`, `ROW_PADDING_HORIZONTAL`. */
+const SPACING_WORDS = new Set([
+  "padding",
+  "paddings",
+  "spacing",
+  "spacings",
+  "margin",
+  "margins",
+  "gap",
+  "gaps",
+  "inset",
+  "insets",
+  "gutter",
+]);
+const RADIUS_WORDS = new Set(["radius", "radii", "corner", "corners"]);
+
+/** A name's words, lowercase: `FABPadding` is `fab padding`, `ROW_PADDING_HORIZONTAL` is `row padding horizontal`.
+ * Read a letter at a time, so a long name costs its length. */
+function wordsOf(name: string): string[] {
+  const words: string[] = [];
+  let word = "";
+  const upper = (c: string | undefined) => c !== undefined && c >= "A" && c <= "Z";
+  const lower = (c: string | undefined) =>
+    c !== undefined && ((c >= "a" && c <= "z") || (c >= "0" && c <= "9"));
+  for (let i = 0; i < name.length; i++) {
+    const c = name[i] ?? "";
+    // A new word at `_`, at `aB`, and at `ABc`'s `B`: `FABPadding`'s `P`.
+    const starts =
+      c === "_" || (upper(c) && (lower(name[i - 1]) || (upper(name[i - 1]) && lower(name[i + 1]))));
+    if (starts && word) words.push(word.toLowerCase());
+    if (starts) word = "";
+    if (c !== "_") word += c;
+  }
+  if (word) words.push(word.toLowerCase());
+  return words;
+}
+
+/** A size's word in a constant's name: `rowHeight`, `iconSize`, `shadowRadius`, but not `OutlinedButtonPadding`. */
+const SIZE_WORDS = new Set([
+  "height",
+  "width",
+  "size",
+  "shadow",
+  "blur",
+  "offset",
+  "opacity",
+  "alpha",
+  "duration",
+  "scale",
+  "line",
+  "border",
+]);
+
+/** Whether a constant named for its kind is a size of another sort, by its words: `borderRadius` is a corner's. */
+function namesAnotherSize(name: string): boolean {
+  const words = wordsOf(name);
+  return words.some((w) => SIZE_WORDS.has(w) && !(w === "border" && words.includes("radius")));
+}
+
+/** A round thing's radius, which a name alone can't tell from a corner's: `currentTimeDotRadius`, `rippleRadius`. A
+ * scale may still have a `circle` step: this is for a constant named on its own. */
+const NOT_A_CORNER = /dot|circle|ripple|glow|knob/i;
+
+/** The kind of size a constant's own name says it is, or none: `ThumbnailCornerRadius` a radius, `TabTopPadding`
+ * a spacing, `rowHeight` or `shadowRadius` neither. */
+export function stepKindOf(name: string): ScaleKind | undefined {
+  // A retired or a size-named one (`shadowRadius`, `rowHeight`) is left out with every scale's.
+  const words = wordsOf(name);
+  if (words.some((w) => RADIUS_WORDS.has(w))) return NOT_A_CORNER.test(name) ? undefined : "radius";
+  if (words.some((w) => SPACING_WORDS.has(w))) return "spacing";
   return undefined;
 }
 
@@ -53,7 +129,8 @@ export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefin
   const seen = new Set<string>();
   for (const candidate of candidates) {
     const { name, value } = candidate.step;
-    if (RETIRED.test(name) || NOT_A_STEP.test(name) || value < 0) continue;
+    const another = candidate.named ? namesAnotherSize(name) : NOT_A_STEP.test(name);
+    if (RETIRED.test(name) || another || value < 0) continue;
     const id = `${candidate.kind}|${candidate.step.source}|${candidate.scale}`;
     const steps = byScale.get(id) ?? [];
     byScale.set(id, steps);
@@ -67,10 +144,15 @@ export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefin
   const found: NamedScales = { spacing: [], radii: [] };
   for (const steps of byScale.values()) {
     const [first] = steps;
-    if (!first || steps.length < MIN_STEPS) continue;
-    const usedElsewhere = steps.some((s) => [...s.usedIn.keys()].some((file) => file !== s.step.source));
-    if (!usedElsewhere) continue;
-    const kept = steps.map(({ step, usedIn }) => ({
+    if (!first) continue;
+    const elsewhere = (s: ScaleCandidate) => [...s.usedIn.keys()].some((file) => file !== s.step.source);
+    // A constant named for its kind stands on its own; a container's steps are a scale together.
+    const chosen = first.named
+      ? steps.filter(elsewhere)
+      : steps.length >= MIN_STEPS && steps.some(elsewhere)
+        ? steps
+        : [];
+    const kept = chosen.map(({ step, usedIn }) => ({
       ...step,
       uses: [...usedIn.values()].reduce((sum, n) => sum + n, 0),
     }));

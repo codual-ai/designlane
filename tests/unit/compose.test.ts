@@ -655,3 +655,167 @@ describe("themes outside the project", () => {
     expect(themesOutsideNote(scan)).toBeUndefined();
   });
 });
+
+describe("Compose constants named for a spacing or a corner radius", () => {
+  it("names each one code elsewhere uses, top-level or in an object, and a shape's radius", async () => {
+    const { tokens } = await compose({
+      "app/ui/theme/Dimensions.kt": [
+        "val ThumbnailCornerRadius = 3.dp",
+        "val PlayerHorizontalPadding: Dp = 32.dp",
+        "const val unusedPadding = 4",
+        "val OnlyHerePadding = 6.dp",
+        "private val HiddenPadding = 8.dp",
+        "val currentTimeDotRadius = 6.dp",
+        "val rowHeight = 64.dp",
+        "val CardShape = RoundedCornerShape(12.dp)",
+        "object MailDimens { val SnackbarOuterMargin = 12.dp; val Elevation = 2.dp }",
+        "fun local() { val InnerPadding = 10.dp }",
+        "@Composable fun D() { Box(Modifier.padding(OnlyHerePadding)) }",
+      ].join("\n"),
+      "app/ui/Screen.kt": [
+        "@Composable fun S() {",
+        "  Box(Modifier.clip(RoundedCornerShape(ThumbnailCornerRadius)).padding(PlayerHorizontalPadding))",
+        "  Box(Modifier.padding(MailDimens.SnackbarOuterMargin).padding(HiddenPadding).padding(InnerPadding))",
+        "  Box(Modifier.size(currentTimeDotRadius).height(rowHeight).clip(CardShape).padding(MailDimens.Elevation))",
+        "}",
+      ].join("\n"),
+    });
+    const steps = (kind: "spacing" | "radii") =>
+      tokens.scales?.[kind].map((s) => [s.reference, s.value, s.uses]);
+    expect(steps("spacing")).toEqual([
+      ["MailDimens.SnackbarOuterMargin", 12, 1],
+      ["PlayerHorizontalPadding", 32, 1],
+    ]);
+    expect(steps("radii")).toEqual([
+      ["ThumbnailCornerRadius", 3, 1],
+      ["CardShape", 12, 1],
+    ]);
+  });
+
+  it("reads the one a file's package declares or imports, and never a parameter, argument or import", async () => {
+    const { tokens } = await compose({
+      "app/src/a/Dims.kt": "package a\nval CardPadding = 8.dp",
+      "app/src/b/Dims.kt": "package b\nval CardPadding = 20.dp",
+      "tv/src/b/Dims.kt": "package b\nval CardPadding = 40.dp",
+      "tv/src/b/Screen.kt": "package b\n@Composable fun V() { Box(Modifier.padding(CardPadding)) }",
+      "app/src/b/Screen.kt": "package b\n@Composable fun S() { Box(Modifier.padding(CardPadding)) }",
+      "app/src/d/Screen.kt": "package d\n@Composable fun U() { Box(Modifier.padding(CardPadding)) }",
+      "app/src/Root.kt": "val ROOT_PADDING = 18.dp",
+      "app/src/e/Screen.kt":
+        "package e\nimport ROOT_PADDING\n@Composable fun W() { Box(Modifier.padding(ROOT_PADDING)) }",
+      "app/src/c/Screen.kt": [
+        "package c",
+        "import a.CardPadding",
+        "@Composable fun T(CardPadding: Dp = 1.dp) { Row(CardPadding = 2.dp) }",
+      ].join("\n"),
+    });
+    expect(tokens.scales?.spacing.map((s) => [s.source, s.value, s.uses])).toEqual([
+      ["app/src/Root.kt", 18, 1],
+      // The TV module's copy, read in the TV module, is the same token: the first stays, with its own use only.
+      ["app/src/b/Dims.kt", 20, 1],
+    ]);
+  });
+
+  it("reads nested, companion and constructed types' constants by their whole path, but no function's", async () => {
+    const { tokens } = await compose({
+      "app/ui/theme/Theme.kt": [
+        "object Theme { object Metrics { val CardPadding = 8.dp } }",
+        "class Holder { companion object { val SheetPadding = 12.dp } }",
+        "class Sized(val x: Int) { val RowPadding = 6.dp }",
+        "object Bars : Base() { val BarPadding = 4.dp }",
+        "fun local() { class Metrics { val CardPadding = 30.dp } }",
+        "class Marker",
+        "fun g() { val GPadding = 2.dp }",
+        "val Spaced = 9.dp",
+        "    get() = field * 2",
+        "val SpacedPadding = 10.dp\n    get() = field * 2",
+        '@Deprecated("use another")\nval OldPadding = 2.dp',
+        "val FABPadding = 16.dp",
+        "val OutlinedButtonPadding = 14.dp",
+        "val CardCorner: CornerSize = CornerSize(12.dp)",
+        "val CardBorderRadius = 6.dp",
+      ].join("\n"),
+      "app/ui/Screen.kt": [
+        "@Composable fun S() {",
+        "  Box(Modifier.padding(Theme.Metrics.CardPadding).padding(Holder.SheetPadding).padding(Sized.RowPadding))",
+        "  Box(Modifier.padding(Bars.BarPadding).padding(SpacedPadding).padding(OldPadding).padding(FABPadding))",
+        "  Box(Modifier.padding(OutlinedButtonPadding).clip(RoundedCornerShape(CardCorner)))",
+        "  Box(Modifier.clip(RoundedCornerShape(CardBorderRadius)).padding(Marker.GPadding))",
+        "}",
+      ].join("\n"),
+    });
+    expect(tokens.scales?.spacing.map((s) => [s.reference, s.value])).toEqual([
+      ["Bars.BarPadding", 4],
+      ["Sized.RowPadding", 6],
+      ["Theme.Metrics.CardPadding", 8],
+      ["Holder.SheetPadding", 12],
+      ["OutlinedButtonPadding", 14],
+      ["FABPadding", 16],
+    ]);
+    expect(tokens.scales?.radii.map((s) => [s.reference, s.value])).toEqual([
+      ["CardBorderRadius", 6],
+      ["CardCorner", 12],
+    ]);
+  });
+
+  it("reads each declaration's own modifiers, members by package and import, and getters after annotations", async () => {
+    const { tokens } = await compose({
+      "app/src/a/Metrics.kt": "package a\nobject Metrics { val CardPadding = 8.dp }",
+      "app/src/b/Metrics.kt": [
+        "package b",
+        "private val secret = 1",
+        "val SheetPadding = 12.dp",
+        "object Metrics : Base(),",
+        "  Other { val CardPadding = 20.dp }",
+        "val GetterPadding = 4.dp",
+        '  @Deprecated("x") get() = field * 2',
+      ].join("\n"),
+      "app/src/b/Screen.kt":
+        "package b\n@Composable fun S() { Box(Modifier.padding(Metrics.CardPadding).padding(GetterPadding)) }",
+      "app/src/c/Screen.kt": [
+        "package c",
+        "import b.SheetPadding",
+        "import a.Metrics.CardPadding",
+        "@Composable fun T(SheetPadding   : Dp = 1.dp) { Box(Modifier.padding(CardPadding)) }",
+      ].join("\n"),
+      "app/src/d/Screen.kt": [
+        "package d",
+        "import b.Metrics.CardPadding",
+        "import b.SheetPadding",
+        "import a.Metrics",
+        "@Composable fun U() { Box(Modifier.padding(Metrics.CardPadding).padding(SheetPadding)) }",
+      ].join("\n"),
+    });
+    expect(tokens.scales?.spacing.map((s) => [s.source, s.reference, s.value, s.uses])).toEqual([
+      ["app/src/a/Metrics.kt", "Metrics.CardPadding", 8, 2],
+      // Public, after a private declaration of its own.
+      ["app/src/b/Metrics.kt", "SheetPadding", 12, 1],
+    ]);
+  });
+
+  speedIt("reads long names and thousands of declarations on a line quickly", async () => {
+    const long = `val ${"A".repeat(30000)}_PADDING = 8.dp`;
+    const many = Array.from({ length: 8000 }, (_, i) => `val p${i}Padding = ${i}.dp`).join("; ");
+    const started = performance.now();
+    await compose({ "app/ui/A.kt": long, "app/ui/B.kt": many });
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  speedIt("reads a file of thousands of annotations without a constant quickly", async () => {
+    const started = performance.now();
+    await compose({ "app/ui/T.kt": `${"@A ".repeat(20000)}fun f() {}\nval CardPadding = 8.dp` });
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  it("leaves a scale's own steps to the scale", async () => {
+    const { tokens } = await compose({
+      "app/ui/theme/Spacing.kt": "object Spacing { val smallPadding = 4.dp; val largePadding = 16.dp }",
+      "app/ui/Screen.kt":
+        "@Composable fun S() { Box(Modifier.padding(Spacing.smallPadding).padding(Spacing.largePadding)) }",
+    });
+    expect(tokens.scales?.spacing.map((s) => s.reference)).toEqual([
+      "Spacing.smallPadding",
+      "Spacing.largePadding",
+    ]);
+  });
+});

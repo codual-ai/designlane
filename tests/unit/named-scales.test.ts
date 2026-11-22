@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { toDesignMd } from "../../src/output/design-md.js";
 import { toDesignTokens } from "../../src/output/tokens-json.js";
 import { scanRepo } from "../../src/scan/index.js";
+import { stepKindOf } from "../../src/scan/scales.js";
 import type { FrameworkId } from "../../src/scan/types.js";
 import { planSync } from "../../src/sync/plan.js";
 import { readTokensFile } from "../../src/sync/tokens-file.js";
@@ -267,5 +268,22 @@ describe("syncing named scale steps", () => {
     expect(plan.rename.map((r) => [r.name, r.token.identity])).toEqual([
       ["radius/card", "radius:Radii.tile"],
     ]);
+  });
+});
+
+describe("a constant's own name", () => {
+  it.each([
+    ["ThumbnailCornerRadius", "radius"],
+    ["cardCorners", "radius"],
+    ["layoutPadding", "spacing"],
+    ["ROW_PADDING_HORIZONTAL", "spacing"],
+    ["SnackbarFabGap", "spacing"],
+    ["currentTimeDotRadius", undefined],
+    ["rippleRadius", undefined],
+    ["indicatorPadding", "spacing"],
+    ["rowHeight", undefined],
+    ["Elevation", undefined],
+  ])("says %s is a %s", (name, kind) => {
+    expect(stepKindOf(name)).toBe(kind);
   });
 });
