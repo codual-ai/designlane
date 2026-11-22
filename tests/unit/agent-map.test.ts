@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { applyMap, isMap } from "../../src/scan/agent-map.js";
 import { scanRepo } from "../../src/scan/index.js";
@@ -201,6 +202,16 @@ describe("agent map: checked where it says each value is written", () => {
       ["Theme.body", "the family Roboto isn't written there"],
       ["Theme.md", "the code there writes 16, not 8"],
     ]);
+    expect(reading.unconfirmed.map((u) => u.kind)).toEqual([
+      "other-value",
+      "no-line",
+      "outside-app",
+      "outside-app",
+      "invalid-value",
+      "no-definition",
+      "no-family",
+      "other-value",
+    ]);
     expect(tokens?.colors.filter((c) => c.kind !== "inline")).toEqual([]);
   });
 });
@@ -364,29 +375,81 @@ describe("agent map: what leads", () => {
 });
 
 describe("designlane --from-agent with a map", () => {
-  it("says how many tokens it confirmed, and each it left out with where and why", async () => {
+  async function fromAgent(colors: Record<string, object>, ...flags: string[]) {
     const { run } = await import("../../src/cli/run.js");
     const root = await tempDir({
       "App/Theme.swift": SWIFT_THEME,
-      "designlane/agent.json": JSON.stringify({
-        version: 1,
-        colors: {
-          "Theme.surface": { light: { value: "#ffffff", at: "App/Theme.swift:3" } },
-          "Theme.accent": { light: { value: "#000000", at: "App/Theme.swift:5" } },
-        },
-      }),
+      "designlane/agent.json": JSON.stringify({ version: 1, colors }),
     });
     const out: string[] = [];
     const error: string[] = [];
-    const code = await run([root, "--from-agent", `${root}/designlane/agent.json`, "--no-write"], {
+    const code = await run([root, "--from-agent", `${root}/designlane/agent.json`, ...flags], {
       out: (t) => out.push(t),
       error: (t) => error.push(t),
     });
+    return { root, code, out, error };
+  }
+
+  it("says how many it confirmed, a line for each kind of reason the rest were left out, and writes every one", async () => {
+    const { root, code, out, error } = await fromAgent({
+      "Theme.gone": { light: { value: "#000000", at: "App/Theme.swift:99" } },
+      "Theme.surface": { light: { value: "#ffffff", at: "App/Theme.swift:3" } },
+      "Theme.accent": { light: { value: "#000000", at: "App/Theme.swift:5" } },
+      "Theme.accent2": { light: { value: "#000000", at: "App/Theme.swift:5" } },
+    });
     expect(code).toBe(0);
     expect(out[0]).toMatch(/^Confirmed 1 token of .*agent\.json where it says they're written$/);
-    expect(error).toContain(
-      "designlane: left out Theme.accent (App/Theme.swift:5): the code there writes #3366cc, not #000000",
+    expect(error).toEqual(
+      expect.arrayContaining([
+        "designlane: left out 3 entries the code doesn't bear out:",
+        "  2  the code there gives another value, like Theme.accent (App/Theme.swift:5): the code there writes #3366cc, not #000000",
+        "  1  the file has no such line, like Theme.gone (App/Theme.swift:99): the file has no line 99",
+      ]),
     );
+    // The most common reason first.
+    expect(error.filter((l) => l.startsWith("  ")).map((l) => l.trim()[0])).toEqual(["2", "1"]);
+    expect(error.at(-1)).toMatch(
+      /^designlane: every entry left out, with where and why: .*designlane\/agent-check\.json$/,
+    );
+    const check = JSON.parse(await readFile(`${root}/designlane/agent-check.json`, "utf8"));
+    expect(check.confirmed).toBe(1);
+    expect(check.unconfirmed.map((u: { reference: string; kind: string }) => [u.reference, u.kind])).toEqual([
+      ["Theme.gone", "no-line"],
+      ["Theme.accent", "other-value"],
+      ["Theme.accent2", "other-value"],
+    ]);
+  });
+
+  it("keeps the lines few however many are left out, and writes no file with --no-write", async () => {
+    const colors = Object.fromEntries(
+      Array.from({ length: 3000 }, (_, i) => [
+        `Theme.c${i}`,
+        { light: { value: "#000000", at: "App/Theme.swift:99" } },
+      ]),
+    );
+    const { root, error } = await fromAgent(colors, "--no-write");
+    expect(error.filter((l) => l.startsWith("  "))).toHaveLength(1);
+    expect(error).toContain(
+      "designlane: left out 3,000 entries the code doesn't bear out:".replace("3,000", "3000"),
+    );
+    await expect(readFile(`${root}/designlane/agent-check.json`, "utf8")).rejects.toThrow();
+  });
+
+  it("says nothing of entries left out when none is, and writes the file empty", async () => {
+    const { root, error } = await fromAgent({
+      "Theme.surface": { light: { value: "#ffffff", at: "App/Theme.swift:3" } },
+    });
+    expect(error.filter((l) => l.includes("left out"))).toEqual([]);
+    expect(JSON.parse(await readFile(`${root}/designlane/agent-check.json`, "utf8"))).toEqual({
+      confirmed: 1,
+      unconfirmed: [],
+    });
+  });
+
+  it("lists every kind of reason with words of its own", async () => {
+    const { UNCONFIRMED_KINDS } = await import("../../src/scan/agent-map.js");
+    const words = Object.values(UNCONFIRMED_KINDS);
+    expect(new Set(words).size).toBe(words.length);
   });
 });
 

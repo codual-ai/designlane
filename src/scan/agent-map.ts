@@ -95,11 +95,31 @@ export function placeOf(at: string): { file: string; line: number } {
   return { file: at.slice(0, colon), line: Number(at.slice(colon + 1)) };
 }
 
+/** Why a map's entry wasn't confirmed, as a kind that stays the same release to release: what an agent fixing its
+ * map, or a tool grouping them, goes by. */
+export const UNCONFIRMED_KINDS = {
+  "outside-app": "the file isn't in the app's folder",
+  "unread-file": "Designlane doesn't read this kind of file",
+  "no-line": "the file has no such line",
+  "no-definition": "nothing of that name is defined at the line",
+  "invalid-value": "the map's value isn't a color",
+  "other-value": "the code there gives another value",
+  "no-color": "no color is written there whole",
+  "no-number": "no number is written there whole",
+  "no-size": "no size is written there",
+  "no-family": "the family isn't written there",
+  "no-weight": "the weight isn't written there",
+  "no-size-or-family": "the map gives neither a size nor a family",
+  "unread-name": "it's written as a name Designlane couldn't read",
+} as const;
+export type UnconfirmedKind = keyof typeof UNCONFIRMED_KINDS;
+
 /** A map's entry Designlane couldn't confirm where the map says it's written, and why. */
 export interface Unconfirmed {
   /** How the code refers to it (`Theme.surface`), with its theme (`Sepia: Theme.surface`) for a theme's color. */
   reference: string;
   at: string;
+  kind: UnconfirmedKind;
   why: string;
 }
 
@@ -178,7 +198,13 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
         const failed = [light, dark].find((r) => r !== undefined && "why" in r);
         if (failed && "why" in failed) {
           if ("waiting" in failed) later.push([reference, color]);
-          else unconfirmed.push({ reference: label(reference), at: failed.at, why: failed.why });
+          else
+            unconfirmed.push({
+              reference: label(reference),
+              at: failed.at,
+              kind: failed.kind,
+              why: failed.why,
+            });
           continue;
         }
         if ("why" in light || (dark && "why" in dark)) continue;
@@ -207,6 +233,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
           unconfirmed.push({
             reference: label(reference),
             at: color.light.at,
+            kind: "unread-name",
             why: "it's written as the name of a color Designlane couldn't confirm",
           });
         break;
@@ -227,7 +254,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
   for (const [reference, style] of Object.entries(map.textStyles)) {
     const read = await textStyleAt(texts, reference, style);
     if ("why" in read) {
-      unconfirmed.push({ reference, at: style.at, why: read.why });
+      unconfirmed.push({ reference, at: style.at, kind: read.kind, why: read.why });
       continue;
     }
     typeStyles.push({
@@ -249,7 +276,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
     for (const [reference, step] of Object.entries(entries)) {
       const read = await numberAt(texts, reference, step);
       if ("why" in read) {
-        unconfirmed.push({ reference, at: step.at, why: read.why });
+        unconfirmed.push({ reference, at: step.at, kind: read.kind, why: read.why });
         continue;
       }
       const { file, line } = placeOf(step.at);
@@ -300,7 +327,8 @@ const nameOf = (reference: string) => namesOf(reference).at(-1) ?? reference;
 const namesOf = (reference: string) =>
   [...reference.matchAll(/\[\s*["']([^"']+)["']\s*\]|[A-Za-z_$][\w$-]*/g)].map((m) => m[1] ?? m[0]);
 
-type Read<T> = T | { why: string; at: string };
+type Failure = { kind: UnconfirmedKind; why: string; at: string };
+type Read<T> = T | Failure;
 
 /** The definition the map's entry is at, its file's text with comments blanked, or why there's none. */
 async function definitionAt(
@@ -311,17 +339,17 @@ async function definitionAt(
 ): Promise<Read<{ file: string; line: number; code: string; definition: Definition }>> {
   const { file, line } = placeOf(at);
   const text = await texts(file);
-  if (text === undefined) return { why: "the file isn't in the app's folder", at };
+  if (text === undefined) return { kind: "outside-app", why: "the file isn't in the app's folder", at };
   const language = languageOf(file);
-  if (!language) return { why: "Designlane doesn't read this kind of file", at };
+  if (!language) return { kind: "unread-file", why: "Designlane doesn't read this kind of file", at };
   const code = text;
   const span = lineAt(code, line);
-  if (!span) return { why: `the file has no line ${line}`, at };
+  if (!span) return { kind: "no-line", why: `the file has no line ${line}`, at };
   // An asset catalog's color is the entry opening at the line, not a name.
   if (language === "json") return { file, line, code, definition: { name: nameOf(reference), ...span } };
   const names = namesOf(reference).slice(-2).reverse();
   const definition = definitionOnLine(code, line, language, names, appearance);
-  if (!definition) return { why: `no ${nameOf(reference)} is defined there`, at };
+  if (!definition) return { kind: "no-definition", why: `no ${nameOf(reference)} is defined there`, at };
   return { file, line, code, definition };
 }
 
@@ -381,23 +409,38 @@ async function colorAt(
   names: Names,
   appearance: "light" | "dark",
   unread: Set<string>,
-): Promise<Read<Located> | { why: string; at: string; waiting: true }> {
+): Promise<Read<Located> | (Failure & { waiting: true })> {
   const value = colorOf(given.value);
-  if (!value) return { why: `${given.value} isn't a color`, at: given.at };
+  if (!value) return { kind: "invalid-value", why: `${given.value} isn't a color`, at: given.at };
   const at = await definitionAt(texts, reference, given.at, appearance);
   if ("why" in at) return at;
   const written = colorValue(at.file, at.code, at.definition, appearance);
-  if (!written) return { why: "no color is written there", at: given.at };
+  if (!written) return { kind: "no-color", why: "no color is written there", at: given.at };
   if ("name" in written) {
     // A color written as another's name: its value is where that one's is, reached through this name.
     const self = written.name === reference || written.name === nameOf(reference);
     const target =
       unread.has(written.name) && !self && !names.has(written.name) ? undefined : names.get(written.name);
-    if (!target) return { why: `${written.name} isn't a color Designlane read`, at: given.at, waiting: true };
+    if (!target)
+      return {
+        kind: "unread-name",
+        why: `${written.name} isn't a color Designlane read`,
+        at: given.at,
+        waiting: true,
+      };
     const through = appearance === "dark" ? target.dark : target.light;
-    if (!through) return { why: `${written.name}'s dark color isn't one Designlane read`, at: given.at };
+    if (!through)
+      return {
+        kind: "unread-name",
+        why: `${written.name}'s dark color isn't one Designlane read`,
+        at: given.at,
+      };
     if (through.value !== value)
-      return { why: `${written.name} is ${through.value} there, not ${value}`, at: given.at };
+      return {
+        kind: "other-value",
+        why: `${written.name} is ${through.value} there, not ${value}`,
+        at: given.at,
+      };
     const via: CodeSpan = { file: at.file, line: at.line, start: written.start, end: written.end };
     return { value, location: { ...through.location, via: [via, ...(through.location.via ?? [])] } };
   }
@@ -411,8 +454,12 @@ async function colorAt(
     };
   const there = found[0];
   return there
-    ? { why: `the code there writes ${showColor(there.value as Color)}, not ${value}`, at: given.at }
-    : { why: "no color is written there", at: given.at };
+    ? {
+        kind: "other-value",
+        why: `the code there writes ${showColor(there.value as Color)}, not ${value}`,
+        at: given.at,
+      }
+    : { kind: "no-color", why: "no color is written there", at: given.at };
 }
 
 async function numberAt(
@@ -425,6 +472,7 @@ async function numberAt(
   const found = numberValue(at.code, at.definition, nameOf(reference));
   if (found?.value === given.value) return { location: locationOf(at.file, at.line, found) };
   return {
+    kind: found ? "other-value" : "no-number",
     why: found
       ? `the code there writes ${found.value}, not ${given.value}`
       : "no number is written there whole",
@@ -480,7 +528,7 @@ async function textStyleAt(
   style: z.infer<typeof TextStyleSchema>,
 ): Promise<Read<{ locations: TypeLocations }>> {
   if (style.size === undefined && !style.family)
-    return { why: "it gives neither a size nor a family", at: style.at };
+    return { kind: "no-size-or-family", why: "it gives neither a size nor a family", at: style.at };
   const at = await definitionAt(texts, reference, style.at);
   if ("why" in at) return at;
   const written = textStyleValue(at.file, at.code, at.definition);
@@ -488,6 +536,7 @@ async function textStyleAt(
   if (style.size !== undefined) {
     if (written.size?.value !== style.size)
       return {
+        kind: written.size ? "other-value" : "no-size",
         why: written.size
           ? `its size there is ${written.size.value}, not ${style.size}`
           : `no size is written there`,
@@ -499,7 +548,11 @@ async function textStyleAt(
     // The platform's font is one no name is written for (`.system(size: 17)`): one that is, isn't it.
     // Compose names the platform's font too: `FontFamily.Default`, `FontFamily.SansSerif`.
     if (written.family && !/^FontFamily\.(?:Default|SansSerif)$/.test(written.family.value))
-      return { why: `its family there is ${written.family.value}, not the platform's`, at: style.at };
+      return {
+        kind: "other-value",
+        why: `its family there is ${written.family.value}, not the platform's`,
+        at: style.at,
+      };
   } else if (style.family) {
     const family = written.family;
     const wanted = style.family.toLowerCase();
@@ -517,7 +570,8 @@ async function textStyleAt(
     } else {
       // A font's file name names its family and weight: `Inter-SemiBold`.
       const kind = named === wanted ? "literal" : named?.startsWith(`${wanted}-`) ? "family-name" : undefined;
-      if (!family || !kind) return { why: `the family ${style.family} isn't written there`, at: style.at };
+      if (!family || !kind)
+        return { kind: "no-family", why: `the family ${style.family} isn't written there`, at: style.at };
       locations.fontFamily = locationOf(at.file, at.line, { ...family, kind });
     }
   }
@@ -529,6 +583,7 @@ async function textStyleAt(
       (written.weight || written.weighted || style.weight !== "regular")
     )
       return {
+        kind: written.weight ? "other-value" : "no-weight",
         why: written.weight
           ? `its weight there is ${written.weight.value}, not ${style.weight}`
           : `the weight ${style.weight} isn't written there`,

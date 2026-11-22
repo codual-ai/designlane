@@ -11,8 +11,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
   each color (with its dark value and its themes), text style, spacing and corner radius with the file and line it's
   written on. Designlane reads each value there with its own readers, following a color written as another's name
   (`primary = Purple40`), and keeps only those the code bears out, saying where and why for the rest. The map's tokens
-  then are the app's design system: of each kind the map gives, Designlane's own named tokens give way to it. An
-  `agent.json` without a version is read as before.
+  then are the app's design system: of each kind the map gives, Designlane's own named tokens give way to it. What's
+  left out is summed up a line per kind of reason, and `designlane/agent-check.json` lists every entry with its place,
+  a stable `kind` and why, for the agent to fix its map by. An `agent.json` without a version is read as before.
 
 ## 0.5.0 - 2026-11-22
 
