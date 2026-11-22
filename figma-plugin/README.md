@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: codual-ai/designlane@v0.4.0
+      - uses: codual-ai/designlane@v0.5.0
         with:
           app: . # the app's folder, if it isn't the repo's root
 ```

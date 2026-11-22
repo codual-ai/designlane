@@ -351,7 +351,7 @@ Something you'd like Designlane to read, or a screen it reads wrong?
 
 ## Status
 
-Version 0.4. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
+Version 0.5. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
 in Figma into pull requests. Feedback and issues are welcome.
 
 ## License
