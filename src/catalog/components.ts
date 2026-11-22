@@ -61,9 +61,10 @@ const CATEGORY_SUFFIXES: [RegExp, Category][] = [
 export const categoryOf = (name: string, kind: ScreenRef["kind"]): Category =>
   CATEGORY_SUFFIXES.find(([suffix]) => suffix.test(name))?.[1] ?? (kind === "screen" ? "screen" : "other");
 
-export function readerOf(sources: FrameworkSources): ComponentReader {
+/** The reader of `sources`' views; with `previews`, a Compose preview the scan lists is a view too. */
+export function readerOf(sources: FrameworkSources, options: { previews?: boolean } = {}): ComponentReader {
   if (sources.framework === "swiftui") return swiftReader(sources.files);
-  if (sources.framework === "compose") return kotlinReader(sources.files);
+  if (sources.framework === "compose") return kotlinReader(sources.files, options);
   return jsReader(sources.files);
 }
 

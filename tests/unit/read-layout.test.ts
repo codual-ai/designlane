@@ -1367,3 +1367,38 @@ describe("layoutOf: names a framework and an app share", () => {
     expect(provider.tree?.children.map((n) => n.kind)).toEqual(["other"]);
   });
 });
+
+describe("layoutOf: Compose functions annotated as previews", () => {
+  it("reads the layout of a function the scan lists though it's annotated @Preview", async () => {
+    const { tree } = await layout(
+      {
+        "app/src/main/java/a/Crash.kt": kotlin(
+          "@Composable",
+          "@Preview",
+          'fun CrashReportPage(message: String = "x") {',
+          '  Column { Text(message); Button(onClick = {}) { Text("Copy") } }',
+          "}",
+        ),
+      },
+      "CrashReportPage",
+    );
+    expect(tree?.children[0]?.children.map((n) => n.kind)).toEqual(["text", "button"]);
+  });
+
+  it("reads a composable, not a preview of the same name, in a view that adds the preview", async () => {
+    const rel = "app/src/main/java/a/Card.kt";
+    const { app, screen } = await layout(
+      { [rel]: kotlin("@Composable", "fun Card(label: String) { Row { Text(label) } }") },
+      "Card",
+    );
+    const view = await app.withChanges({
+      [rel]: kotlin(
+        "@Composable @Preview",
+        'fun Card() { Column { Text("preview") } }',
+        "@Composable",
+        "fun Card(label: String) { Row { Text(label) } }",
+      ),
+    });
+    expect(view.layoutOf(screen.id)?.children[0]?.kind).toBe("stack-h");
+  });
+});

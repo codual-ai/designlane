@@ -24,6 +24,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   `.Provider`, which passes through to what it holds. Snackbars and tooltips are left out, like dialogs. A type's
   members that are values (`DispatchQueue.main`, `Date.now`) and assignments (`rows += Row { … }`) are no longer read
   as elements.
+- `layoutOf` reads a Compose function the scan lists that's annotated as a preview (`@Composable @Preview fun …`),
+  which had no layout: a preview, or a real composable given `@Preview` too.
 
 ## 0.4.0 - 2026-11-21
 

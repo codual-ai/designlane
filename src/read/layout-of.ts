@@ -50,7 +50,9 @@ export interface LayoutIndex {
 }
 
 export function layoutIndex({ scan, sources, edited, packages }: LayoutInput): LayoutIndex {
-  const reader = readerOf(sources);
+  // A function the scan lists that's annotated as a preview is still a view whose layout is read: a real composable
+  // given `@Preview` (`@Composable @Preview fun CrashReportPage(…)`), or a preview of one.
+  const reader = readerOf(sources, { previews: true });
   const files = new Map<string, Code>(codeFiles(sources).map((f) => [f.rel, f]));
   const views = viewsOf({ scan, edited }, files);
   const byName = groupBy(views, (v) => v.name);

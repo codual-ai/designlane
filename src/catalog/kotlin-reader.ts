@@ -45,15 +45,22 @@ const previewsOf = perSource((source: KotlinSource): Range[] =>
     .map((f) => [f.start, f.body[1] + 1]),
 );
 
-export function kotlinReader(files: KotlinSource[]): ComponentReader {
+/** The reader of `files`' composables. A preview (`@Preview fun CardPreview()`) isn't a component of the catalog's, so
+ * it has no declaration, unless `previews`: a layout reads one the scan lists as the view it is. */
+export function kotlinReader(files: KotlinSource[], { previews = false } = {}): ComponentReader {
   const byFile = new Map(files.map((f) => [f.rel, f]));
   const linesOf = perSource((source: KotlinSource) => lineIndex(source.text));
   return {
     declaration(view) {
       const source = byFile.get(view.file);
       if (!source) return undefined;
-      const candidates = functionsOf(source).filter((f) => f.name === view.name && !f.preview);
-      const fn = onLine(candidates, view, linesOf(source), (f) => [f.start, f.body[0]]);
+      const named = functionsOf(source).filter((f) => f.name === view.name);
+      const find = (candidates: KotlinFunction[]) =>
+        onLine(candidates, view, linesOf(source), (f) => [f.start, f.body[0]]);
+      // A function that isn't a preview first, so a preview of the same name never stands in for it.
+      const fn =
+        find(named.filter((f) => !f.preview)) ??
+        (previews ? find(named.filter((f) => f.preview)) : undefined);
       return fn && declarationOf(source, fn);
     },
     placements(names) {
