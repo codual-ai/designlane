@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { MAX_FILE_BYTES } from "./file-limits.js";
 
@@ -105,4 +105,15 @@ export async function isFolder(file: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** The real path of `file` in the app at `root`, or undefined when it's missing or outside it, through a symlink or
+ * otherwise: edits are read and written at this path, and an agent's map read at it, so what's used is what was checked. */
+export async function realPathInside(root: string, file: string): Promise<string | undefined> {
+  const [real, realRoot] = await Promise.all([realpath(path.resolve(root, file)), realpath(root)]).catch(
+    () => [],
+  );
+  if (!real || !realRoot) return undefined;
+  const rel = path.relative(realRoot, real);
+  return !rel || rel.split(path.sep)[0] === ".." || path.isAbsolute(rel) ? undefined : real;
 }

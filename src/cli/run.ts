@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { writeOutputs } from "../output/write.js";
+import { applyMap, isMap } from "../scan/agent-map.js";
 import { mergeAgentTokens } from "../scan/agent-tokens.js";
 import { plural } from "../scan/counting.js";
 import { isFolder, readGaps } from "../scan/files.js";
@@ -82,15 +83,27 @@ async function map(
   for (const note of scanNotes(scan)) error(`designlane: ${note}`);
   const agentFile = values["from-agent"];
   if (agentFile) {
-    const merge = await fromAgent(scan, path.resolve(agentFile));
-    scan = merge.scan;
+    const json = await agentJson(path.resolve(agentFile));
     // With --json, stdout is the scan alone.
-    (values.json ? error : out)(`Added ${plural(merge.added, "token")} from ${agentFile}`);
-    if (merge.dropped.length) {
-      const some = merge.dropped.slice(0, 5).join(", ");
-      error(
-        `designlane: left out ${plural(merge.dropped.length, "token")} the code doesn't bear out: ${some}${merge.dropped.length > 5 ? ", …" : ""}`,
-      );
+    const say = values.json ? error : out;
+    if (isMap(json)) {
+      const reading = await usage(() => applyMap(scan, json));
+      scan = reading.scan;
+      say(`Confirmed ${plural(reading.confirmed, "token")} of ${agentFile} where it says they're written`);
+      for (const u of reading.unconfirmed.slice(0, MAX_LISTED))
+        error(`designlane: left out ${u.reference} (${u.at}): ${u.why}`);
+      if (reading.unconfirmed.length > MAX_LISTED)
+        error(`designlane: and ${reading.unconfirmed.length - MAX_LISTED} more the code doesn't bear out`);
+    } else {
+      const merge = await usage(() => mergeAgentTokens(scan, json));
+      scan = merge.scan;
+      say(`Added ${plural(merge.added, "token")} from ${agentFile}`);
+      if (merge.dropped.length) {
+        const some = merge.dropped.slice(0, 5).join(", ");
+        error(
+          `designlane: left out ${plural(merge.dropped.length, "token")} the code doesn't bear out: ${some}${merge.dropped.length > 5 ? ", …" : ""}`,
+        );
+      }
     }
   }
   if (values.json) return done(out, JSON.stringify(scan, null, 2));
@@ -110,15 +123,21 @@ async function map(
   return 0;
 }
 
-async function fromAgent(scan: ScanResult, file: string) {
-  let json: unknown;
+/** How many entries of an agent's map the code doesn't bear out are listed, each with where and why. */
+const MAX_LISTED = 20;
+
+async function agentJson(file: string): Promise<unknown> {
   try {
-    json = JSON.parse(await readFile(file, "utf8"));
+    return JSON.parse(await readFile(file, "utf8"));
   } catch (e) {
     throw new UsageError(`couldn't read ${file}: ${(e as Error).message}`, 1);
   }
+}
+
+/** `read`'s result, or its error as a mistake in how the command was run. */
+async function usage<T>(read: () => Promise<T>): Promise<T> {
   try {
-    return await mergeAgentTokens(scan, json);
+    return await read();
   } catch (e) {
     throw new UsageError((e as Error).message, 1);
   }

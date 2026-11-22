@@ -1,6 +1,6 @@
 /** `designlane edit`: makes a change to a token in the app's code, in the code's own notation. */
 
-import { readFile, realpath, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { editDiff } from "../edit/diff.js";
@@ -10,7 +10,7 @@ import { type ReadSource, TOO_LARGE } from "../edit/read-source.js";
 import { OLD_OUTPUT_DIR } from "../output/old-names.js";
 import { OUTPUT_DIR, TOKENS_FILE } from "../output/output-files.js";
 import { tokensFilesIn } from "../output/write.js";
-import { isFolder, isTooLarge, readText } from "../scan/files.js";
+import { isFolder, isTooLarge, readText, realPathInside } from "../scan/files.js";
 import { type Output, UsageError } from "./command.js";
 
 export const EDIT_USAGE = `  designlane edit <token> <property> <value> [--dir <app>] [--dry-run] [--tokens <file>]
@@ -96,14 +96,3 @@ async function readTokens(file: string): Promise<unknown> {
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/** The real path of `file` in the app, or undefined when it's missing or outside it, through a symlink or otherwise.
- * Edits are read and written at this path, so what's written is what was checked. */
-async function realPathInside(root: string, file: string): Promise<string | undefined> {
-  const [real, realRoot] = await Promise.all([realpath(path.resolve(root, file)), realpath(root)]).catch(
-    () => [],
-  );
-  if (!real || !realRoot) return undefined;
-  const rel = path.relative(realRoot, real);
-  return !rel || rel.split(path.sep)[0] === ".." || path.isAbsolute(rel) ? undefined : real;
-}
