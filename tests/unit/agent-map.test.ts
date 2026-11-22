@@ -409,7 +409,7 @@ describe("designlane --from-agent with a map", () => {
     // The most common reason first.
     expect(error.filter((l) => l.startsWith("  ")).map((l) => l.trim()[0])).toEqual(["2", "1"]);
     expect(error.at(-1)).toMatch(
-      /^designlane: every entry left out, with where and why: .*designlane\/agent-check\.json$/,
+      /^designlane: every entry left out, with where and why: .*designlane[\\/]agent-check\.json$/,
     );
     const check = JSON.parse(await readFile(`${root}/designlane/agent-check.json`, "utf8"));
     expect(check.confirmed).toBe(1);
