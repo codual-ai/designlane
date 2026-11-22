@@ -11,6 +11,7 @@ import { RESOURCE_FILE } from "../frameworks/android-resources.js";
 import { isScript, type JsSource, jsSource } from "../frameworks/js-sources.js";
 import { type KotlinSource, kotlinSource } from "../frameworks/kotlin-sources.js";
 import type { FrameworkPlugin, ScanContext } from "../frameworks/plugin.js";
+import { type Locator, locator } from "../frameworks/source-text.js";
 import { opacityFirstIn } from "../frameworks/swiftui-colors.js";
 import { type SwiftSource, swiftSource } from "../frameworks/swiftui-sources.js";
 import { isColorset } from "../frameworks/xcode-colors.js";
@@ -20,9 +21,10 @@ import { isTestPath } from "../scan/test-paths.js";
 import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
 import { makeFilesFor } from "./files-for.js";
+import { layoutIssues, type Readings } from "./layout-issues.js";
 import { type LayoutIndex, layoutIndex } from "./layout-of.js";
-import type { FileTokens, LayoutNode, ScreenFile, ScreenPart, StringUse } from "./schema.js";
-import { screenParts } from "./screen-parts.js";
+import type { FileTokens, LayoutIssues, LayoutNode, ScreenFile, ScreenPart, StringUse } from "./schema.js";
+import { type PartReading, readParts, screenParts } from "./screen-parts.js";
 import {
   decodeStrings,
   isStringsFile,
@@ -40,6 +42,9 @@ export interface AppView {
   readonly root: string;
   /** The frameworks found, as the scan reads them; a view's changes don't add or drop screens. */
   readonly frameworks: readonly FrameworkScan[];
+  /** What the scan left out: whether it stopped at its limit of files, and the folders it couldn't open. Nothing in
+   * them is in any answer. */
+  readonly skipped: { readonly truncated: boolean; readonly unreadable: readonly string[] };
   /** Every screen and component, best first within each framework; only `framework`'s when given. */
   screens(framework?: FrameworkId): ScreenRef[];
   /** The screen or component with this id, or undefined when there's none. */
@@ -76,6 +81,12 @@ export interface AppView {
    * ("Card", "Card 2"). Empty when no node holds two or more; undefined when a layout on the way is. Throws as
    * `layoutOf` does. */
   screenParts(screen: string | ScreenRef): ScreenPart[] | undefined;
+  /** Where Designlane falls short on the screen or component `screen`: why its layout, or that of a view its parts are
+   * found in, couldn't be read whole (`unreadable`: the reason, the view, and where), and what may be wrong in one
+   * that was (`issues`: an element no framework table names, a name several views have, a part named by its kind
+   * alone, …), each where it's written. The reasons and kinds stay the same from release to release. Throws as
+   * `layoutOf` does. */
+  layoutIssues(screen: string | ScreenRef): LayoutIssues;
   /** A view of this one with `changes` made: each path's new text, or null for a file deleted. */
   withChanges(changes: Readonly<Record<string, string | null>>): Promise<AppView>;
 }
@@ -350,9 +361,72 @@ function viewOf(state: State): AppView {
       ? stringsIn(framework.scan.framework, rel, source, tableOf(state))
       : undefined;
   };
-  return {
+  /** What `screenParts` reads: each view's layout, and each file's text shown, read once for all the views it looks
+   * into. */
+  const partReading = (layoutOf?: PartReading["layoutOf"]): PartReading => {
+    const layouts = new Map<string, LayoutNode | undefined>();
+    const strings = new Map<string, StringUse[]>();
+    return {
+      layoutOf:
+        layoutOf ??
+        ((id) => {
+          if (!layouts.has(id)) {
+            const [view, index] = viewNamed(id);
+            layouts.set(id, index.layoutOf(view));
+          }
+          return layouts.get(id);
+        }),
+      namesOf: (id) => {
+        const [view, index] = viewNamed(id);
+        const shown = strings.get(view.file) ?? stringsOf(view.file) ?? [];
+        strings.set(view.file, shown);
+        return {
+          text: state.texts.get(view.file) ?? "",
+          code: index.code(view.file) ?? state.texts.get(view.file) ?? "",
+          strings: shown,
+          viewName: (ref) => index.views.get(ref)?.name,
+          memberAt: (offset) => index.memberAt(view.file, offset),
+        };
+      },
+    };
+  };
+  // Each file's line index, found once for all the spans of it.
+  const locators = new Map<string, Locator>();
+  // What layoutIssues reads, kept for every call on this view: an app's issues are found screen by screen, and the
+  // views several screens place are read once for all of them.
+  const layoutReadings = new Map<string, ReturnType<Readings["layout"]>>();
+  const readLayout = (screen: string | ScreenRef) => {
+    const [found, index] = viewNamed(screen);
+    let read = layoutReadings.get(found.id);
+    if (!read) {
+      read = { view: found, reading: index.read(found) };
+      layoutReadings.set(found.id, read);
+    }
+    return read;
+  };
+  let sharedParts: PartReading | undefined;
+  const readings: Readings = {
+    layout: readLayout,
+    parts: (screen) => {
+      sharedParts ??= partReading((id) => {
+        const { reading } = readLayout(id);
+        return "layout" in reading ? reading.layout : undefined;
+      });
+      return readParts(viewNamed(screen)[0].id, sharedParts);
+    },
+    span: (rel, start, end) => {
+      let locate = locators.get(rel);
+      if (!locate) {
+        locate = locator(rel, state.texts.get(rel) ?? "");
+        locators.set(rel, locate);
+      }
+      return locate(start, end);
+    },
+  };
+  const view: AppView = {
     root: state.root,
     frameworks: scans,
+    skipped: { truncated: state.scan.truncated, unreadable: state.scan.unreadable },
     screens: (framework) =>
       scans.filter((f) => !framework || f.framework === framework).flatMap((f) => f.screens),
     screen: (id) => byId.get(id),
@@ -374,34 +448,12 @@ function viewOf(state: State): AppView {
     },
     screenParts(screen) {
       const [found] = viewNamed(screen);
-      // Each view's layout, and each file's text shown, read once for all the views looked into.
-      const layouts = new Map<string, LayoutNode | undefined>();
-      const strings = new Map<string, StringUse[]>();
-      const layoutOf = (id: string) => {
-        if (!layouts.has(id)) {
-          const [view, index] = viewNamed(id);
-          layouts.set(id, state.texts.has(view.file) ? index.layoutOf(view) : undefined);
-        }
-        return layouts.get(id);
-      };
-      return screenParts(found.id, {
-        layoutOf,
-        namesOf: (id) => {
-          const [view, index] = viewNamed(id);
-          const shown = strings.get(view.file) ?? stringsOf(view.file) ?? [];
-          strings.set(view.file, shown);
-          return {
-            text: state.texts.get(view.file) ?? "",
-            code: index.code(view.file) ?? state.texts.get(view.file) ?? "",
-            strings: shown,
-            viewName: (ref) => index.views.get(ref)?.name,
-            memberAt: (offset) => index.memberAt(view.file, offset),
-          };
-        },
-      });
+      return screenParts(found.id, partReading());
     },
+    layoutIssues: (screen) => layoutIssues(readings, screen),
     withChanges: async (changes) => viewOf(await changed(state, new Map(Object.entries(changes)))),
   };
+  return view;
 }
 
 /** Scans the app in `root` once, keeping every file's text, for many questions to share. */
@@ -451,6 +503,9 @@ export async function readApp(root: string): Promise<App> {
     get root() {
       return view.root;
     },
+    get skipped() {
+      return view.skipped;
+    },
     get frameworks() {
       return view.frameworks;
     },
@@ -461,6 +516,7 @@ export async function readApp(root: string): Promise<App> {
     filesFor: (screen) => view.filesFor(screen),
     layoutOf: (screen) => view.layoutOf(screen),
     screenParts: (screen) => view.screenParts(screen),
+    layoutIssues: (screen) => view.layoutIssues(screen),
     withChanges: (changes) => view.withChanges(changes),
     // Each update starts from the one before, so two made at once both land; one that fails doesn't stop the next.
     update(rel, text) {

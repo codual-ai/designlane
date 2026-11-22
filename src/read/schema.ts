@@ -160,3 +160,59 @@ export const ScreenPartSchema = z.object({
   ref: z.string().exactOptional(),
 });
 export type ScreenPart = z.infer<typeof ScreenPartSchema>;
+
+/**
+ * Why a layout couldn't be read whole. These values stay the same from release to release, so a tool can map each to
+ * its own words:
+ * - `no-declaration`: the view isn't declared where the scan found it.
+ * - `no-body`: it declares no body (`var body`, a composable's block, a component's return).
+ * - `unbalanced`: a bracket in its code is left open, or closes one it didn't open.
+ * - `open-extension`: an extension of a SwiftUI view in its file is left open.
+ * - `parse-error`: TypeScript's parser found an error in its code.
+ * - `too-deep`: its code nests past the reader's limit.
+ * - `too-much-inlined`: its view properties place each other past the reader's limit.
+ */
+export const UNREADABLE_REASONS = [
+  "no-declaration",
+  "no-body",
+  "unbalanced",
+  "open-extension",
+  "parse-error",
+  "too-deep",
+  "too-much-inlined",
+] as const;
+export type UnreadableReason = (typeof UNREADABLE_REASONS)[number];
+
+/**
+ * What may be wrong in a layout that was read. These values stay the same from release to release too:
+ * - `ambiguous-view`: a name places one of several views of the app, and nothing tells which (the name is its
+ *   `detail`).
+ * - `unknown-element`: an element no framework table names, so it's `other` (its name is the issue's `detail`).
+ * - `if-as-written`: a SwiftUI `#if` around more than one block holds, so both its sides are read as shown.
+ * - `self-placed`: a view places itself.
+ * - `unnamed-part`: one of the screen's parts is labelled by its kind, the code naming it nothing (the label is its
+ *   `detail`).
+ * - `no-parts`: a screen whose layout was read has no parts.
+ */
+export const LAYOUT_ISSUE_KINDS = [
+  "ambiguous-view",
+  "unknown-element",
+  "if-as-written",
+  "self-placed",
+  "unnamed-part",
+  "no-parts",
+] as const;
+export type LayoutIssueKind = (typeof LAYOUT_ISSUE_KINDS)[number];
+
+/** Where Designlane falls short on a screen: why its layout couldn't be read whole, if it couldn't (the screen's, or
+ * that of a view its parts are found in), and what may be wrong in one that was, each where it's written. */
+export const LayoutIssuesSchema = z.object({
+  screen: z.string(),
+  unreadable: z
+    .object({ reason: z.enum(UNREADABLE_REASONS), view: z.string(), span: CodeSpanSchema })
+    .exactOptional(),
+  issues: z.array(
+    z.object({ kind: z.enum(LAYOUT_ISSUE_KINDS), span: CodeSpanSchema, detail: z.string().exactOptional() }),
+  ),
+});
+export type LayoutIssues = z.infer<typeof LayoutIssuesSchema>;

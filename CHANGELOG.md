@@ -3,6 +3,19 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `designlane doctor [dir]` lists the screens whose layout Designlane can't read, with where, and sums up what it may
+  read wrong: `--all` lists every issue with where it is, `--screen <name>` shows one screen's issues, parts and
+  layout, and `--json` prints the issues for scripts. It reads offline and sends nothing.
+- `app.layoutIssues(screen)` in `designlane/read`: why a screen's layout can't be read whole (`unreadable`, with its
+  reason, the view and where), and what may be wrong in one that was (`issues`), with `UNREADABLE_REASONS`,
+  `LAYOUT_ISSUE_KINDS` and `LayoutIssuesSchema`. Their values stay the same from release to release.
+- `app.skipped` says what the scan left out: whether it stopped at its limit of files, and the folders it couldn't
+  open. `designlane doctor` warns about them.
+
 ## 0.4.0 - 2026-11-21
 
 ### Added

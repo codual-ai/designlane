@@ -9,15 +9,16 @@ import type { KotlinSource } from "../frameworks/kotlin-sources.js";
 import { spanIn, treeOf } from "../frameworks/kotlin-sources.js";
 import { Modules } from "../frameworks/rn-modules.js";
 import { fileComponentName } from "../frameworks/rn-views.js";
-import { bracketTree, locator } from "../frameworks/source-text.js";
+import { type BracketTree, bracketTree, locator } from "../frameworks/source-text.js";
 import { structs } from "../frameworks/swift-source.js";
 import type { SwiftSource } from "../frameworks/swiftui-sources.js";
 import { groupBy } from "../scan/counting.js";
 import type { FrameworkScan, ScreenRef } from "../scan/types.js";
 import { type Code, nearestViews, viewsOf } from "./files-for.js";
-import { CodeElements, unbalanced } from "./layout-code.js";
-import { JsxElements } from "./layout-jsx.js";
+import { CodeElements, unbalancedAt } from "./layout-code.js";
+import { JsxElements, parseErrorAfter } from "./layout-jsx.js";
 import { type Building, type Element, layoutTree } from "./layout-tree.js";
+import { type Issue, isUnread, ReadingNotes, type Unread } from "./reading-notes.js";
 import type { LayoutNode } from "./schema.js";
 
 /** What `layoutOf` reads for one framework of a view. */
@@ -39,6 +40,8 @@ export interface LayoutIndex {
   /** Every view of the framework, by id, the scan's and those declared in files changed since. */
   views: ReadonlyMap<string, ScreenRef>;
   layoutOf(view: ScreenRef): LayoutNode | undefined;
+  /** The layout of `view` with what may be wrong in it, or why it couldn't be read whole. */
+  read(view: ScreenRef): LayoutReading;
   /** The view property or function, other than a body, whose code starts at `offset` in the file `rel`: `header` for
    * the first thing `var header: some View { … }` writes. */
   memberAt(rel: string, offset: number): string | undefined;
@@ -56,18 +59,28 @@ export function layoutIndex({ scan, sources, edited, packages }: LayoutInput): L
     sources.framework === "react-native" ? new Modules(sources.files, new Set(packages)) : undefined;
   const imported = modules && importedView(modules, byFile);
   const overloads = sources.framework === "compose" ? new Overloads(sources.files, reader) : undefined;
+  const read = (view: ScreenRef): LayoutReading => {
+    const notes = new ReadingNotes();
+    return layoutOfView(sources, reader, view, notes, {
+      viewNamed: (name, at) => {
+        const found = imported?.view(name, view.file);
+        if (found === null) return undefined;
+        const near = found ?? nearestViews(byName.get(name) ?? [], view.file, files);
+        const placed = near.length > 1 && overloads ? overloads.called(near, view, name, at) : near;
+        if (placed.length > 1)
+          notes.issue({ kind: "ambiguous-view", start: at.start, end: at.end, detail: name });
+        return firstId(placed);
+      },
+      builtIn: (name) => imported?.builtIn(name, view.file),
+    });
+  };
   return {
     views: new Map(views.map((v) => [v.id, v])),
-    layoutOf: (view) =>
-      layoutOfView(sources, reader, view, {
-        viewNamed: (name, at) => {
-          const found = imported?.view(name, view.file);
-          if (found !== undefined) return found ?? undefined;
-          const near = nearestViews(byName.get(name) ?? [], view.file, files);
-          return firstId(near.length > 1 && overloads ? overloads.called(near, view, name, at) : near);
-        },
-        builtIn: (name) => imported?.builtIn(name, view.file),
-      }),
+    layoutOf: (view) => {
+      const reading = read(view);
+      return isUnread(reading) ? undefined : reading.layout;
+    },
+    read,
     memberAt: (rel, offset) => {
       if (sources.framework !== "swiftui") return undefined;
       const source = sources.files.find((f) => f.rel === rel);
@@ -262,7 +275,7 @@ function listed(code: string, from: number, to: number, text?: string): string[]
 /** How many files an import is followed through, re-exports and `export *` included. */
 const MAX_MODULES = 50;
 
-/** For a JSX tag imported into `rel`, the id of the app's view the import names, followed through files that
+/** For a JSX tag imported into `rel`, the app's views the import names, followed through files that
  * re-export it (`export { Card } from "./Card"`, `export * from "./Badge"`); null for one imported from a package
  * (`Button` from `react-native`), which is no view of the app's; undefined for a name not imported, or not found. */
 function importedView(modules: Modules, byFile: Map<string, ScreenRef[]>) {
@@ -300,12 +313,15 @@ function importedView(modules: Modules, byFile: Map<string, ScreenRef[]>) {
   };
 
   return {
-    view(tag: string, rel: string): string | null | undefined {
+    view(tag: string, rel: string): ScreenRef[] | null | undefined {
       const found = bindingOf(tag, rel);
       if (!found) return undefined;
       if (found.targets.length === 0) return null;
       const seen = new Set<string>();
-      return firstId(found.targets.flatMap((target) => exported(target, found.binding.name, tag, seen)));
+      const views = found.targets.flatMap((target) => exported(target, found.binding.name, tag, seen));
+      // A view exported along several ways (re-exported under two names) is still the one view.
+      const each = [...new Map(views.map((v) => [v.id, v])).values()];
+      return each.length > 0 ? each : undefined;
     },
     /** The name a package exports what `tag` imports by: `Text` for `import { Text as Label } from "react-native"`. */
     builtIn(tag: string, rel: string): string | undefined {
@@ -317,41 +333,67 @@ function importedView(modules: Modules, byFile: Map<string, ScreenRef[]>) {
   };
 }
 
+/** A view's layout read whole, with what may be wrong in it; or why it couldn't be. */
+export type LayoutReading = { layout: LayoutNode; issues: Issue[] } | Unread;
+
 function layoutOfView(
   sources: FrameworkSources,
   reader: ComponentReader,
   view: ScreenRef,
+  notes: ReadingNotes,
   names: Pick<Building, "viewNamed" | "builtIn">,
-): LayoutNode | undefined {
+): LayoutReading {
   const declaration = reader.declaration(view);
-  if (!declaration) return undefined;
-  const span = (text: string) => locator(view.file, text);
-  const building = (spanOf: Building["span"]): Building => ({
-    framework: sources.framework,
-    span: spanOf,
-    ...names,
-  });
-  const screen = { ref: view.id, start: declaration.start, end: declaration.end };
+  const read = (at: Declaration, elements: Element[] | Unread, span: Building["span"]): LayoutReading => {
+    if (isUnread(elements)) return elements;
+    const screen = { ref: view.id, start: at.start, end: at.end };
+    const layout = layoutTree({ framework: sources.framework, span, notes, ...names }, screen, elements);
+    return { layout, issues: notes.kept() };
+  };
   if (sources.framework === "react-native") {
     const source = sources.files.find((f) => f.rel === view.file);
-    const elements = source && new JsxElements(source).ofComponent(declaration.start, declaration.end);
-    return elements && layoutTree(building(span(source.text)), screen, elements);
+    if (!source) return { reason: "no-declaration", at: 0 };
+    if (!declaration) {
+      const from = lineStart(source.text, view.line);
+      const error = parseErrorAfter(source, from);
+      return error === undefined
+        ? { reason: "no-declaration", at: from }
+        : { reason: "parse-error", at: error };
+    }
+    const elements = new JsxElements(source, notes).ofComponent(declaration.start, declaration.end);
+    return read(declaration, elements, locator(view.file, source.text));
   }
   if (sources.framework === "swiftui") {
     const source = sources.files.find((f) => f.rel === view.file);
-    const elements = source && swiftElements(source, declaration);
-    return elements && layoutTree(building(span(source.text)), screen, elements);
+    if (!source) return { reason: "no-declaration", at: 0 };
+    if (!declaration) return undeclared(source, treeOfSwift(source), view);
+    return read(declaration, swiftElements(source, declaration, notes), locator(view.file, source.text));
   }
   const source = sources.files.find((f) => f.rel === view.file);
-  const elements = source && composeElements(source, declaration);
-  return (
-    elements &&
-    layoutTree(
-      building((start, end) => spanIn(source, start, end)),
-      screen,
-      elements,
-    )
+  if (!source) return { reason: "no-declaration", at: 0 };
+  if (!declaration) return undeclared(source, treeOf(source), view);
+  return read(declaration, composeElements(source, declaration, notes), (start, end) =>
+    spanIn(source, start, end),
   );
+}
+
+/** Where line `line` (1-based) of `text` starts. */
+function lineStart(text: string, line: number): number {
+  let at = 0;
+  for (let n = 1; n < line; n++) {
+    const next = text.indexOf("\n", at);
+    if (next === -1) return at;
+    at = next + 1;
+  }
+  return at;
+}
+
+/** Why a SwiftUI or Compose view the scan found has no declaration where it was found: a bracket from there on left
+ * open, or else it isn't declared there any more. */
+function undeclared(source: { text: string; code: string }, tree: BracketTree, view: ScreenRef): Unread {
+  const from = lineStart(source.text, view.line);
+  const at = unbalancedAt({ code: source.code, tree }, from, source.code.length);
+  return at === undefined ? { reason: "no-declaration", at: from } : { reason: "unbalanced", at };
 }
 
 const structsOf = perSource((source: SwiftSource) => structs(source.code));
@@ -372,10 +414,14 @@ const swiftMembers = perSource((source: SwiftSource) => {
 });
 
 /** What a SwiftUI view's `body` writes, with the view properties of its struct and the file's extensions of it. */
-function swiftElements(source: SwiftSource, declaration: Declaration): Element[] | undefined {
+function swiftElements(
+  source: SwiftSource,
+  declaration: Declaration,
+  notes: ReadingNotes,
+): Element[] | Unread {
   const { code } = source;
   const struct = structsOf(source).find((s) => s.start === declaration.start);
-  if (!struct) return undefined;
+  if (!struct) return { reason: "no-declaration", at: declaration.start };
   const tree = treeOfSwift(source);
   const blocks: [number, number][] = [[struct.open, struct.close]];
   for (const m of code.matchAll(new RegExp(`\\bextension\\s+${struct.name}\\b[^{}]{0,500}\\{`, "g"))) {
@@ -383,7 +429,7 @@ function swiftElements(source: SwiftSource, declaration: Declaration): Element[]
     if (tree.enclosing[m.index ?? 0] !== -1) continue;
     const close = tree.closeOf.get(open);
     // An extension left open may hold a view property the body places: the layout can't be read whole.
-    if (close === undefined) return undefined;
+    if (close === undefined) return { reason: "open-extension", at: m.index ?? 0 };
     blocks.push([open, close]);
   }
   const views = new Map<string, [number, number]>();
@@ -395,25 +441,36 @@ function swiftElements(source: SwiftSource, declaration: Declaration): Element[]
       const name = m[1] ?? m[2] ?? "";
       if (tree.enclosing[at] === open && end !== undefined && !views.has(name)) views.set(name, [brace, end]);
     }
+  for (const [open, close] of blocks) {
+    const at = unbalancedAt({ code, tree }, open, close);
+    if (at !== undefined) return { reason: "unbalanced", at };
+  }
   const body = views.get("body");
-  if (!body || blocks.some(([open, close]) => unbalanced({ code, tree }, open, close))) return undefined;
+  if (!body) return { reason: "no-body", at: struct.start };
   views.delete("body");
-  const reading = new CodeElements({ language: "swift", code, tree, views });
+  const reading = new CodeElements({ language: "swift", code, tree, views }, notes);
   const elements = reading.between(body[0] + 1, body[1]);
-  return reading.cut ? undefined : elements;
+  return notes.stopped ?? elements;
 }
 
 /** What a composable function's body writes: its block, or its `= expression`. */
-function composeElements(source: KotlinSource, declaration: Declaration): Element[] | undefined {
+function composeElements(
+  source: KotlinSource,
+  declaration: Declaration,
+  notes: ReadingNotes,
+): Element[] | Unread {
   const { code } = source;
   const tree = treeOf(source);
   const open = code.indexOf("(", declaration.start);
-  const close = open === -1 || open > declaration.end ? undefined : tree.closeOf.get(open);
-  const body = close === undefined ? undefined : bodyAfter(source, close + 1);
-  if (!body) return undefined;
+  if (open === -1 || open > declaration.end) return { reason: "no-body", at: declaration.start };
+  const close = tree.closeOf.get(open);
+  if (close === undefined) return { reason: "unbalanced", at: open };
+  const body = bodyAfter(source, close + 1);
+  if (!body) return { reason: "no-body", at: declaration.start };
   const [at, end] = body;
-  if (unbalanced({ code, tree }, at, end + 1)) return undefined;
-  const reading = new CodeElements({ language: "kotlin", code, tree });
+  const unpaired = unbalancedAt({ code, tree }, at, end + 1);
+  if (unpaired !== undefined) return { reason: "unbalanced", at: unpaired };
+  const reading = new CodeElements({ language: "kotlin", code, tree }, notes);
   const elements = code[at] === "{" ? reading.between(at + 1, end) : reading.between(at + 1, end + 1);
-  return reading.cut ? undefined : elements;
+  return notes.stopped ?? elements;
 }

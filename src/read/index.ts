@@ -32,7 +32,11 @@ export {
   FontUseSchema,
   type FoundFramework,
   FoundFrameworkSchema,
+  LAYOUT_ISSUE_KINDS,
   LAYOUT_KINDS,
+  type LayoutIssueKind,
+  type LayoutIssues,
+  LayoutIssuesSchema,
   type LayoutKind,
   type LayoutNode,
   LayoutNodeSchema,
@@ -49,4 +53,6 @@ export {
   TypeStyleUseSchema,
   type TypeValue,
   TypeValueSchema,
+  UNREADABLE_REASONS,
+  type UnreadableReason,
 } from "./schema.js";

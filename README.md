@@ -171,6 +171,33 @@ colour is a named or computed one (`.white`, `Brand.copy(alpha = 0.5f)`), the we
 there), a value can't be copied in place of a name safely (it's in another file, or Swift's `.init(…)`), or a text
 style's value comes from a style it builds on. `--tokens` is read relative to `--dir`.
 
+## See where Designlane falls short
+
+`designlane doctor` lists the screens whose layout Designlane can't read, with where, and sums up what it may read
+wrong (`--all` lists each issue with where it is):
+
+```sh
+npx designlane doctor
+```
+
+```
+Read 184 screens and components: 176 whole, 6 can't be read, 2 place a view that can't be.
+
+Can't be read
+  Sources/Feed/FeedView.swift:120  Designlane can't match a bracket here: FeedView, placed in HomeScreen, SearchScreen
+  Sources/Legacy/Banner.js:44      TypeScript's parser can't read the code here: Banner
+
+May be read wrong
+  14 unknown elements, shown as "other": ProgressView ×9, Divider ×3, Gauge ×2
+
+22 parts labelled by their kind only, 3 screens with no parts (--all lists them)
+```
+
+`--screen <name>` shows one screen's issues, parts and layout tree; `--all` lists every issue where it is;
+`--json` prints the issues for a script. It reads offline and sends nothing anywhere; if
+something should read better, [open an issue](https://github.com/codual-ai/designlane/issues) with the lines it
+printed.
+
 ## Use it as a library
 
 `designlane/read` answers questions about an app's code from your own tool, offline and with the same answer every
@@ -213,6 +240,12 @@ variant.tokensIn("Shop/Views/Card.swift");
   biggest branch or a loop's item is named, the first text it shows, or its kind, in that order. What only runs code
   or opens dialogs isn't a part. It's `[]` when nothing holds two or more parts, and `undefined` when a layout on the
   way is.
+- `layoutIssues(screen)` says where Designlane falls short on a screen: why its layout, or that of a view its parts
+  are found in, can't be read whole (`unreadable`: the reason, the view, and where), and what may be wrong in one that
+  was (`issues`: an element no framework table names, a name several views have, a part labelled by its kind alone,
+  …), each where it's written. The reasons (`UNREADABLE_REASONS`) and kinds (`LAYOUT_ISSUE_KINDS`) stay the same from
+  release to release, so a tool can map them to its own words: "this screen can't be compared yet (FeedView.swift
+  line 120)".
 - `filesFor(screen)` lists the files that explain a screen or component, each with why: where it's declared, the
   views it places at any depth, the types holding its state (`CartViewModel`), the project's files a React Native
   screen imports, and where the tokens it uses are declared. For giving an agent or a variant generator what it needs
@@ -226,6 +259,18 @@ variant.tokensIn("Shop/Views/Card.swift");
 Reading a file takes a few milliseconds (about 20 ms for a 2,000-line one) and a view of a few changed files about
 as long; `readApp` takes as long as a scan. The first `filesFor` parses the app's code once (about 100 ms for 400
 screens), and each one after takes as long as reading the screen's files. Every result has a zod schema exported beside it.
+
+## Building on Designlane
+
+Designlane reads code by its structure, without compiling it, so some screens read less well than others.
+`layoutIssues` and `designlane doctor` say which and why. To help one read better:
+
+- **An unknown element** (`ProgressView`, shown as `other`): add it to its framework's table in
+  `src/read/layout-tree.ts`, with the kind it is, and a test of a screen using it.
+- **A screen that can't be read**: `designlane doctor --screen <name>` points at the line. Open an issue with a
+  small piece of code that reads the same way, or a pull request with a test of it.
+
+Every fix comes with a test that fails without it.
 
 ## Supported
 
@@ -291,9 +336,22 @@ outside the app. Add Designlane to the library's repo instead, and connect your 
 - [Keeping tokens.json up to date](figma-plugin/README.md#keeping-tokensjson-up-to-date): the GitHub Action
 - [Changelog](CHANGELOG.md)
 
+## What's next
+
+- **Reading more of every screen.** Elements Designlane doesn't know yet (`ProgressView`, `Divider`, shapes) read as
+  `other`, and some screens can't be read at all. Each release adds more, worked out from what `designlane doctor`
+  reports on open-source apps and on yours.
+- **Fewer guesses.** A name several views share, or a React Native import Designlane can't follow, is resolved by
+  rules rather than picked.
+- **A design system map kept up to date.** A coding agent maps the design system once; Designlane checks it against
+  the code, reads it again on every push, and says when it's out of date.
+
+Something you'd like Designlane to read, or a screen it reads wrong?
+[Open an issue](https://github.com/codual-ai/designlane/issues).
+
 ## Status
 
-Version 0.2. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
+Version 0.4. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
 in Figma into pull requests. Feedback and issues are welcome.
 
 ## License

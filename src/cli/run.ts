@@ -10,6 +10,7 @@ import { scanNotes } from "../scan/notes.js";
 import { FRAMEWORK_NAMES, type ScanResult, SUPPORTED_FRAMEWORKS } from "../scan/types.js";
 import { AGENT_PROMPT } from "./agent-prompt.js";
 import { type Output, UsageError } from "./command.js";
+import { DOCTOR_USAGE, doctor } from "./doctor.js";
 import { EDIT_USAGE, edit } from "./edit.js";
 
 const HELP = `designlane: map a mobile app's design system from its code
@@ -22,6 +23,7 @@ Usage
   designlane prompt
                     Print instructions for a coding agent to read the app's design system into designlane/agent.json
 ${EDIT_USAGE}
+${DOCTOR_USAGE}
 
 Let a coding agent read an app whose setup Designlane's own reading misses
   claude -p "$(npx designlane prompt)" --allowedTools Read Glob Grep Write
@@ -44,6 +46,7 @@ Options
 export async function run(argv: string[], io: Output): Promise<number> {
   try {
     if (argv[0] === "edit") return await edit(argv.slice(1), io);
+    if (argv[0] === "doctor") return await doctor(argv.slice(1), io);
     const { values, positionals } = parse(argv);
     if (values.help) return done(io.out, HELP);
     if (values.version) return done(io.out, await version());

@@ -8,6 +8,7 @@ import ts from "typescript";
 import { eachNode, type JsSource, propertyName, stringValue, unwrapped } from "../frameworks/js-sources.js";
 import { componentFunction } from "../frameworks/rn-views.js";
 import type { Element } from "./layout-tree.js";
+import { ReadingNotes, type Unread } from "./reading-notes.js";
 
 /** How deep JSX is read; JSX nested deeper has no layout, so hostile code can't overflow the stack. */
 const MAX_DEPTH = 100;
@@ -80,6 +81,21 @@ function errorsIn(file: Parsed, node: ts.Node): number[] {
   return out;
 }
 
+/** Where the first error TypeScript's parser found in `source` at or after `from` is, if it found one. */
+export function parseErrorAfter(source: JsSource, from: number): number | undefined {
+  const errors = ((source.file as Parsed).parseDiagnostics ?? []).flatMap((d) =>
+    d.start !== undefined && d.start >= from ? [d.start] : [],
+  );
+  return earliest(errors);
+}
+
+/** The least of `offsets`, however many there are (a spread would overflow the stack). */
+function earliest(offsets: number[]): number | undefined {
+  let least: number | undefined;
+  for (const o of offsets) if (least === undefined || o < least) least = o;
+  return least;
+}
+
 /** Whether the file is one Flow checks: `@flow` in a comment before its code. */
 function isFlow(file: ts.SourceFile): boolean {
   const text = file.getFullText();
@@ -121,29 +137,34 @@ function styleSheets(file: ts.SourceFile): Map<string, ts.ObjectLiteralExpressio
 
 export class JsxElements {
   private readonly sheets: Map<string, ts.ObjectLiteralExpression>;
-  /** Whether the nesting limit stopped the reading short, so the elements read are only part of what it returns. */
-  private cut = false;
-
-  constructor(private readonly source: JsSource) {
+  /** `notes` gets why the nesting limit stopped the reading short, if it did, so the elements read are only part of
+   * what it returns. */
+  constructor(
+    private readonly source: JsSource,
+    readonly notes = new ReadingNotes(),
+  ) {
     this.sheets = styleSheets(source.file);
   }
 
   /** The elements the component declared from `start` to `end` returns: a conditional of its returns when it has
-   * several (`if (loading) return <Spinner />`). Undefined when it isn't a component's declaration, or can't be read
+   * several (`if (loading) return <Spinner />`). Why not when it isn't a component's declaration, or can't be read
    * whole: code TypeScript can't parse, or JSX nested past the limit. */
-  ofComponent(start: number, end: number): Element[] | undefined {
+  ofComponent(start: number, end: number): Element[] | Unread {
     const node = declared(this.source, start, end);
     const fn = node && functionOf(node);
-    if (!fn) return undefined;
+    if (!fn) return { reason: "no-body", at: start };
     const elements = this.ofReturns(fn, { start, end }, 0);
-    if (this.cut) return undefined;
+    if (this.notes.stopped) return this.notes.stopped;
     const { file } = this.source;
     const errors = errorsIn(file, node);
-    if (errors.length === 0) return elements;
+    const first = earliest(errors);
+    if (first === undefined) return elements;
     // TypeScript can't parse Flow's types (`{| a: T |}`) but reads past them, and one such error can set off others
     // anywhere after it. So a Flow file's component with errors is read when they left it elements and its JSX is
-    // whole, every tag closed by its own; any other component with errors is undefined.
-    return isFlow(file) && elements.length > 0 && !unclosedJsx(file, node) ? elements : undefined;
+    // whole, every tag closed by its own; any other component with errors isn't read.
+    return isFlow(file) && elements.length > 0 && !unclosedJsx(file, node)
+      ? elements
+      : { reason: "parse-error", at: first };
   }
 
   /** What a function returns: one return's elements, or a conditional of its several. */
@@ -164,7 +185,7 @@ export class JsxElements {
   /** The elements an expression gives: JSX, a conditional, a loop, or none. */
   private ofExpression(expression: ts.Expression, depth: number): Element[] {
     if (depth > MAX_DEPTH) {
-      this.cut = true;
+      this.notes.stop("too-deep", expression.getStart(this.source.file));
       return [];
     }
     const value = unwrapped(expression);
@@ -228,7 +249,7 @@ export class JsxElements {
     return children.flatMap((child): Element[] => {
       if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child)) {
         if (depth < MAX_DEPTH) return [this.ofJsx(child, depth + 1)];
-        this.cut = true;
+        this.notes.stop("too-deep", child.getStart(this.source.file));
         return [];
       }
       if (ts.isJsxExpression(child) && child.expression)

@@ -4,6 +4,7 @@
  */
 
 import type { FrameworkId } from "../scan/types.js";
+import type { ReadingNotes } from "./reading-notes.js";
 import type { LayoutKind, LayoutNode } from "./schema.js";
 
 /** An element as a framework's code writes it, from where its name starts to where it ends. */
@@ -137,6 +138,8 @@ export interface Building {
   viewNamed: (name: string, at: { start: number; end: number }) => string | undefined;
   /** The framework's own name a local one stands for: `Text` for `Label` in `import { Text as Label }`. */
   builtIn?: (name: string) => string | undefined;
+  /** Where what may be wrong in the layout is noted: an element no table names. */
+  notes?: ReadingNotes;
 }
 
 type Node = Omit<LayoutNode, "id" | "children"> & { children: Node[] };
@@ -151,6 +154,12 @@ function nodesOfOne(building: Building, element: Element): Node[] {
   const node = (kind: LayoutKind, children: Node[], ref?: string): Node[] => [
     { kind, span, ...(ref !== undefined && { ref }), children: LEAVES.has(kind) ? [] : children },
   ];
+  // What a leaf holds is part of it, so it isn't read, nor noted: a button's label, an unknown element's content.
+  const childrenFor = (kind: LayoutKind) => {
+    if (!LEAVES.has(kind)) return nodesOf(building, element.children);
+    for (const child of element.children) building.notes?.drop(child.start, child.end);
+    return [];
+  };
   if (element.kind === "conditional" || element.kind === "repeat")
     return node(
       element.kind,
@@ -163,13 +172,17 @@ function nodesOfOne(building: Building, element: Element): Node[] {
   // The app's own view of a name is that view, whatever its name would make it (an app's `FlatList`).
   const ref = element.name ? building.viewNamed(element.name, element) : undefined;
   if (ref !== undefined) return node("view-ref", nodesOf(building, element.children), ref);
-  if (element.kind) return node(element.kind, nodesOf(building, element.children));
+  if (element.kind) return node(element.kind, childrenFor(element.kind));
   const name = building.builtIn?.(element.name) ?? element.name;
-  const entry =
+  const known =
     TABLES[building.framework].get(name) ??
-    (building.framework === "react-native" ? navigatorEntry(name) : undefined) ??
-    "other";
+    (building.framework === "react-native" ? navigatorEntry(name) : undefined);
+  if (known === undefined && name)
+    building.notes?.issue({ kind: "unknown-element", start: element.start, end: element.end, detail: name });
+  const entry = known ?? "other";
   if (entry === "drop") return [];
+  if (entry !== "group" && entry !== "backdrop" && entry !== "wrapper")
+    return node(entry, childrenFor(entry));
   const children = nodesOf(building, element.children);
   if (entry === "group") return children;
   // An image holding content (`ImageBackground`) lays it over the image.
@@ -177,7 +190,6 @@ function nodesOfOne(building: Building, element: Element): Node[] {
     return children.length === 0
       ? node("image", [])
       : node("stack-z", [{ kind: "image", span, children: [] }, ...children]);
-  if (entry !== "wrapper") return node(entry, children);
   // A wrapper around one element only styles it; around none, it's an element of its own.
   if (children.length === 1) return children;
   return node(children.length === 0 ? "other" : (element.holding ?? "stack-z"), children);

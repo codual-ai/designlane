@@ -14,6 +14,7 @@ const BUDGET_MS = {
   stringsIn: 50,
   layoutOf: 50,
   screenParts: 50,
+  layoutIssues: 300,
 };
 const LINES = 2000;
 /** An app the size of a large one's design system: many colours and screens using them. */
@@ -131,6 +132,53 @@ describe("designlane/read speed", () => {
       const id = "swiftui:App/Screens/Screen0.swift#Screen0";
       expect(app.screenParts(id)).toHaveLength(LINES - 6);
       expect(await fastest(() => app.screenParts(id))).toBeLessThan(BUDGET_MS.screenParts);
+    },
+    120_000,
+  );
+
+  speedIt(
+    "finds the layout issues of a screen with a doubt on each of thousands of rows within the budget",
+    async () => {
+      const ROWS = 8000;
+      const app = await readApp(
+        await appIn({
+          "App/Gauges.swift": swift(
+            "struct Gauges: View {",
+            "  var body: some View {",
+            "    VStack {",
+            ...Array.from({ length: ROWS }, (_, k) => `      Gauge(value: ${k})`),
+            "    }",
+            "  }",
+            "}",
+          ),
+        }),
+      );
+      const id = "swiftui:App/Gauges.swift#Gauges";
+      expect(app.layoutIssues(id).issues.length).toBeGreaterThanOrEqual(ROWS);
+      expect(await fastest(() => app.layoutIssues(id))).toBeLessThan(BUDGET_MS.layoutIssues);
+    },
+    120_000,
+  );
+
+  speedIt(
+    "finds the layout issues of every view of a long file within the budget",
+    async () => {
+      const VIEWS = 800;
+      const app = await readApp(
+        await appIn({
+          "App/V.swift": swift(
+            ...Array.from(
+              { length: VIEWS },
+              (_, i) => `struct V${i}: View { var body: some View { VStack { Text("a"); Text("b") } } }`,
+            ),
+          ),
+        }),
+      );
+      const ids = app.screens().map((s) => s.id);
+      expect(ids).toHaveLength(VIEWS);
+      expect(await fastest(() => ids.map((id) => app.layoutIssues(id)), 3)).toBeLessThan(
+        BUDGET_MS.layoutIssues * 2,
+      );
     },
     120_000,
   );

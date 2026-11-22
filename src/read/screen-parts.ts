@@ -87,16 +87,27 @@ const MAX_LOOKED_INTO = 32;
  * two or more, those nodes. None when no node does; undefined when a layout on the way can't be read. Spacers are
  * space between parts, not parts. */
 export function screenParts(view: string, read: PartReading): ScreenPart[] | undefined {
+  const found = readParts(view, read);
+  return "parts" in found ? found.parts : undefined;
+}
+
+/** What `screenParts` finds, as it finds it: the parts, which of them are labelled by their kind alone, and the views
+ * placed on the way to them; or the view on the way whose layout couldn't be read. */
+export type PartsReading =
+  | { parts: ScreenPart[]; unnamed: ScreenPart[]; views: string[] }
+  | { unread: string; views: string[] };
+
+export function readParts(view: string, read: PartReading): PartsReading {
   const visible = new Visibility(read.layoutOf);
   let node = read.layoutOf(view);
-  let followed = 0;
+  const followed: string[] = [];
   while (node) {
     const shown = node.children.filter((c) => visible.shows(c));
-    if (shown.length >= 2) return labelled(shown, view, read.namesOf(view));
+    if (shown.length >= 2) return { ...labelled(shown, view, read.namesOf(view)), views: followed };
     let only = shown[0];
     // A decision over the whole screen (loading, or its content) shows its biggest branch most.
     while (only?.kind === "conditional") only = biggest(only.children.filter((c) => visible.shows(c)));
-    if (!only) return [];
+    if (!only) return none(followed);
     // A container of the app's holding what the screen writes inside it (`AppScaffold { … }`): what's written there.
     if (only.kind === "view-ref" && only.children.length > 0) {
       node = only;
@@ -104,16 +115,20 @@ export function screenParts(view: string, read: PartReading): ScreenPart[] | und
     }
     if (only.kind === "view-ref" && only.ref !== undefined) {
       // Views placing each other end here too.
-      if (++followed > MAX_FOLLOWED) return [];
+      if (followed.length >= MAX_FOLLOWED) return none(followed);
       view = only.ref;
+      followed.push(view);
       node = read.layoutOf(view);
       continue;
     }
-    if (!STEPPED_THROUGH.has(only.kind)) return [];
+    if (!STEPPED_THROUGH.has(only.kind)) return none(followed);
     node = only;
   }
-  return undefined;
+  return { unread: view, views: followed.filter((v) => v !== view) };
 }
+
+/** No parts, each time a new answer, so a caller changing one changes no other. */
+const none = (views: string[]): PartsReading => ({ parts: [], unnamed: [], views });
 
 /**
  * Whether a node shows anything: an element does; a spacer doesn't; anything else does when something it holds does,
@@ -187,19 +202,31 @@ function biggest(nodes: LayoutNode[]): LayoutNode | undefined {
   return best;
 }
 
-function labelled(nodes: LayoutNode[], view: string, names: PartNames): ScreenPart[] {
+/** The parts `nodes` are, each labelled by the first of: a section's or toolbar's title, the placed view's name, the
+ * view property it's written in, a comment on the line above, what a decision's biggest branch or a loop's item is
+ * named, the first text it shows, its kind. */
+function labelled(
+  nodes: LayoutNode[],
+  view: string,
+  names: PartNames,
+): { parts: ScreenPart[]; unnamed: ScreenPart[] } {
   const taken = new Set<string>();
   const next = new Map<string, number>();
-  return nodes.map((node) => {
-    const label = unique(labelOf(node, names), taken, next);
-    return { id: node.id, view, label, span: node.span, ...(node.ref !== undefined && { ref: node.ref }) };
+  const unnamed: ScreenPart[] = [];
+  const parts = nodes.map((node) => {
+    const name = nameOf(node, names);
+    const label = unique(name ?? KIND_LABELS[node.kind], taken, next);
+    const part = {
+      id: node.id,
+      view,
+      label,
+      span: node.span,
+      ...(node.ref !== undefined && { ref: node.ref }),
+    };
+    if (name === undefined) unnamed.push(part);
+    return part;
   });
-}
-
-/** The first of: a section's or toolbar's title, the placed view's name, the view property it's written in, a comment
- * on the line above, what a decision's biggest branch or a loop's item is named, the first text it shows, its kind. */
-function labelOf(node: LayoutNode, names: PartNames): string {
-  return nameOf(node, names) ?? KIND_LABELS[node.kind];
+  return { parts, unnamed };
 }
 
 function nameOf(node: LayoutNode, names: PartNames): string | undefined {

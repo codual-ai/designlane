@@ -6,6 +6,7 @@
 
 import type { BracketTree } from "../frameworks/source-text.js";
 import type { Element } from "./layout-tree.js";
+import { ReadingNotes } from "./reading-notes.js";
 
 export interface CodeReading {
   language: "swift" | "kotlin";
@@ -52,17 +53,17 @@ export class CodeElements {
   private inlined = 0;
   /** The file's `#if`s, matched once. */
   private compiled: Map<number, number[]> | undefined;
-  /** Whether a limit stopped the reading short (nesting too deep, too much read in place), so the elements read are
-   * only part of what the code writes. */
-  cut = false;
-
-  constructor(private readonly r: CodeReading) {}
+  /** `notes` gets why a limit stopped the reading short (nesting too deep, too much read in place), and its issues. */
+  constructor(
+    private readonly r: CodeReading,
+    readonly notes = new ReadingNotes(),
+  ) {}
 
   /** The elements written between `from` and `to`, `depth` blocks in. */
   between(from: number, to: number, depth = 0): Element[] {
     const out: Element[] = [];
     if (depth > MAX_DEPTH) {
-      this.cut = true;
+      this.notes.stop("too-deep", from);
       return out;
     }
     let j = from;
@@ -128,7 +129,7 @@ export class CodeElements {
   private step(j: number, to: number, depth: number): Step {
     const { code } = this.r;
     if (depth > MAX_DEPTH) {
-      this.cut = true;
+      this.notes.stop("too-deep", j);
       return { elements: [], next: this.lineEnd(j, to) };
     }
     const c = code[j] ?? "";
@@ -203,7 +204,11 @@ export class CodeElements {
     const end = directive?.at(-1);
     // An `#if` around more than this block holds (some of a `switch`'s cases), or left open: each side is read where
     // it's written.
-    if (!directive || end === undefined || end >= to) return { elements: [], next: this.lineEnd(j, to) };
+    if (!directive || end === undefined || end >= to) {
+      const next = this.lineEnd(j, to);
+      this.notes.issue({ kind: "if-as-written", start: j - 1, end: next });
+      return { elements: [], next };
+    }
     const next = this.lineEnd(end + 1, to);
     const starts = [j, ...directive.slice(0, -1)].map((at) => this.lineEnd(at + 1, to));
     const branches = starts.map((from, i) => this.between(from, directive[i] ?? from, depth + 1));
@@ -287,6 +292,11 @@ export class CodeElements {
         word === "default" || (word === "case" && !PATTERN_CASE.test(code.slice(Math.max(0, k - 40), k)))
       );
     });
+    // An `#if` before the first case is around cases, not in one: each is read as written.
+    for (const m of code.slice(open + 1, starts[0] ?? close).matchAll(/#if\b/g)) {
+      const at = open + 1 + (m.index ?? 0);
+      this.notes.issue({ kind: "if-as-written", start: at, end: this.lineEnd(at + 1, close) });
+    }
     return starts.map((start, i) => {
       const end = starts[i + 1] ?? close;
       const colon = this.topLevel(start - 1, end, (k) => code[k] === ":" && code[k + 1] !== ":")[0] ?? end;
@@ -461,7 +471,7 @@ export class CodeElements {
     if (!body || this.inlining.has(name)) return undefined;
     const size = body[1] - body[0];
     if (this.inlined + size > code.length * MAX_INLINED) {
-      this.cut = true;
+      this.notes.stop("too-much-inlined", j);
       return undefined;
     }
     this.inlined += size;
@@ -515,20 +525,23 @@ export class CodeElements {
   }
 }
 
-/** Whether a bracket between `from` and `to` has no match: code left unfinished, whose elements can't all be read.
- * Square brackets, which the bracket tree doesn't pair, are counted. */
-export function unbalanced(
+/** Where a bracket of the code from `from` to `to` is left open or closes one it didn't open, `[` and `]` counted too:
+ * the first that closes none, else the last left open, the likeliest to be the one written wrong (`Text("a"` inside a
+ * struct, which leaves the struct's `{` open too). Undefined when every one is paired. */
+export function unbalancedAt(
   { code, tree }: Pick<CodeReading, "code" | "tree">,
   from: number,
   to: number,
-): boolean {
-  let squares = 0;
+): number | undefined {
+  const squares: number[] = [];
+  let open: number | undefined;
   for (let k = from; k < to; k++) {
     const c = code[k];
-    if ((c === "(" || c === "{") && !tree.closeOf.has(k)) return true;
-    if ((c === ")" || c === "}") && !tree.openOf.has(k)) return true;
-    if (c === "[") squares++;
-    else if (c === "]" && --squares < 0) return true;
+    if ((c === "(" || c === "{") && !tree.closeOf.has(k)) open = k;
+    else if ((c === ")" || c === "}") && !tree.openOf.has(k)) return k;
+    else if (c === "[") squares.push(k);
+    else if (c === "]" && squares.pop() === undefined) return k;
   }
-  return squares !== 0;
+  const square = squares.at(-1);
+  return square !== undefined && (open === undefined || square > open) ? square : open;
 }
