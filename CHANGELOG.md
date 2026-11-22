@@ -15,6 +15,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
   left out is summed up a line per kind of reason, and `designlane/agent-check.json` lists every entry with its place,
   a stable `kind` and why, for the agent to fix its map by. An `agent.json` without a version is read as before.
 
+### Fixed
+
+- A Compose app with a theme per object (`BrandColorScheme`, `AuroraColorScheme`, each with its light and dark
+  scheme) gets its Material roles from the theme the code names as its default (`AppTheme.DEFAULT to …`,
+  `getOrDefault(theme, …)`, `else -> …`), or one named default, not the fullest; and each theme's light scheme pairs
+  with its own dark one.
+
+
 ## 0.5.0 - 2026-11-22
 
 ### Added

@@ -116,6 +116,180 @@ describe("Compose colours", () => {
     expect(colorOf(tokens.colors, "Pink")).toMatchObject({ light: "#ffd8e4", uses: 1 });
   });
 
+  it("takes the theme the code names as its default, each theme's light and dark from its own object", async () => {
+    const theme = (name: string, light: string, dark: string, extra = "") =>
+      [
+        `internal object ${name} : BaseColorScheme() {`,
+        `  override val darkScheme = darkColorScheme(primary = Color(0xFF${dark}), surface = Color.Black)`,
+        `  override val lightScheme = lightColorScheme(primary = Color(0xFF${light}), surface = Color.White${extra})`,
+        "}",
+      ].join("\n");
+    const themes = {
+      // Fuller, first and alphabetically before the default: the one the old rule took.
+      "app/ui/theme/Aurora.kt": theme(
+        "AuroraColorScheme",
+        "8839EF",
+        "CBA6F7",
+        ", tertiary = Color.Red, secondary = Color.Blue",
+      ),
+      "app/ui/theme/Brand.kt": theme("BrandColorScheme", "0058CA", "B0C6FF"),
+      "app/ui/Screen.kt": "@Composable fun S() { Text(color = MaterialTheme.colorScheme.primary) }",
+    };
+    const named = async (choice: string) =>
+      colorOf(
+        (await compose({ ...themes, "app/ui/theme/Themes.kt": choice })).tokens.colors,
+        "MaterialTheme.colorScheme.primary",
+      );
+    for (const choice of [
+      "private val schemes = mapOf(AppTheme.DEFAULT to BrandColorScheme, AppTheme.AURORA to AuroraColorScheme)",
+      "fun pick(t: AppTheme) = schemes.getOrDefault(t, BrandColorScheme)",
+      "fun pick(t: AppTheme) = when (t) { AppTheme.AURORA -> AuroraColorScheme; else -> BrandColorScheme }",
+    ])
+      expect(await named(choice), choice).toMatchObject({ light: "#0058ca", dark: "#b0c6ff" });
+    // No default named: a pair is still a pair, within one theme's object.
+    const pair = await named("val x = 1");
+    expect([pair?.light, pair?.dark]).toEqual(["#8839ef", "#cba6f7"]);
+  });
+
+  it("weighs a theme named DEFAULT over one only suggested, by its whole reference, in any type's header", async () => {
+    const object = (header: string, light: string, dark: string, extra = "") =>
+      [
+        `${header} {`,
+        `  val darkScheme = darkColorScheme(primary = Color(0xFF${dark}))`,
+        `  val lightScheme = lightColorScheme(primary = Color(0xFF${light})${extra})`,
+        "}",
+      ].join("\n");
+    const fuller = ", surface = Color.White, tertiary = Color.Red";
+    const primary = async (files: Record<string, string>) => {
+      const { tokens } = await compose({
+        ...files,
+        "app/ui/Screen.kt": "@Composable fun S() { Text(color = MaterialTheme.colorScheme.primary) }",
+      });
+      const c = colorOf(tokens.colors, "MaterialTheme.colorScheme.primary");
+      return [c?.light, c?.dark];
+    };
+    const brand = ["#0058ca", "#b0c6ff"];
+    // DEFAULT beats an else and an unrelated getOrDefault, however full the other theme.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": object("object Aurora", "8839EF", "CBA6F7", fuller),
+        "app/ui/theme/B.kt": object("class Brand(val enabled: Boolean = true)", "0058CA", "B0C6FF"),
+        "app/ui/theme/T.kt": [
+          "fun pick(t: AppTheme) = when (t) { AppTheme.DEFAULT -> Themes.Brand; else -> Aurora }",
+          "val preview = previews.getOrDefault(read(id), Aurora)",
+        ].join("\n"),
+      }),
+    ).toEqual(brand);
+    // getOrDefault with a call for its first argument, and a bodyless class before the theme's object.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": object("object Aurora", "8839EF", "CBA6F7", fuller),
+        "app/ui/theme/B.kt": `class Marker\n${object("object Brand", "0058CA", "B0C6FF")}`,
+        "app/ui/theme/T.kt": "fun pick() = schemes.getOrDefault(readTheme(), Brand)",
+      }),
+    ).toEqual(brand);
+    // A bodyless class doesn't take the next block for its own: the scheme built in `build` isn't Aurora2's.
+    expect(
+      await primary({
+        "app/ui/theme/B.kt": object("object Brand", "0058CA", "B0C6FF"),
+        "app/ui/theme/C.kt":
+          "class Aurora2\nfun build() { val lightScheme = lightColorScheme(primary = Color(0xFF8839EF)) }",
+        "app/ui/theme/T.kt":
+          "val schemes = mapOf(AppTheme.DEFAULT to Aurora2)\nfun pick(t: Int) = when (t) { 1 -> Aurora2; else -> Brand }",
+      }),
+    ).toEqual(brand);
+    // A qualified default names its own nested theme; a function type in a header and a class literal before a
+    // theme don't lose it; a trailing comma doesn't hide getOrDefault's default.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": `object Aurora {\n${object("object Palette", "8839EF", "CBA6F7", fuller)}\n}`,
+        "app/ui/theme/B.kt": `object Brand {\n${object("object Palette", "0058CA", "B0C6FF")}\n}`,
+        "app/ui/theme/T.kt": "val schemes = mapOf(AppTheme.DEFAULT to Brand.Palette)",
+      }),
+    ).toEqual(brand);
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": object("object Aurora", "8839EF", "CBA6F7", fuller),
+        "app/ui/theme/B.kt": object("class Brand(val onTap: () -> Unit = {})", "0058CA", "B0C6FF"),
+        "app/ui/theme/T.kt": "val schemes = mapOf(AppTheme.DEFAULT to Brand())",
+      }),
+    ).toEqual(brand);
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": object("object Aurora", "8839EF", "CBA6F7", fuller),
+        "app/ui/theme/B.kt": `val type = String::class\n${object("object Brand", "0058CA", "B0C6FF")}`,
+        "app/ui/theme/T.kt": "fun pick() = schemes.getOrDefault(readTheme(), Brand,)",
+      }),
+    ).toEqual(brand);
+    // A scheme after a theme's object has closed isn't that theme's.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": [
+          "object Aurora {\n  val lightScheme = lightColorScheme(primary = Color(0xFF0058CA))\n}",
+          `val lightScheme = lightColorScheme(primary = Color(0xFF8839EF)${fuller})`,
+        ].join("\n"),
+        "app/ui/theme/T.kt": "val schemes = mapOf(AppTheme.DEFAULT to Aurora)",
+      }),
+    ).toEqual(["#0058ca", undefined]);
+    // A default theme with no dark scheme of its own takes no other theme's.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt":
+          "object Aurora {\n  val darkScheme = darkColorScheme(primary = Color(0xFFCBA6F7))\n}",
+        "app/ui/theme/B.kt":
+          "object Brand {\n  val lightScheme = lightColorScheme(primary = Color(0xFF0058CA))\n}",
+        "app/ui/theme/T.kt": "val schemes = mapOf(AppTheme.DEFAULT to Brand)",
+      }),
+    ).toEqual(["#0058ca", undefined]);
+    // Nested objects of the same name pair within their own theme, and Day and Night aren't one theme.
+    expect(
+      await primary({
+        "app/ui/theme/A.kt": `object Aurora {\n${object("object Palette", "8839EF", "FFFF00")}\n}`,
+        "app/ui/theme/B.kt": `object Brand {\n${object("object Palette", "0058CA", "B0C6FF", fuller)}\n}`,
+      }),
+    ).toEqual(brand);
+    expect(
+      await primary({
+        "app/ui/theme/D.kt": object("object DayColorScheme", "8839EF", "FFFF00"),
+        "app/ui/theme/N.kt": object("object NightColorScheme", "0058CA", "B0C6FF"),
+        "app/ui/theme/T.kt": "val schemes = mapOf(AppTheme.DEFAULT to NightColorScheme)",
+      }),
+    ).toEqual(brand);
+  });
+
+  speedIt("reads thousands of themes and nested defaults quickly", async () => {
+    const themes = Array.from(
+      { length: 4000 },
+      (_, i) => `object T${i} { val lightScheme = lightColorScheme(primary = Color(0xFF0058CA)) }`,
+    );
+    const nested = `${"m.getOrDefault(a, ".repeat(4000)}Brand${")".repeat(4000)}`;
+    const started = performance.now();
+    await compose({ "app/ui/theme/T.kt": `${themes.join("\n")}\nval x = ${nested}` });
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  speedIt("finds each scheme's theme quickly among hundreds of nested types", async () => {
+    const nested = Array.from({ length: 400 }, (_, i) => `object N${i} {`).join("\n") + "\n}".repeat(400);
+    const schemes = Array.from(
+      { length: 400 },
+      (_, i) => `val s${i} = lightColorScheme(primary = Color(0xFF0058CA))`,
+    );
+    const started = performance.now();
+    await compose({ "app/ui/theme/T.kt": `${nested}\n${schemes.join("\n")}` });
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+
+  it("takes a scheme named as the default before a fuller one", async () => {
+    const { tokens } = await compose({
+      "app/ui/theme/Theme.kt": [
+        "private val LightDefaultColors = lightColorScheme(primary = Color(0xFF0058CA))",
+        "private val LightBrandColors = lightColorScheme(primary = Color(0xFF8839EF), surface = Color.White, tertiary = Color.Red)",
+      ].join("\n"),
+      "app/ui/Screen.kt": "@Composable fun S() { Text(color = MaterialTheme.colorScheme.primary) }",
+    });
+    expect(colorOf(tokens.colors, "MaterialTheme.colorScheme.primary")?.light).toBe("#0058ca");
+  });
+
   it("reads an app's own colour class, named as the code reads it", async () => {
     const { tokens } = await compose({
       "app/theme/AppColors.kt": [

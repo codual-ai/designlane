@@ -28,6 +28,9 @@ const COLOR_FIELD =
 /** One call that sets a theme's colours: a scheme, or an instance of the app's colour class. */
 interface Palette {
   name: string;
+  /** The objects or classes holding it, outermost first, as an app with a theme per object writes it
+   * (`TachiyomiColorScheme` for its `lightScheme`). */
+  owner?: string;
   dark: boolean;
   values: Map<string, Argument>;
   source: KotlinSource;
@@ -42,20 +45,31 @@ export interface ThemeColors {
 export function themeColors(sources: KotlinSource[], known: ColorLookup): ThemeColors {
   const definitions = new Map(sources.map((s) => [s, new Spans()]));
   const colors: ThemeColors["colors"] = [];
-  const schemes = sources.flatMap((source) =>
-    [...source.code.matchAll(SCHEME_CALL)].flatMap((m) => {
+  const schemes = sources.flatMap((source) => {
+    const calls = [...source.code.matchAll(SCHEME_CALL)];
+    const owners =
+      calls.length > 0
+        ? ownersAt(
+            typeBodies(source.code),
+            calls.map((m) => m.index ?? 0),
+          )
+        : [];
+    return calls.flatMap((m, i) => {
       const kind = SCHEMES[m[1] ?? ""];
       if (!kind) return [];
       const at = m.index ?? 0;
       const { args, close } = callArguments(source, at + m[0].length - 1);
       definitions.get(source)?.add(at, close);
       const values = new Map(args.flatMap((a) => (a.name ? [[a.name, a] as const] : [])));
-      return [
-        { palette: { name: assignedName(source.code, at) ?? "", dark: kind.dark, values, source }, ...kind },
-      ];
-    }),
+      const owner = owners[i];
+      const name = assignedName(source.code, at) ?? "";
+      return [{ palette: { name, ...(owner && { owner }), dark: kind.dark, values, source }, ...kind }];
+    });
+  });
+  const pair = lightAndDark(
+    schemes.map((s) => s.palette),
+    defaultsNamed(sources),
   );
-  const pair = lightAndDark(schemes.map((s) => s.palette));
   const access = schemes.find((s) => s.palette === pair?.light)?.access;
   if (pair && access) colors.push(...paletteColors(pair, [...pair.light.values.keys()], access, known));
   const classes = colorClasses(sources);
@@ -73,21 +87,168 @@ export function themeColors(sources: KotlinSource[], known: ColorLookup): ThemeC
   return { colors, definitions };
 }
 
-/** `LightDefaultColorScheme` and `DarkDefaultColorScheme` are a pair; so are `BrandLightColors` and `BrandDarkColors`. */
-const pairKey = (name: string) => name.toLowerCase().replace(/light|dark|night|day/g, "");
+/** An object's or class's body: where its `{` and `}` are. */
+interface TypeBody {
+  name: string;
+  open: number;
+  close: number;
+}
 
-/** The theme's Light palette and its Dark partner. Light is the one with a partner by name, then the one named light,
- * then the fullest; a lone dark palette partners whichever light one there is. */
-function lightAndDark(palettes: Palette[]): { light: Palette; dark?: Palette } | undefined {
+/** A type's declaration, not a class literal (`String::class`): its name on the same line. */
+const TYPE_NAME = /(?<!::)\b(?:object|class)[ \t]+(\w+)/g;
+/** What starts a declaration of its own, so a type before it has no body: `class Marker` then `object Brand {`. */
+const DECLARATION =
+  /^\s*(?:[@}]|(?:(?:private|internal|public|protected|data|enum|sealed|abstract|open|inner|override|companion)\s+)*(?:class|object|interface|val|var|fun)\b)/;
+/** How far a type's header is read for its body's `{`. */
+const MAX_HEADER = 2000;
+
+/** Each object's and class's body in `code`, whose strings and comments are blanked: its braces matched once. */
+function typeBodies(code: string): TypeBody[] {
+  const closes = new Map<number, number>();
+  const open: number[] = [];
+  for (let i = 0; i < code.length; i++) {
+    if (code[i] === "{") open.push(i);
+    else if (code[i] === "}") {
+      const from = open.pop();
+      if (from !== undefined) closes.set(from, i);
+    }
+  }
+  const bodies: TypeBody[] = [];
+  for (const m of code.matchAll(TYPE_NAME)) {
+    const brace = bodyOpen(code, (m.index ?? 0) + m[0].length);
+    const close = brace === undefined ? undefined : closes.get(brace);
+    if (brace !== undefined && close !== undefined) bodies.push({ name: m[1] ?? "", open: brace, close });
+  }
+  return bodies;
+}
+
+/** Where the body of the type whose header starts at `from` opens: past its constructor and supertypes, none when a
+ * declaration of its own or a `;` comes first. */
+function bodyOpen(code: string, from: number): number | undefined {
+  let depth = 0;
+  for (let i = from; i < Math.min(code.length, from + MAX_HEADER); i++) {
+    const c = code[i];
+    if (c === "(" || c === "<" || c === "[") depth++;
+    // A function type's `->` closes nothing: `class Brand(val onTap: () -> Unit = {})`.
+    else if (c === ")" || (c === ">" && code[i - 1] !== "-") || c === "]") depth--;
+    else if (depth > 0) continue;
+    else if (c === "{") return i;
+    else if (c === ";" || c === "}" || c === "=") return undefined;
+    else if (c === "\n" && DECLARATION.test(code.slice(i + 1, i + 200))) return undefined;
+  }
+  return undefined;
+}
+
+/** For each of `positions`, in order, the objects and classes holding it, outermost first (`Aurora.Palette`): one
+ * sweep over the bodies, which nest as their braces do. */
+function ownersAt(bodies: TypeBody[], positions: number[]): (string | undefined)[] {
+  const sorted = [...bodies].sort((a, b) => a.open - b.open);
+  const holding: TypeBody[] = [];
+  let next = 0;
+  return positions.map((at) => {
+    while (next < sorted.length && (sorted[next]?.open ?? at) < at) {
+      const body = sorted[next++];
+      if (!body) break;
+      while (holding.length > 0 && (holding.at(-1)?.close ?? 0) < body.open) holding.pop();
+      holding.push(body);
+    }
+    while (holding.length > 0 && (holding.at(-1)?.close ?? 0) < at) holding.pop();
+    return holding.length > 0 ? holding.map((b) => b.name).join(".") : undefined;
+  });
+}
+
+/** How strongly the code names a theme as its default: `AppTheme.DEFAULT to Brand` and `DEFAULT -> Brand` say so,
+ * `getOrDefault(theme, Brand)` and `else -> Brand` only suggest it. */
+const NAMED_DEFAULT = [/\bDEFAULT\s+to\s+([\w.]+)/g, /\bDEFAULT\s*->\s*([\w.]+)/g];
+const SUGGESTED_DEFAULT = /\belse\s*->\s*([\w.]+)/g;
+const STRONG = 3;
+const WEAK = 1;
+
+/** Each theme the code names as its default, as the code refers to it (`Brand`, `Themes.Brand`), with how strongly. */
+function defaultsNamed(sources: KotlinSource[]): Map<string, number> {
+  const named = new Map<string, number>();
+  const note = (reference: string | undefined, strength: number) => {
+    if (reference) named.set(reference, Math.max(named.get(reference) ?? 0, strength));
+  };
+  for (const { code } of sources) {
+    for (const pattern of NAMED_DEFAULT) for (const m of code.matchAll(pattern)) note(m[1], STRONG);
+    for (const m of code.matchAll(SUGGESTED_DEFAULT)) note(m[1], WEAK);
+    const calls = [...code.matchAll(/\bgetOrDefault\(/g)];
+    if (calls.length === 0) continue;
+    const args = callCommas(code);
+    for (const m of calls) note(lastArgument(code, args, (m.index ?? 0) + m[0].length - 1), WEAK);
+  }
+  return named;
+}
+
+/** Each bracket's close and the commas directly in it, by where it opens: read in one pass over the code. */
+function callCommas(code: string): Map<number, { close: number; commas: number[] }> {
+  const calls = new Map<number, { close: number; commas: number[] }>();
+  const open: { at: number; commas: number[] }[] = [];
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (c === "(" || c === "[" || c === "{") open.push({ at: i, commas: [] });
+    else if (c === ")" || c === "]" || c === "}") {
+      const call = open.pop();
+      if (call) calls.set(call.at, { close: i, commas: call.commas });
+    } else if (c === ",") open.at(-1)?.commas.push(i);
+  }
+  return calls;
+}
+
+/** The reference a call's last argument starts with: `Brand` in `getOrDefault(read(), Brand)` and in
+ * `getOrDefault(read(), Brand,)`. */
+function lastArgument(
+  code: string,
+  calls: Map<number, { close: number; commas: number[] }>,
+  open: number,
+): string | undefined {
+  const call = calls.get(open);
+  if (!call) return undefined;
+  const ends = [open, ...call.commas, call.close];
+  for (let k = ends.length - 1; k > 1; k--) {
+    const text = code.slice((ends[k - 1] ?? 0) + 1, ends[k]);
+    if (text.trim() !== "") return /^\s*([\w.]+)/.exec(text)?.[1];
+  }
+  return undefined;
+}
+
+/** `LightDefaultColorScheme` and `DarkDefaultColorScheme` are a pair; so are `BrandLightColors` and `BrandDarkColors`,
+ * and an object's `lightScheme` and `darkScheme`, never another object's. */
+const pairKey = (p: Palette) =>
+  `${p.owner ?? ""}|${p.name.toLowerCase().replace(/light|dark|night|day/g, "")}`;
+
+/** The theme's Light palette and its Dark partner. Light is the one the code names as its default theme, then one
+ * named default, then one with a partner by name, then one named light, then the fullest; a lone dark palette
+ * partners whichever light one there is. */
+function lightAndDark(
+  palettes: Palette[],
+  defaults = new Map<string, number>(),
+): { light: Palette; dark?: Palette } | undefined {
   const lights = palettes.filter((p) => !p.dark);
   const darks = palettes.filter((p) => p.dark);
   const darkByKey = new Map<string, Palette>();
-  for (const d of darks) if (!darkByKey.has(pairKey(d.name))) darkByKey.set(pairKey(d.name), d);
-  const partner = (light: Palette) => darkByKey.get(pairKey(light.name));
-  const score = (p: Palette) => (partner(p) ? 2 : 0) + (/light|day/i.test(p.name) ? 1 : 0);
+  for (const d of darks) if (!darkByKey.has(pairKey(d))) darkByKey.set(pairKey(d), d);
+  const partner = (light: Palette) => darkByKey.get(pairKey(light));
+  // A reference names a theme by its whole path or the end of it: `Themes.Brand` and `Brand` are `Brand`'s;
+  // `Brand.Palette` isn't `Aurora.Palette`'s.
+  const names = (reference: string, path: string) =>
+    path === reference || path.endsWith(`.${reference}`) || reference.endsWith(`.${path}`);
+  const named = (p: Palette) =>
+    Math.max(
+      0,
+      ...[...defaults].filter(([r]) => (p.owner && names(r, p.owner)) || r === p.name).map(([, n]) => n),
+    );
+  const score = (p: Palette) =>
+    named(p) * 8 +
+    (/default/i.test(`${p.owner ?? ""}.${p.name}`) ? 4 : 0) +
+    (partner(p) ? 2 : 0) +
+    (/light|day/i.test(p.name) ? 1 : 0);
   const light = [...lights].sort((a, b) => score(b) - score(a) || b.values.size - a.values.size)[0];
   if (!light) return undefined;
-  const dark = partner(light) ?? (darks.length === 1 ? darks[0] : undefined);
+  // A lone dark palette is the light one's only if it isn't another theme's.
+  const lone = darks.length === 1 ? darks[0] : undefined;
+  const dark = partner(light) ?? (lone && lone.owner === light.owner ? lone : undefined);
   return { light, ...(dark && { dark }) };
 }
 
