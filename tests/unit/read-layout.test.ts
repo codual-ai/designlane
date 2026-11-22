@@ -1226,3 +1226,144 @@ describe("layoutOf: Compose overloads", () => {
     expect(app.layoutOf(placed?.ref ?? "")?.children[0]?.kind).toBe("stack-v");
   });
 });
+
+describe("layoutOf: framework elements and code that isn't one", () => {
+  it("reads SwiftUI's shapes, progress and image loaders, and a type's members that are values as no elements", async () => {
+    const { lines, app, screen } = await layout(
+      {
+        "App/S.swift": swift(
+          "struct S: View {",
+          "  var body: some View {",
+          "    VStack {",
+          "      ProgressView()",
+          "      RoundedRectangle(cornerRadius: 8)",
+          "      KFImage(url)",
+          "      Color.black.opacity(0.3)",
+          "      Image.logo",
+          "      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { show = true }",
+          "      let _ = Date.now",
+          '      GroupBox { Text("a") }',
+          "    }",
+          "  }",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(lines).toEqual([
+      ". view-ref → S",
+      "  stack-v stack-v",
+      "    stack-v/other other",
+      "    stack-v/other.1 other",
+      "    stack-v/image image",
+      "    stack-v/other.2 other",
+      "    stack-v/image.1 image",
+      "    stack-v/section section",
+      "      stack-v/section/text text",
+    ]);
+    expect(app.layoutIssues(screen.id).issues.filter((i) => i.kind === "unknown-element")).toEqual([]);
+  });
+
+  it("reads Compose's dividers, menu items and segmented rows, and drops snackbars and assignments", async () => {
+    const { lines } = await layout(
+      {
+        "app/src/main/java/a/S.kt": kotlin(
+          "@Composable fun S(items: List<Item>) {",
+          "  Column {",
+          "    HorizontalDivider()",
+          '    DropdownMenuItem(text = { Text("a") }, onClick = {})',
+          '    SingleChoiceSegmentedButtonRow { SegmentedButton(selected = true, onClick = {}) { Text("b") } }',
+          "    SnackbarHost(state)",
+          '    rows += Row { Text("c") }',
+          '    if (ready) count = 1 else Text("Waiting")',
+          '    if (ready) count = if (other) 1 else 2 else Text("Later")',
+          "    state =",
+          "      UiState.Loading()",
+          "  }",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(lines).toEqual([
+      ". view-ref → S",
+      "  stack-v stack-v",
+      "    stack-v/other other",
+      "    stack-v/button button",
+      "    stack-v/stack-h stack-h",
+      "      stack-v/stack-h/button button",
+      "    stack-v/conditional conditional",
+      "      stack-v/conditional/text text",
+      "    stack-v/conditional.1 conditional",
+      "      stack-v/conditional.1/text text",
+    ]);
+  });
+
+  it("reads React Native's spinner, SVG shapes and icons, and passes through a context's provider", async () => {
+    const { lines } = await layout(
+      {
+        ...RN_MANIFEST,
+        "src/S.tsx": tsx(
+          'import { Path } from "react-native-svg";',
+          "export function S() {",
+          "  return (",
+          "    <ThemeContext.Provider value={theme}>",
+          '      <View><ActivityIndicator /><Path d={d} /><Icon name="x" /></View>',
+          "    </ThemeContext.Provider>",
+          "  );",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(lines).toEqual([
+      ". view-ref → S",
+      "  stack-v stack-v",
+      "    stack-v/other other",
+      "    stack-v/image image",
+      "    stack-v/image.1 image",
+    ]);
+  });
+});
+
+describe("layoutOf: names a framework and an app share", () => {
+  it("reads an app's view of a name a framework type has, a LegendList of several columns as a grid, and a provider of what isn't read", async () => {
+    const swiftApp = await layout(
+      {
+        "App/S.swift": swift(
+          "struct Calendar: View {",
+          "  static var preview: Calendar { Calendar() }",
+          '  var body: some View { Text("Calendar") }',
+          "}",
+          'struct S: View { var body: some View { VStack { Calendar.preview; Text("Footer") } } }',
+        ),
+      },
+      "S",
+    );
+    expect(swiftApp.tree?.children[0]?.children.map((n) => n.kind)).toEqual(["view-ref", "text"]);
+    const rn = await layout(
+      {
+        ...RN_MANIFEST,
+        "src/S.tsx": tsx(
+          "export function S() {",
+          "  return <LegendList data={items} numColumns={2} renderItem={({ item }) => <Text>{item.title}</Text>} />;",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(rn.tree?.children.map((n) => n.kind)).toEqual(["lazy-grid"]);
+    const provider = await layout(
+      {
+        ...RN_MANIFEST,
+        "src/S.tsx": tsx(
+          "export function S({ children }) {",
+          "  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(provider.tree?.children.map((n) => n.kind)).toEqual(["other"]);
+  });
+});

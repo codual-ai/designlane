@@ -14,6 +14,8 @@ export interface CodeReading {
   tree: BracketTree;
   /** SwiftUI's view properties and functions of the screen's own struct, by name: the block each one's body is. */
   views?: ReadonlyMap<string, [open: number, close: number]>;
+  /** Whether the app declares a view of this name, which a framework type of the same name (`Calendar`) doesn't hide. */
+  appView?: (name: string) => boolean;
 }
 
 /** How deep blocks are read; code nested deeper has no layout, so hostile code can't overflow the stack. */
@@ -35,6 +37,25 @@ const PATTERN_CASE = /(?:\b(?:if|guard|while|for)|,)\s*$/;
 const MAX_INLINED = 50;
 /** Statements that declare, rather than write, elements: read past to their line's end. */
 const DECLARATIONS = new Set(["let", "var", "val", "guard", "typealias"]);
+/** Swift types a view's code names that are never views, whose members (`DispatchQueue.main`, `Date.now`) are code
+ * run or values. */
+const NOT_VIEWS = new Set([
+  "DispatchQueue",
+  "Calendar",
+  "Date",
+  "UIApplication",
+  "UIPasteboard",
+  "UIDevice",
+  "NotificationCenter",
+  "UserDefaults",
+  "Task",
+  "Bundle",
+  "FileManager",
+  "ProcessInfo",
+  "Locale",
+  "TimeZone",
+]);
+
 /** Modifiers whose block or call adds an element beside the one they modify. */
 const SWIFT_ADDING = new Map<string, Element["kind"]>([
   ["toolbar", "toolbar"],
@@ -149,6 +170,8 @@ export class CodeElements {
     if (word === "for" && this.r.language === "kotlin") return this.forLoop(j, to, depth);
     if (word === "throw") return { elements: [], next: this.pastExpression(j + word.length) };
     if (DECLARATIONS.has(word)) return { elements: [], next: this.lineEnd(j, to) };
+    const assigned = this.assignmentEnd(j, to, depth);
+    if (assigned !== undefined) return { elements: [], next: assigned };
     if (/^[A-Z]/.test(word)) return this.call(j, word, to, depth);
     return this.lowercase(j, to, depth);
   }
@@ -363,7 +386,7 @@ export class CodeElements {
     }
     // A name neither called nor given a block isn't an element (a type, a constant), unless it's SwiftUI's view
     // constant (`Color.red`); a member called (`Analytics.track(…)`) is code run, not shown.
-    if (!args && blocks.length === 0 && !this.viewConstant(k)) return { elements: [], next: k };
+    if (!args && blocks.length === 0 && !this.viewConstant(name, k)) return { elements: [], next: k };
     const children: Element[] = [];
     if (args && language === "kotlin") children.push(...this.slots(args, depth));
     // `AnyView(Text(t))` holds the view it's given.
@@ -395,12 +418,41 @@ export class CodeElements {
     return /^\s*[\w$\\.[(]/.test(first) && !/^\s*\w+\s*:/.test(first);
   }
 
-  /** Whether a SwiftUI name is a constant view, `Color.red`, at the `.` at `k`: a member not called. */
-  private viewConstant(k: number): boolean {
+  /** Whether a SwiftUI name with a member at the `.` at `k` is a constant view: a member not called, then perhaps its
+   * modifiers (`Color.red`, `Color.black.opacity(0.3)`, `Image.logo`), unless it's a type that's never a view
+   * (`DispatchQueue.main.async { … }`). */
+  private viewConstant(name: string, k: number): boolean {
     const { code } = this.r;
     if (this.r.language !== "swift" || code[k] !== ".") return false;
+    if (NOT_VIEWS.has(name) && !this.r.appView?.(name)) return false;
     const member = this.wordAt(k + 1);
     return member !== undefined && code[k + 1 + member.length] !== "(";
+  }
+
+  /** Where the assignment at `j` ends (`date = Calendar.current.date(…)`, `self.count += 1`): code run, whatever
+   * its value names. At the line's end, or before an `else` of the branch it's written in
+   * (`if (ready) count = 1 else Text("Waiting")`), unless its value is itself an `if` or a `when`. Undefined when the
+   * statement at `j` assigns nothing. */
+  private assignmentEnd(j: number, to: number, depth: number): number | undefined {
+    const { code } = this.r;
+    let k = j;
+    for (let word = this.wordAt(k); word; word = code[k] === "." ? this.wordAt(k + 1) : undefined)
+      k += (code[k] === "." ? 1 : 0) + word.length;
+    while (code[k] === " " || code[k] === "\t") k++;
+    const operator = /^(?:[-+*/%]|\?\?)?=(?!=)/.exec(code.slice(k, k + 3))?.[0];
+    if (!operator) return undefined;
+    // Its value may start on the next line (`state =⏎ UiState.Loading()`).
+    k = this.space(k + operator.length);
+    const value = this.wordAt(k);
+    // A value that's an `if` or a `when` ends where that does: read as one, its elements put aside.
+    if (value === "if") return this.conditional(k, to, depth).next;
+    if (value === "when" || value === "switch") return this.choice(k, depth).next;
+    while (k < to && code[k] !== "\n" && code[k] !== ";") {
+      const word = this.wordAt(k);
+      if (word === "else" && /\s/.test(code[k - 1] ?? "")) return k;
+      k = word ? k + word.length : this.past(k);
+    }
+    return k;
   }
 
   /** A loop's element: a repeat of what its block writes. */

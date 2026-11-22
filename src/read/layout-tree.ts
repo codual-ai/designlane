@@ -47,12 +47,19 @@ const SWIFTUI = new Map<string, Entry>([
   ...entries("section", "Section DisclosureGroup"),
   ...entries("text", "Text Label"),
   ...entries("button", "Button NavigationLink Link Menu ShareLink EditButton PasteButton RenameButton"),
-  ...entries("image", "Image AsyncImage"),
+  ...entries("image", "Image AsyncImage KFImage WebImage LazyImage CachedAsyncImage LottieView"),
   ...entries("input", "TextField SecureField TextEditor Toggle Slider Picker Stepper DatePicker ColorPicker"),
-  ...entries("spacer", "Spacer"),
+  ...entries("spacer", "Spacer ToolbarSpacer"),
   ...entries(
     "group",
-    "Group AnyView GeometryReader ViewThatFits ScrollViewReader ToolbarItem ToolbarItemGroup TimelineView Tab TabSection",
+    "Group AnyView GeometryReader ViewThatFits ScrollViewReader ToolbarItem ToolbarItemGroup TimelineView Tab TabSection GlassEffectContainer",
+  ),
+  ...entries("section", "GroupBox"),
+  ...entries("stack-h", "ControlGroup"),
+  // Shown, but none of the layout's kinds: shapes, dividers, progress, colors and gradients, charts, players.
+  ...entries(
+    "other",
+    "Rectangle RoundedRectangle UnevenRoundedRectangle Circle Ellipse Capsule ContainerRelativeShape Path Divider ProgressView Color LinearGradient RadialGradient AngularGradient EllipticalGradient MeshGradient ContentUnavailableView Gauge Canvas Chart Map VideoPlayer",
   ),
   // Code run, not shown: `Task { await load() }` in a block.
   ...entries("drop", "EmptyView Task"),
@@ -74,10 +81,10 @@ const COMPOSE = new Map<string, Entry>([
     "toolbar",
     "TopAppBar CenterAlignedTopAppBar MediumTopAppBar LargeTopAppBar BottomAppBar NavigationBar NavigationRail",
   ),
-  ...entries("text", "Text"),
+  ...entries("text", "Text BasicText"),
   ...entries(
     "button",
-    "Button TextButton OutlinedButton ElevatedButton FilledTonalButton IconButton FilledIconButton OutlinedIconButton IconToggleButton FloatingActionButton SmallFloatingActionButton LargeFloatingActionButton ExtendedFloatingActionButton Tab LeadingIconTab NavigationBarItem NavigationRailItem FilterChip AssistChip InputChip SuggestionChip",
+    "Button TextButton OutlinedButton ElevatedButton FilledTonalButton IconButton FilledIconButton OutlinedIconButton IconToggleButton FloatingActionButton SmallFloatingActionButton LargeFloatingActionButton ExtendedFloatingActionButton SmallExtendedFloatingActionButton Tab LeadingIconTab NavigationBarItem NavigationRailItem NavigationDrawerItem FilterChip AssistChip InputChip SuggestionChip SegmentedButton DropdownMenuItem",
   ),
   ...entries("image", "Image Icon AsyncImage SubcomposeAsyncImage GlideImage"),
   ...entries(
@@ -87,12 +94,20 @@ const COMPOSE = new Map<string, Entry>([
   ...entries("spacer", "Spacer"),
   ...entries(
     "group",
-    "Surface Card ElevatedCard OutlinedCard MaterialTheme CompositionLocalProvider AnimatedVisibility AnimatedContent Crossfade ProvideTextStyle SelectionContainer TooltipBox",
+    "Surface Card ElevatedCard OutlinedCard MaterialTheme MaterialExpressiveTheme CompositionLocalProvider AnimatedVisibility AnimatedContent Crossfade ProvideTextStyle SelectionContainer TooltipBox",
+  ),
+  // A refresh box lays its indicator over what it holds.
+  ...entries("wrapper", "Layout SubcomposeLayout PullToRefreshBox"),
+  ...entries("stack-h", "SingleChoiceSegmentedButtonRow MultiChoiceSegmentedButtonRow"),
+  // Shown, but none of the layout's kinds: dividers, progress, drawing, a view of Android's, a badge.
+  ...entries(
+    "other",
+    "HorizontalDivider VerticalDivider Divider CircularProgressIndicator LinearProgressIndicator PullRefreshIndicator Canvas AndroidView Badge",
   ),
   // Effects run code when the view appears and show nothing; dialogs and menus open over the screen, not in it.
   ...entries(
     "drop",
-    "LaunchedEffect DisposableEffect SideEffect LifecycleEventEffect LifecycleStartEffect LifecycleResumeEffect BackHandler AlertDialog BasicAlertDialog Dialog DropdownMenu ModalBottomSheet",
+    "LaunchedEffect DisposableEffect SideEffect LifecycleEventEffect LifecycleStartEffect LifecycleResumeEffect BackHandler AlertDialog BasicAlertDialog Dialog DropdownMenu ModalBottomSheet SnackbarHost PlainTooltip RichTooltip",
   ),
 ]);
 
@@ -103,17 +118,24 @@ const REACT_NATIVE = new Map<string, Entry>([
     "View SafeAreaView KeyboardAvoidingView Animated.View LinearGradient BlurView MaskedView div",
   ),
   ...entries("scroll", "ScrollView KeyboardAwareScrollView Animated.ScrollView"),
-  ...entries("lazy-list", "FlatList SectionList FlashList VirtualizedList Animated.FlatList"),
-  ...entries("text", "Text Animated.Text span p h1 h2 h3 label"),
+  ...entries("lazy-list", "FlatList SectionList FlashList VirtualizedList Animated.FlatList LegendList"),
+  ...entries("text", "Text Animated.Text span p h1 h2 h3 label FormattedMessage"),
   ...entries(
     "button",
     "Button Pressable TouchableOpacity TouchableHighlight TouchableWithoutFeedback TouchableNativeFeedback Link button a",
   ),
-  ...entries("image", "Image FastImage Animated.Image Svg img"),
+  // react-native-svg's shapes, each part of a drawing.
+  ...entries(
+    "image",
+    "Image FastImage Animated.Image Svg img Icon Path Circle Rect Ellipse Line Polygon Polyline G",
+  ),
   ...entries("backdrop", "ImageBackground"),
   ...entries("input", "TextInput Switch Slider input textarea select"),
   ...entries("group", "Fragment React.Fragment GestureDetector"),
-  ...entries("drop", "Modal StatusBar"),
+  ...entries("drop", "Modal StatusBar FullWindowOverlay br"),
+  ...entries("stack-v", "ul ol"),
+  // Shown, but none of the layout's kinds: a spinner, a web view, a drawing.
+  ...entries("other", "ActivityIndicator WebView Canvas video"),
 ]);
 
 const TABLES: Record<FrameworkId, ReadonlyMap<string, Entry>> = {
@@ -122,10 +144,13 @@ const TABLES: Record<FrameworkId, ReadonlyMap<string, Entry>> = {
   "react-native": REACT_NATIVE,
 };
 
-/** What a JSX tag of a navigator is: `Tab.Navigator` lays out tabs, `Stack.Screen` only configures one. */
-function navigatorEntry(name: string): Entry | undefined {
+/** What a JSX tag is by how it's named: `Tab.Navigator` lays out tabs, `Stack.Screen` only configures one, and a
+ * context's `ThemeContext.Provider` only passes values to what it holds. (A `Consumer` renders what a function gives,
+ * which isn't read, so it stays unknown.) */
+function namedEntry(name: string): Entry | undefined {
   if (name.endsWith(".Navigator")) return /tab/i.test(name) ? "tabs" : "nav";
   if (name.endsWith(".Screen") || name.endsWith(".Group")) return "drop";
+  if (name.endsWith(".Provider")) return "group";
   return undefined;
 }
 
@@ -138,6 +163,8 @@ export interface Building {
   viewNamed: (name: string, at: { start: number; end: number }) => string | undefined;
   /** The framework's own name a local one stands for: `Text` for `Label` in `import { Text as Label }`. */
   builtIn?: (name: string) => string | undefined;
+  /** Whether the app declares a view of this name. */
+  appView?: (name: string) => boolean;
   /** Where what may be wrong in the layout is noted: an element no table names. */
   notes?: ReadingNotes;
 }
@@ -176,7 +203,7 @@ function nodesOfOne(building: Building, element: Element): Node[] {
   const name = building.builtIn?.(element.name) ?? element.name;
   const known =
     TABLES[building.framework].get(name) ??
-    (building.framework === "react-native" ? navigatorEntry(name) : undefined);
+    (building.framework === "react-native" ? namedEntry(name) : undefined);
   if (known === undefined && name)
     building.notes?.issue({ kind: "unknown-element", start: element.start, end: element.end, detail: name });
   const entry = known ?? "other";
@@ -184,6 +211,8 @@ function nodesOfOne(building: Building, element: Element): Node[] {
   if (entry !== "group" && entry !== "backdrop" && entry !== "wrapper")
     return node(entry, childrenFor(entry));
   const children = nodesOf(building, element.children);
+  // A context's provider holding only what isn't read (`{children}`) still shows what it's given: it's an element.
+  if (entry === "group" && children.length === 0 && name.endsWith(".Provider")) return node("other", []);
   if (entry === "group") return children;
   // An image holding content (`ImageBackground`) lays it over the image.
   if (entry === "backdrop")

@@ -72,6 +72,7 @@ export function layoutIndex({ scan, sources, edited, packages }: LayoutInput): L
         return firstId(placed);
       },
       builtIn: (name) => imported?.builtIn(name, view.file),
+      appView: (name) => byName.has(name),
     });
   };
   return {
@@ -341,7 +342,7 @@ function layoutOfView(
   reader: ComponentReader,
   view: ScreenRef,
   notes: ReadingNotes,
-  names: Pick<Building, "viewNamed" | "builtIn">,
+  names: Pick<Building, "viewNamed" | "builtIn" | "appView">,
 ): LayoutReading {
   const declaration = reader.declaration(view);
   const read = (at: Declaration, elements: Element[] | Unread, span: Building["span"]): LayoutReading => {
@@ -367,7 +368,8 @@ function layoutOfView(
     const source = sources.files.find((f) => f.rel === view.file);
     if (!source) return { reason: "no-declaration", at: 0 };
     if (!declaration) return undeclared(source, treeOfSwift(source), view);
-    return read(declaration, swiftElements(source, declaration, notes), locator(view.file, source.text));
+    const elements = swiftElements(source, declaration, notes, names.appView);
+    return read(declaration, elements, locator(view.file, source.text));
   }
   const source = sources.files.find((f) => f.rel === view.file);
   if (!source) return { reason: "no-declaration", at: 0 };
@@ -418,6 +420,7 @@ function swiftElements(
   source: SwiftSource,
   declaration: Declaration,
   notes: ReadingNotes,
+  appView?: (name: string) => boolean,
 ): Element[] | Unread {
   const { code } = source;
   const struct = structsOf(source).find((s) => s.start === declaration.start);
@@ -448,7 +451,10 @@ function swiftElements(
   const body = views.get("body");
   if (!body) return { reason: "no-body", at: struct.start };
   views.delete("body");
-  const reading = new CodeElements({ language: "swift", code, tree, views }, notes);
+  const reading = new CodeElements(
+    { language: "swift", code, tree, views, ...(appView && { appView }) },
+    notes,
+  );
   const elements = reading.between(body[0] + 1, body[1]);
   return notes.stopped ?? elements;
 }

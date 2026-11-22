@@ -16,6 +16,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `app.skipped` says what the scan left out: whether it stopped at its limit of files, and the folders it couldn't
   open. `designlane doctor` warns about them.
 
+### Changed
+
+- `layoutOf` and `screenParts` know more of each framework's elements: SwiftUI's shapes, progress views, gradients,
+  `GroupBox` and image loaders (`KFImage`, `WebImage`, `LazyImage`); Compose's dividers, progress indicators, menu and
+  drawer items, segmented buttons and `Layout`; React Native's `ActivityIndicator`, SVG shapes, icons and a context's
+  `.Provider`, which passes through to what it holds. Snackbars and tooltips are left out, like dialogs. A type's
+  members that are values (`DispatchQueue.main`, `Date.now`) and assignments (`rows += Row { … }`) are no longer read
+  as elements.
+
 ## 0.4.0 - 2026-11-21
 
 ### Added

@@ -139,13 +139,13 @@ describe("layoutIssues: what may be wrong in a layout read whole", () => {
     const { issues } = await issuesOf(
       {
         "App/S.swift": swift(
-          'struct S: View { var body: some View { VStack { Text("a"); Gauge(value: 1); HStack { Image("x") } } } }',
+          'struct S: View { var body: some View { VStack { Text("a"); Meter(value: 1); HStack { Image("x") } } } }',
         ),
       },
       "S",
     );
     expect(issues).toEqual([
-      ["unknown-element", "Gauge"],
+      ["unknown-element", "Meter"],
       ["unnamed-part", "Element"],
       ["unnamed-part", "Row"],
     ]);
@@ -207,7 +207,7 @@ describe("layoutIssues: notes as the code is written", () => {
       {
         "App/S.swift": swift(
           "struct S: View {",
-          '  var body: some View { VStack { Button(action: {}) { Gauge(value: 2) }; row; row; Text("a") } }',
+          '  var body: some View { VStack { Button(action: {}) { Meter(value: 2) }; row; row; Text("a") } }',
           "  var row: some View { Meter(value: 1) }",
           "}",
         ),
@@ -245,13 +245,13 @@ describe("layoutIssues: notes as the code is written", () => {
       {
         "App/S.swift": swift("struct S: View { var body: some View { NavigationStack { Feed() } } }"),
         "App/Feed.swift": swift(
-          'struct Feed: View { var body: some View { VStack { Text("a"); Gauge(value: 1) } } }',
+          'struct Feed: View { var body: some View { VStack { Text("a"); Meter(value: 1) } } }',
         ),
       },
       "S",
     );
     expect(issues).toEqual([
-      ["unknown-element", "Gauge"],
+      ["unknown-element", "Meter"],
       ["unnamed-part", "Element"],
     ]);
   });
@@ -279,14 +279,14 @@ describe("layoutIssues: notes as the code is written", () => {
         "src/S.tsx": tsx(
           'import { Child } from "./Child";',
           'import { Text as Label } from "react-native";',
-          "export function S() { return <View><Child /><Label>a</Label><Gauge /></View>; }",
+          "export function S() { return <View><Child /><Label>a</Label><Meter /></View>; }",
         ),
       },
       "S",
     );
     expect(issues.filter(([kind]) => kind !== "unnamed-part")).toEqual([
       ["ambiguous-view", "Child"],
-      ["unknown-element", "Gauge"],
+      ["unknown-element", "Meter"],
     ]);
   });
 
@@ -302,7 +302,7 @@ describe("layoutIssues: notes as the code is written", () => {
 
 describe("layoutIssues and views", () => {
   const files = {
-    "App/S.swift": swift('struct S: View { var body: some View { VStack { Text("a"); Gauge(value: 1) } } }'),
+    "App/S.swift": swift('struct S: View { var body: some View { VStack { Text("a"); Meter(value: 1) } } }'),
   };
 
   it("gives the same issues each time, and each view's own", async () => {
@@ -438,13 +438,13 @@ describe("layoutIssues: third review", () => {
         "App/S.swift": swift(
           "struct S: View {",
           "  var body: some View { VStack { Button(action: {}) { row }; row } }",
-          '  var row: some View { Gauge(value: 0.5) { Text("Meter") } }',
+          '  var row: some View { Meter(value: 0.5) { Text("Meter") } }',
           "}",
         ),
       },
       "S",
     );
-    expect(issues.filter(([kind]) => kind === "unknown-element")).toEqual([["unknown-element", "Gauge"]]);
+    expect(issues.filter(([kind]) => kind === "unknown-element")).toEqual([["unknown-element", "Meter"]]);
   });
 
   it("gives a view placing itself its issues once", async () => {
@@ -453,7 +453,7 @@ describe("layoutIssues: third review", () => {
         "App/S.swift": swift(
           "struct S: View {",
           "  let depth: Int",
-          '  var body: some View { if depth > 0 { S(depth: depth - 1) } else { Gauge(value: 0.5) { Text("Meter") } } }',
+          '  var body: some View { if depth > 0 { S(depth: depth - 1) } else { Meter(value: 0.5) { Text("Meter") } } }',
           "}",
         ),
       },

@@ -20,7 +20,7 @@ const LOOPS = new Set(["map", "flatMap"]);
 /** The pragma marking a file Flow checks, in a comment before its code. */
 const FLOW = /@flow\b/;
 /** Lists that lay out their items in columns when given `numColumns`. */
-const LISTS = /(?:^|\.)(?:FlatList|FlashList)$/;
+const LISTS = /(?:^|\.)(?:FlatList|FlashList|LegendList)$/;
 
 /** The function a component's declaration is: one declared, held by a variable, a class's `render`, or itself. */
 function functionOf(node: ts.Node): ts.SignatureDeclaration | undefined {

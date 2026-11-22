@@ -146,7 +146,7 @@ describe("designlane/read speed", () => {
             "struct Gauges: View {",
             "  var body: some View {",
             "    VStack {",
-            ...Array.from({ length: ROWS }, (_, k) => `      Gauge(value: ${k})`),
+            ...Array.from({ length: ROWS }, (_, k) => `      Meter(value: ${k})`),
             "    }",
             "  }",
             "}",

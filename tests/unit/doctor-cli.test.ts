@@ -15,7 +15,7 @@ async function designlane(...argv: string[]) {
 
 /** A component every screen places: one unknown element and two parts named by their kind, wherever it's placed. */
 const CARD = swift(
-  'struct Card: View { var body: some View { VStack { Text("a"); Gauge(value: 1); HStack { Image("x") } } } }',
+  'struct Card: View { var body: some View { VStack { Text("a"); Meter(value: 1); HStack { Image("x") } } } }',
 );
 const BROKEN = swift("struct Feed: View {", "  var body: some View {", '    VStack { Text("a"', "  }", "}");
 
@@ -25,8 +25,8 @@ const APP = {
     "  var body: some View {",
     "    VStack {",
     '      Text("Welcome")',
-    "      Gauge(value: 1)",
-    "      Gauge(value: 2)",
+    "      Meter(value: 1)",
+    "      Meter(value: 2)",
     "      Feed()",
     "    }",
     "  }",
@@ -47,7 +47,7 @@ describe("designlane doctor", () => {
       "  App/Feed.swift:4  Designlane can't match a bracket here: Feed, placed in Settings",
       "",
       "May be read wrong",
-      '  2 unknown elements, shown as "other": Gauge ×2',
+      '  2 unknown elements, shown as "other": Meter ×2',
       "",
       "2 parts labelled by their kind only (--all lists them)",
       "",
@@ -64,7 +64,7 @@ describe("designlane doctor", () => {
         "App/B.swift": swift("struct B: View { var body: some View { NavigationStack { Card() } } }"),
       }),
     );
-    expect(out).toContain('1 unknown element, shown as "other": Gauge\n');
+    expect(out).toContain('1 unknown element, shown as "other": Meter\n');
     expect(out).toContain("2 parts labelled by their kind only (--all lists them)");
   });
 
@@ -73,8 +73,8 @@ describe("designlane doctor", () => {
     expect(out).toContain(
       [
         '  2 unknown elements, shown as "other"',
-        "    App/Home.swift:6  Gauge",
-        "    App/Home.swift:7  Gauge",
+        "    App/Home.swift:6  Meter",
+        "    App/Home.swift:7  Meter",
         "  2 parts labelled by their kind only",
         "    App/Home.swift:6  Element",
         "    App/Home.swift:7  Element 2",
@@ -129,8 +129,8 @@ describe("designlane doctor", () => {
     const { out } = await designlane("doctor", root, "--screen", "Home");
     expect(out.split("\n")).toEqual([
       "Home (component, App/Home.swift:2)",
-      '  unknown element, shown as "other": Gauge at line 6',
-      '  unknown element, shown as "other": Gauge at line 7',
+      '  unknown element, shown as "other": Meter at line 6',
+      '  unknown element, shown as "other": Meter at line 7',
       "  part labelled by its kind only: Element at line 6",
       "  part labelled by its kind only: Element 2 at line 7",
       "  Parts: Welcome | Element | Element 2 | Feed",
