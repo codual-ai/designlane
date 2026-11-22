@@ -6,7 +6,7 @@
  */
 
 import ts from "typescript";
-import { countUse, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
+import { countUse, type ScaleCandidate, scaleKindOf, stepKindOf } from "../scan/scales.js";
 import {
   accessPath,
   eachNode,
@@ -29,8 +29,11 @@ export function rnScaleCandidates(sources: JsSource[]): ScaleCandidate[] {
       if (!ts.isVariableStatement(statement) || !exported(statement, source)) continue;
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+        const name = declaration.name.text;
         const object = objectIn(declaration.initializer);
-        if (object) read(source, [declaration.name.text], object, found, 0);
+        if (object) read(source, [name], object, found, 0);
+        // `export const ROW_PADDING_HORIZONTAL = 16`: a constant whose own name says what it is.
+        else named(source, [], name, unwrapped(declaration.initializer), found);
       }
     }
   }
@@ -90,8 +93,39 @@ function read(
     } else if (depth < MAX_DEPTH) {
       const inner = objectIn(value);
       if (inner) read(source, [...path, name], inner, found, depth + 1);
+      // `export const Layout = { headerPadding: 12 }`: a property whose own name says what it is.
+      else named(source, path, name, value, found);
     }
   }
+}
+
+/** A step for a number whose own name says it's a spacing or a corner radius, kept on its own when another file
+ * uses it: `ROW_PADDING_HORIZONTAL`, `Layout.headerPadding`. */
+function named(
+  source: JsSource,
+  path: string[],
+  name: string,
+  value: ts.Expression,
+  found: ScaleCandidate[],
+): void {
+  const kind = stepKindOf(name);
+  const number = kind && numberOf(value);
+  const location = number === undefined || !kind ? undefined : literalLocation(source, value);
+  if (!kind || number === undefined || !location) return;
+  found.push({
+    kind,
+    scale: path.length > 0 ? renderPath(path) : source.rel,
+    named: true,
+    step: {
+      name,
+      value: number,
+      reference: renderPath([...path, name]),
+      source: source.rel,
+      line: location.line,
+      location,
+    },
+    usedIn: new Map(),
+  });
 }
 
 /** A number written as it is: `12`, `0.5`; not `-4`, `8 * 2` or `"12px"`. */
@@ -122,11 +156,32 @@ function countUses(found: ScaleCandidate[], sources: JsSource[]): void {
   }
   const byStep = new Map<string, ScaleCandidate[]>();
   for (const candidate of found) {
+    // A prop names a scale's step (`padding="lg"`); a constant's name in a string doesn't read it.
+    if (candidate.named) continue;
     const key = `${candidate.kind}|${candidate.step.name}`;
-    byStep.set(key, [...(byStep.get(key) ?? []), candidate]);
+    const same = byStep.get(key);
+    if (same) same.push(candidate);
+    else byStep.set(key, [candidate]);
+  }
+  // A constant exported on its own is used by its name where a file imports it from the constant's own file:
+  // `import { CONTENT_SPACING } from "./constants"`. Indexed by that file and name, so each read is one lookup.
+  const exportedAt = new Map<string, ScaleCandidate>();
+  const exportedNames = new Map<string, ScaleCandidate[]>();
+  for (const c of found) {
+    if (!c.named || c.scale !== c.step.source) continue;
+    exportedAt.set(`${withoutExtension(c.step.source)}|${c.step.name}`, c);
+    const same = exportedNames.get(c.step.name);
+    if (same) same.push(c);
+    else exportedNames.set(c.step.name, [c]);
   }
   for (const source of sources) {
+    const imported = exportedAt.size > 0 ? importedConstants(source, exportedAt, exportedNames) : new Map();
     eachNode(source.file, (node) => {
+      if (ts.isIdentifier(node) && readsName(node)) {
+        const target = imported.get(node.text);
+        if (target) countUse(target.usedIn, source.rel);
+        return true;
+      }
       if (ts.isJsxAttribute(node)) {
         const prop = propOf(node);
         for (const candidate of prop ? (byStep.get(prop) ?? []) : []) countUse(candidate.usedIn, source.rel);
@@ -141,6 +196,68 @@ function countUses(found: ScaleCandidate[], sources: JsSource[]): void {
       return true;
     });
   }
+}
+
+/** The exported constants a file imports as they are, by the name it reads them by: the one in the file its import
+ * names (`./theme` is `theme.ts`, then `theme/index.ts`), or, for a module not named by its path, the only one of the
+ * name. One imported under another name (`ROW_RADIUS as RADIUS`) is read as that name, so it isn't one. */
+function importedConstants(
+  source: JsSource,
+  exportedAt: Map<string, ScaleCandidate>,
+  exportedNames: Map<string, ScaleCandidate[]>,
+): Map<string, ScaleCandidate> {
+  const constants = new Map<string, ScaleCandidate>();
+  for (const statement of source.file.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    const file = fileOf(source.rel, statement.moduleSpecifier.text);
+    for (const element of bindings.elements) {
+      if (element.propertyName) continue;
+      const name = element.name.text;
+      const only = exportedNames.get(name);
+      const constant =
+        file === undefined
+          ? only?.length === 1
+            ? only[0]
+            : undefined
+          : (exportedAt.get(`${file}|${name}`) ?? exportedAt.get(`${file}/index|${name}`));
+      if (constant) constants.set(name, constant);
+    }
+  }
+  return constants;
+}
+
+/** The file a relative import names, without its extension: `src/constants` for `./constants` in `src/Row.tsx`. */
+function fileOf(importer: string, specifier: string): string | undefined {
+  if (!specifier.startsWith(".")) return undefined;
+  const parts = importer.split("/").slice(0, -1);
+  for (const part of specifier.split("/")) {
+    if (part === "..") parts.pop();
+    else if (part !== ".") parts.push(part);
+  }
+  return withoutExtension(parts.join("/"));
+}
+
+const withoutExtension = (file: string) => file.replace(/\.[cm]?[jt]sx?$/, "");
+
+/** Whether an identifier reads a value, not names one: not an import's, a declaration's, a key's, a type's or a
+ * class's property, a JSX attribute's name or a member's. */
+function readsName(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (ts.isImportSpecifier(parent) || ts.isImportClause(parent) || ts.isJsxAttribute(parent)) return false;
+  if (ts.isPropertyAssignment(parent)) return parent.initializer === node;
+  // `const { ROW_PADDING: local } = obj` names a key and a local, and reads neither.
+  if (ts.isBindingElement(parent)) return false;
+  if (
+    ts.isVariableDeclaration(parent) ||
+    ts.isParameter(parent) ||
+    ts.isPropertySignature(parent) ||
+    ts.isPropertyDeclaration(parent)
+  )
+    return parent.name !== node;
+  if (ts.isPropertyAccessExpression(parent)) return parent.expression === node;
+  return true;
 }
 
 /** Of the steps an access could name, the ones it does: the only one, or when scales share a name, those whose whole

@@ -271,6 +271,139 @@ describe("syncing named scale steps", () => {
   });
 });
 
+describe("SwiftUI constants named for a spacing or a corner radius", () => {
+  it("names each another file uses, a number type's own written alone too, but no screen's or private one", async () => {
+    const { scales: found } = await scales("swiftui", {
+      "App/Style/Layout.swift": [
+        "import SwiftUI",
+        "extension CGFloat {",
+        "  public static let statusColumnsSpacing: CGFloat = 8",
+        "  public static let statusRowHeight: CGFloat = 44",
+        "  private static let secretPadding: CGFloat = 3",
+        "}",
+        "enum UIConstants {",
+        "  static let urlBarMargin: CGFloat = 10",
+        "  static let cardCornerRadius: CGFloat = 12",
+        "  static let playbackMarginSeconds: Double = 30",
+        "  static let unusedPadding: CGFloat = 5",
+        "}",
+        "struct MenuView: View {",
+        "  enum UX { static let topPadding: CGFloat = 24 }",
+        '  var body: some View { Text("a") }',
+        "}",
+      ].join("\n"),
+      "App/Card.swift": [
+        "import SwiftUI",
+        "extension MenuView { var inset: CGFloat { UX.topPadding + MenuView.UX.topPadding } }",
+        "struct Card: View {",
+        "  var body: some View {",
+        '    Text("Hi").padding(.horizontal, .statusColumnsSpacing).frame(height: .statusRowHeight)',
+        "      .padding(UIConstants.urlBarMargin).padding(.secretPadding).cornerRadius(UIConstants.cardCornerRadius)",
+        "      .padding(CGFloat.statusColumnsSpacing).animation(.default.delay(UIConstants.playbackMarginSeconds))",
+        "      .padding(view.statusColumnsSpacing).padding(flag ? .statusColumnsSpacing : 0)",
+        "  }",
+        "}",
+      ].join("\n"),
+    });
+    expect(found?.spacing.map((s) => [s.reference, s.value, s.uses])).toEqual([
+      ["CGFloat.statusColumnsSpacing", 8, 3],
+      ["UIConstants.urlBarMargin", 10, 1],
+    ]);
+    expect(found?.radii.map((s) => [s.reference, s.value])).toEqual([["UIConstants.cardCornerRadius", 12]]);
+  });
+});
+
+describe("React Native constants named for a spacing or a corner radius", () => {
+  it("names each exported one another file imports and reads, and an exported object's own", async () => {
+    const { scales: found } = await scales("react-native", {
+      "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+      "src/constants.ts": [
+        "export const ROW_PADDING_HORIZONTAL = 16;",
+        "export const ROW_RADIUS = 10;",
+        "export const GAS_PADDING = 1.1;",
+        "export const HALF_GAP = 3.5;",
+        "export const UNREAD_MARGIN = 8;",
+        "const LOCAL_PADDING = 4;",
+        "export const Layout = { headerPadding: 12, rowHeight: 44 };",
+      ].join("\n"),
+      "src/other/index.ts": "export const ROW_RADIUS = 30;",
+      "src/Row.tsx": [
+        'import { View } from "react-native";',
+        'import { ROW_PADDING_HORIZONTAL, ROW_RADIUS, GAS_PADDING, HALF_GAP, LOCAL_PADDING, Layout } from "./constants";',
+        "export function Row({ UNREAD_MARGIN }: { UNREAD_MARGIN: number }) {",
+        "  const style = { padding: ROW_PADDING_HORIZONTAL, ROW_RADIUS, margin: GAS_PADDING + HALF_GAP };",
+        "  const keys = { ROW_PADDING_HORIZONTAL: 0, x: style.ROW_PADDING_HORIZONTAL };",
+        "  const pick = ({ ROW_PADDING_HORIZONTAL }: { ROW_PADDING_HORIZONTAL: number }) => 0;",
+        "  return <View style={[style, { paddingTop: Layout.headerPadding, height: Layout.rowHeight, gap: LOCAL_PADDING }]} />;",
+        "}",
+      ].join("\n"),
+    });
+    expect(found?.spacing.map((s) => [s.reference, s.value, s.uses])).toEqual([
+      ["HALF_GAP", 3.5, 1],
+      ["Layout.headerPadding", 12, 1],
+      ["ROW_PADDING_HORIZONTAL", 16, 1],
+    ]);
+    expect(found?.radii.map((s) => [s.reference, s.value, s.uses])).toEqual([["ROW_RADIUS", 10, 1]]);
+  });
+});
+
+describe("named constants: second review", () => {
+  it("reads a React Native constant from the file its import names, and no key, attribute or string as a use", async () => {
+    const { scales: found } = await scales("react-native", {
+      "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+      "src/local.ts": "export const LOCAL_PADDING = 8;",
+      "src/theme.ts": "export const THEME_PADDING = 8;",
+      "src/theme/index.ts":
+        "export const THEME_PADDING = 16;\nexport const HAIRLINE_RADIUS = 0.5;\nexport const NO_GAP = 0;",
+      "src/other.ts": "export const UNREAD_PADDING = 4;",
+      "src/tokens/index.ts": "export const TOKENS_GAP = 2;",
+      "src/a.ts": "export const ALIAS_PADDING = 6;\nexport const SOLO_MARGIN = 5;",
+      "src/b.ts": "export const ALIAS_PADDING = 7;",
+      "src/Row.tsx": [
+        'import { View } from "react-native";',
+        'import { LOCAL_PADDING } from "./elsewhere";',
+        'import { THEME_PADDING } from "./theme";',
+        'import { HAIRLINE_RADIUS, NO_GAP } from "./theme/index";',
+        'import { UNREAD_PADDING } from "./other";',
+        'import { TOKENS_GAP } from "./tokens";',
+        'import { ALIAS_PADDING, SOLO_MARGIN } from "@app/constants";',
+        "const used = [TOKENS_GAP, ALIAS_PADDING, SOLO_MARGIN];",
+        "class Row { UNREAD_PADDING = 3 }",
+        "const { UNREAD_PADDING: local } = obj;",
+        "export function R() {",
+        '  return <View UNREAD_PADDING={3} padding="UNREAD_PADDING" style={{ padding: LOCAL_PADDING, margin: THEME_PADDING, borderRadius: HAIRLINE_RADIUS, gap: NO_GAP }} />;',
+        "}",
+      ].join("\n"),
+    });
+    // A module named by an alias: the only constant of the name, and none of two.
+    expect(found?.spacing.map((s) => [s.source, s.reference, s.value])).toEqual([
+      ["src/theme/index.ts", "NO_GAP", 0],
+      ["src/tokens/index.ts", "TOKENS_GAP", 2],
+      ["src/a.ts", "SOLO_MARGIN", 5],
+      ["src/theme.ts", "THEME_PADDING", 8],
+    ]);
+    expect(found?.radii.map((s) => [s.reference, s.value])).toEqual([["HAIRLINE_RADIUS", 0.5]]);
+  });
+
+  it("counts no Swift chain's next line, and no `.name` two number types share", async () => {
+    const { scales: found } = await scales("swiftui", {
+      "App/Layout.swift": [
+        "import SwiftUI",
+        "extension CGFloat { static let rowPadding: CGFloat = 8; static let cardSpacing: CGFloat = 4 }",
+        "extension Double { static let rowPadding: Double = 16 }",
+      ].join("\n"),
+      "App/Card.swift": [
+        "import SwiftUI",
+        "struct Card: View {",
+        '  var body: some View { Text("a").padding(.rowPadding).padding(layout',
+        "    .cardSpacing) }",
+        "}",
+      ].join("\n"),
+    });
+    expect(found).toBeUndefined();
+  });
+});
+
 describe("a constant's own name", () => {
   it.each([
     ["ThumbnailCornerRadius", "radius"],

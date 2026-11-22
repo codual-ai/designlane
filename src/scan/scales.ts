@@ -88,6 +88,18 @@ const SIZE_WORDS = new Set([
   "scale",
   "line",
   "border",
+  // A time or a ratio named like a margin or gap: `playbackRangeMarginSeconds`, `driftScoreDominanceGap`.
+  "seconds",
+  "second",
+  "ms",
+  "millis",
+  "interval",
+  "delay",
+  "time",
+  "score",
+  "ratio",
+  "percent",
+  "factor",
 ]);
 
 /** Whether a constant named for its kind is a size of another sort, by its words: `borderRadius` is a corner's. */
@@ -129,7 +141,10 @@ export function namedScales(candidates: ScaleCandidate[]): NamedScales | undefin
   const seen = new Set<string>();
   for (const candidate of candidates) {
     const { name, value } = candidate.step;
-    const another = candidate.named ? namesAnotherSize(name) : NOT_A_STEP.test(name);
+    // A constant named on its own is a size in points or pixels, whole or half: `1.1` or `0.25` is a factor or an em.
+    const another = candidate.named
+      ? namesAnotherSize(name) || !Number.isInteger(value * 2)
+      : NOT_A_STEP.test(name);
     if (RETIRED.test(name) || another || value < 0) continue;
     const id = `${candidate.kind}|${candidate.step.source}|${candidate.scale}`;
     const steps = byScale.get(id) ?? [];

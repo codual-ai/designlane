@@ -6,7 +6,14 @@
  * apps declare those for one view as often as for the whole app.
  */
 
-import { countChains, indexBy, type ScaleCandidate, scaleKindOf } from "../scan/scales.js";
+import {
+  countChains,
+  countUse,
+  indexBy,
+  type ScaleCandidate,
+  scaleKindOf,
+  stepKindOf,
+} from "../scan/scales.js";
 import { locator } from "./source-text.js";
 import { memberOf, ownerAt, qualifiedOwnerAt } from "./swift-owners.js";
 import type { Token } from "./swift-tokens.js";
@@ -15,6 +22,9 @@ import { valueAt } from "./value-locations.js";
 
 /** Types a scale may sit inside and still be the whole app's: `Theme.Spacing`, `DesignSystem.Radius`. */
 const DESIGN_SYSTEM = /(?:Theme|Design|DesignSystem|Style|Styles|Tokens?|Foundations?|DS)$/;
+/** A screen's own type, whose constants are its layout's, however many files extending it use them:
+ * `MenuTableView.UX.topPadding`, `ContactCellView.avatarSpacing`. */
+const SCREEN_TYPE = /(?:View|ViewController|Controller|Cell|ViewModel|Screen|Coordinator)$/;
 /** Modifiers keeping a declaration to its own file or type. */
 const PRIVATE = new Set(["private", "fileprivate"]);
 
@@ -43,10 +53,19 @@ export function swiftScaleCandidates(sources: SwiftSource[]): ScaleCandidate[] {
       const inScale = scaleKindOf(owner);
       const qualified = qualifiedOwnerAt(file, declared.index);
       const outer = qualified.split(".").slice(0, -1);
-      if (!inScale || !outer.every((name) => DESIGN_SYSTEM.test(name))) continue;
+      const scale = inScale && outer.every((name) => DESIGN_SYSTEM.test(name)) ? inScale : undefined;
+      // Outside a scale, a constant whose own name says what it is: `extension CGFloat { static let
+      // statusColumnsSpacing: CGFloat = 8 }`, kept when another file uses it.
+      const kind =
+        scale ??
+        (inScale || qualified.split(".").some((t) => SCREEN_TYPE.test(t))
+          ? undefined
+          : stepKindOf(declared.name));
+      if (!kind) continue;
       const span = locate(declared.at.start, declared.at.end);
       found.push({
-        kind: inScale,
+        kind,
+        ...(!scale && { named: true }),
         scale: qualified,
         step: {
           name: declared.name,
@@ -103,9 +122,36 @@ function* declarations(tokens: Token[]): Generator<Declared> {
   }
 }
 
-/** Counts each step's uses by name in every file: `AppSpacing.large`. */
+/** Counts each step's uses by name in every file: `AppSpacing.large`, and a number type's own member written where
+ * the type is known, `.padding(.statusColumnsSpacing)` for `CGFloat.statusColumnsSpacing`. */
 function countUses(found: ScaleCandidate[], sources: SwiftSource[]): void {
   if (found.length === 0) return;
   const byReference = indexBy(found, (c) => [c.step.reference]);
   countChains(sources, (parts) => byReference.get(parts.join(".")));
+  const implicit = indexBy(
+    found.filter((c) => NUMBER_TYPES.has(c.scale)),
+    (c) => [c.step.name],
+  );
+  if (implicit.size === 0) return;
+  for (const source of sources) {
+    const { tokens } = tokensOf(source);
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i]?.text !== "." || !implicitAt(tokens, i)) continue;
+      // One number type's member of the name, or none: which of several it is can't be told from `.name` alone.
+      const steps = implicit.get(tokens[i + 1]?.text ?? "") ?? [];
+      if (steps.length === 1 && steps[0]) countUse(steps[0].usedIn, source.rel);
+    }
+  }
+}
+
+/** Tokens a member's `.` follows when it's another value's member, `a.b` or `f().b`, rather than written alone. */
+const MEMBER_AFTER = new Set(["name", "number", "string"]);
+
+/** Whether the `.` at `index` starts an implicit member, `.statusColumnsSpacing`, not another value's `a.b`. */
+function implicitAt(tokens: Token[], index: number): boolean {
+  const before = tokens[index - 1];
+  if (!before) return true;
+  // `flag ? .rowPadding : 0` and `x == .rowPadding`; a line starting `.rowPadding` continues a chain instead.
+  if (tokens[index]?.spaceBefore && !tokens[index]?.newlineBefore) return true;
+  return !MEMBER_AFTER.has(before.kind) && ![")", "]", "?", "!", ">"].includes(before.text);
 }
