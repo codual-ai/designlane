@@ -98,3 +98,54 @@ export const StringUseSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type StringUse = z.infer<typeof StringUseSchema>;
+
+/** What a node of a screen's layout is: a container laying out its children, a decision or a loop over them, a view
+ * of the app placed there, or an element shown. `other` is an element none of these name, or a branch or item of
+ * several. */
+export const LAYOUT_KINDS = [
+  "stack-v",
+  "stack-h",
+  "stack-z",
+  "grid",
+  "list",
+  "lazy-list",
+  "lazy-grid",
+  "scroll",
+  "tabs",
+  "nav",
+  "form",
+  "section",
+  "toolbar",
+  "repeat",
+  "conditional",
+  "view-ref",
+  "text",
+  "button",
+  "image",
+  "input",
+  "spacer",
+  "other",
+] as const;
+export type LayoutKind = (typeof LAYOUT_KINDS)[number];
+
+/** A node of a screen's layout, and the nodes inside it, in the order written. */
+export interface LayoutNode {
+  /** Its path from the screen, by kind: `stack-v/list/text.1` is the second text of the list of the screen's stack.
+   * It stays the same when other kinds of nodes are added or removed around it. */
+  id: string;
+  kind: LayoutKind;
+  span: z.infer<typeof CodeSpanSchema>;
+  /** For a view-ref, the id of the view placed. */
+  ref?: string | undefined;
+  children: LayoutNode[];
+}
+
+export const LayoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
+  z.object({
+    id: z.string(),
+    kind: z.enum(LAYOUT_KINDS),
+    span: CodeSpanSchema,
+    ref: z.string().optional(),
+    children: z.array(LayoutNodeSchema),
+  }),
+);

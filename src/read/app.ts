@@ -20,7 +20,8 @@ import { isTestPath } from "../scan/test-paths.js";
 import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
 import { makeFilesFor } from "./files-for.js";
-import type { FileTokens, ScreenFile, StringUse } from "./schema.js";
+import { type LayoutIndex, layoutIndex } from "./layout-of.js";
+import type { FileTokens, LayoutNode, ScreenFile, StringUse } from "./schema.js";
 import {
   decodeStrings,
   isStringsFile,
@@ -56,6 +57,12 @@ export interface AppView {
    * it imports, and where the tokens it uses are declared; a view declared in a file this view adds or changes is
    * followed too. `screen` is one the scan found: throws for one this view doesn't have, or whose file it deletes. */
   filesFor(screen: string | ScreenRef): ScreenFile[];
+  /** The layout of the screen or component `screen` (its id, or itself) as this view has its code: the screen,
+   * holding its containers, decisions, loops, the views it places and the elements it shows, in the order written.
+   * A placed view is a `view-ref` naming the view, whose own layout is `layoutOf` it. Undefined when its code can't be
+   * read whole (left unfinished, or past the reader's limits), never a layout of part of it. `screen` is one the scan found, or one declared in a file this view adds or changes: throws
+   * for one this view doesn't have, or whose file it deletes. */
+  layoutOf(screen: string | ScreenRef): LayoutNode | undefined;
   /** A view of this one with `changes` made: each path's new text, or null for a file deleted. */
   withChanges(changes: Readonly<Record<string, string | null>>): Promise<AppView>;
 }
@@ -293,6 +300,23 @@ function viewOf(state: State): AppView {
       })),
     ]),
   );
+  const layouts = new Map<FrameworkId, () => LayoutIndex>(
+    [...state.frameworks].map(([id, f]) => {
+      let index: LayoutIndex | undefined;
+      return [
+        id,
+        () => {
+          index ??= layoutIndex({
+            scan: f.scan,
+            sources: sourcesOf(state, id),
+            edited: state.edited,
+            packages: packagesOf(state),
+          });
+          return index;
+        },
+      ];
+    }),
+  );
   return {
     root: state.root,
     frameworks: scans,
@@ -319,6 +343,16 @@ function viewOf(state: State): AppView {
       if (!found || !finder || !state.texts.has(found.file))
         throw new Error(`No screen ${id} in the app: pass an id from app.screens().`);
       return finder(found);
+    },
+    layoutOf(screen) {
+      const id = typeof screen === "string" ? screen : screen.id;
+      // A screen the scan found, or a view declared in a file changed since, which only the layouts know; none in a
+      // file deleted.
+      for (const index of layouts.values()) {
+        const found = index().views.get(id);
+        if (found) return index().layoutOf(found);
+      }
+      throw new Error(`No screen ${id} in the app: pass an id from app.screens() or a layout's ref.`);
     },
     withChanges: async (changes) => viewOf(await changed(state, new Map(Object.entries(changes)))),
   };
@@ -379,6 +413,7 @@ export async function readApp(root: string): Promise<App> {
     tokensIn: (rel, text) => view.tokensIn(rel, text),
     stringsIn: (rel, text) => view.stringsIn(rel, text),
     filesFor: (screen) => view.filesFor(screen),
+    layoutOf: (screen) => view.layoutOf(screen),
     withChanges: (changes) => view.withChanges(changes),
     // Each update starts from the one before, so two made at once both land; one that fails doesn't stop the next.
     update(rel, text) {

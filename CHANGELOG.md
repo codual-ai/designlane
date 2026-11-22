@@ -30,6 +30,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `app.stringsIn(path, text?)` lists the text one file shows people, each with its exact span: words written in the
   code, and translated strings named by key, with their default-language text from the app's strings files, or
   `null` when none has it.
+- `app.layoutOf(screen)` gives a screen's layout as a tree of containers, conditionals, loops, placed views and the
+  elements it shows, each with its span and an id from its path by kind that stays the same when other kinds of
+  nodes are added around it, for comparing two versions of a screen.
 - `app.filesFor(screen)` lists the files that explain a screen or component, each with why: its declaration, the
   views it places at any depth, the types holding its state, the project's files a React Native screen imports, and
   where the tokens it uses are declared. Views answer for their changes, following a view in a file they add.

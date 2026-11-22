@@ -6,7 +6,7 @@ import { speedIt } from "../helpers/speed.js";
 
 /** How fast the reads must be: fast enough to run beside every variant an app generates, with room for a slower CI
  * machine (a long file reads in about 15 ms on a laptop and 25 ms in CI). */
-const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50, filesFor: 50, stringsIn: 50 };
+const BUDGET_MS = { tokensIn: 50, changes: 20, themeChange: 50, filesFor: 50, stringsIn: 50, layoutOf: 50 };
 const LINES = 2000;
 /** An app the size of a large one's design system: many colours and screens using them. */
 const COLORS = 300;
@@ -93,6 +93,25 @@ describe("designlane/read speed", () => {
       );
       let view = 0;
       expect(await fastest(() => views[view++]?.filesFor(id))).toBeLessThan(first / 2);
+    },
+    120_000,
+  );
+
+  speedIt(
+    `reads a ${LINES}-line screen's layout within the budget, and again in a view`,
+    async () => {
+      const app = await bigApp();
+      const id = "swiftui:App/Screens/Screen0.swift#Screen0";
+      const stack = app.layoutOf(id)?.children[0];
+      expect(stack?.children).toHaveLength(LINES - 6);
+      expect(await fastest(() => app.layoutOf(id))).toBeLessThan(BUDGET_MS.layoutOf);
+      const views = await Promise.all(
+        Array.from({ length: 5 }, (_, i) =>
+          app.withChanges({ "App/Screens/S100.swift": swift(`let a${i} = 1`) }),
+        ),
+      );
+      let view = 0;
+      expect(await fastest(() => views[view++]?.layoutOf(id))).toBeLessThan(BUDGET_MS.layoutOf * 4);
     },
     120_000,
   );

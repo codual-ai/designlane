@@ -94,7 +94,7 @@ function placedNames(sources: JsSource[]): Set<string> {
 }
 
 /** The name a file's anonymous or lowercase default export goes by: its file's, or its folder's for an `index`. */
-export const fileComponentName = (source: JsSource) => {
+export const fileComponentName = (source: Pick<JsSource, "rel">) => {
   const base = path.basename(source.rel).replace(/\.[^.]+$/, "");
   const name = base === "index" ? path.basename(path.dirname(source.rel)) : base;
   return name.replace(/(?:^|[-_[\]().+])(\w)/g, (_, c: string) => c.toUpperCase()).replace(/\W/g, "");

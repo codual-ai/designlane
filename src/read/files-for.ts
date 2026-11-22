@@ -8,6 +8,7 @@ import type { FrameworkSources } from "../catalog/sources.js";
 import { jsCodeOnly } from "../frameworks/js-code.js";
 import type { JsSource } from "../frameworks/js-sources.js";
 import { Modules } from "../frameworks/rn-modules.js";
+import { fileComponentName } from "../frameworks/rn-views.js";
 import { structs } from "../frameworks/swift-source.js";
 import { groupBy } from "../scan/counting.js";
 import type { DesignTokens, FrameworkScan, ScreenRef, ValueLocation } from "../scan/types.js";
@@ -33,7 +34,7 @@ export interface FilesForInput {
   edited: ReadonlySet<string>;
 }
 
-interface Code {
+export interface Code {
   text: string;
   /** With comments and strings blanked, at the same offsets. */
   code: string;
@@ -58,27 +59,38 @@ interface ScreenIndex {
 
 /** A composable function, in blanked Kotlin. */
 const COMPOSABLE = /@Composable\s+(?:(?:private|internal|public)\s+)*fun\s+([A-Z]\w{0,100})\s*\(/g;
-/** A component as a function or a constant holding one, in blanked JavaScript. */
+/** A component in blanked JavaScript: a function, a constant holding one (`= (…) =>`, `= props => <…>`, wrapped as
+ * `= memo(() => …)` or `= observer(function …)`), or a React component class; and a default export with no name of its own, which goes by its file's. */
 const COMPONENT =
-  /\bfunction\s+([A-Z]\w{0,100})\s*\(|\b(?:const|let)\s+([A-Z]\w{0,100})\s*(?::[^=\n]{0,100})?=\s*(?:\(|function\b|(?:React\.)?memo\b|forwardRef\b)/g;
+  /\bfunction\s+([A-Z]\w{0,100})\s*\(|\b(?:const|let)\s+([A-Z]\w{0,100})\s*(?::[^=\n]{0,100})?=\s*(?:\(|function\b|(?:async\s+)?\w{1,100}\s*=>\s*[<({]|[\w.]{1,100}\(\s*(?:\(|function\b|\w{1,100}\s*=>))|\bclass\s+([A-Z]\w{0,100})\s+extends\s+(?:React\.)?(?:Pure)?Component\b|\bexport\s+default\s+(?:function\s*(?:[a-z]\w{0,100})?\s*\(|\(|async\s|\w{1,100}\s*=>|class\b(?!\s+[A-Z]))/g;
 
 /** The views `rel` declares, by name and offset, for a file the scan didn't read as it is. */
-function declaredViews(framework: FilesForInput["scan"]["framework"], { code }: Code): [string, number][] {
+function declaredViews(
+  framework: FilesForInput["scan"]["framework"],
+  rel: string,
+  { code }: Code,
+): [string, number][] {
   if (framework === "swiftui")
     return structs(code)
       .filter((s) => s.conformances.includes("View"))
       .map((s) => [s.name, s.start]);
-  const pattern = framework === "compose" ? COMPOSABLE : COMPONENT;
-  return [...code.matchAll(pattern)].map((m) => [m[1] ?? m[2] ?? "", m.index]);
+  if (framework === "compose") return [...code.matchAll(COMPOSABLE)].map((m) => [m[1] ?? "", m.index]);
+  return [...code.matchAll(COMPONENT)].map((m) => [
+    m[1] ?? m[2] ?? m[3] ?? fileComponentName({ rel }),
+    m.index,
+  ]);
 }
 
 /** The scan's views, with those declared in the files edited since in place of the scan's own for those files. */
-function viewsOf(framework: FilesForInput, files: Map<string, Code>): ScreenRef[] {
+export function viewsOf(
+  framework: Pick<FilesForInput, "scan" | "edited">,
+  files: Map<string, Code>,
+): ScreenRef[] {
   const { scan, edited } = framework;
   const added = [...edited].flatMap((rel): ScreenRef[] => {
     const file = files.get(rel);
     if (!file) return [];
-    return declaredViews(scan.framework, file).map(([name, at]) => {
+    return declaredViews(scan.framework, rel, file).map(([name, at]) => {
       const line = file.text.slice(0, at).split("\n").length;
       return {
         id: `${scan.framework}:${rel}#${name}`,
@@ -160,8 +172,17 @@ interface Reached {
 /** The views a placement may mean: those of its name declared nearest it, all of them when equally near; none whose
  * file the view deleted. */
 function placedViews(index: ScreenIndex, placement: Placement): ScreenRef[] {
-  const named = (index.views.get(placement.name) ?? []).filter((view) => index.files.has(view.file));
-  const near = named.map((view) => nearness(view.file, placement.rel));
+  return nearestViews(index.views.get(placement.name) ?? [], placement.rel, index.files);
+}
+
+/** Of the views named, those declared nearest `rel`; all when equally near; none whose file is gone. */
+export function nearestViews(
+  views: ScreenRef[],
+  rel: string,
+  files: ReadonlyMap<string, unknown>,
+): ScreenRef[] {
+  const named = views.filter((view) => files.has(view.file));
+  const near = named.map((view) => nearness(view.file, rel));
   const most = Math.max(...near);
   return named.filter((_, i) => near[i] === most);
 }

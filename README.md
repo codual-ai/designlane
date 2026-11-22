@@ -196,6 +196,14 @@ variant.tokensIn("Shop/Views/Card.swift");
   in the code (`literal`), and translated strings it names by key (`localized`), with their English text (or Xcode's
   base localization's) from its strings files (Xcode string catalogs and `.strings`, Android `strings.xml`, JSON
   locale files), or `null` when none has it.
+- `layoutOf(screen)` gives a screen's or component's layout as a tree: its stacks, grids, lists, scroll views, tabs,
+  navigation, forms, sections and toolbars, each `if` or `switch` as a `conditional` with a child per branch, each
+  loop as a `repeat` of one item, the app's views it places as a `view-ref` naming the view (whose own layout is
+  `layoutOf` that), and the text, buttons, images, inputs and spacers it shows. Wrappers that only style their content
+  (padding, a background `Box`, a `View` with one child) give way to it. Each node has its span and an id from its
+  path by kind (`stack-v/list/text.1`), which stays the same when nodes of other kinds are added around it, so two
+  versions of a screen can be compared node by node. It's `undefined` for code that can't be read whole (a bracket
+  or tag left open), never a tree of part of the screen.
 - `filesFor(screen)` lists the files that explain a screen or component, each with why: where it's declared, the
   views it places at any depth, the types holding its state (`CartViewModel`), the project's files a React Native
   screen imports, and where the tokens it uses are declared. For giving an agent or a variant generator what it needs
