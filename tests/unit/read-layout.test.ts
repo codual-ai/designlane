@@ -1039,3 +1039,190 @@ describe("layoutOf on code left unfinished, as it's written", () => {
     ]);
   });
 });
+
+describe("layoutOf: decisions made when the app is built", () => {
+  it("reads a SwiftUI `#if` as a decision, a branch per clause, and one that only adds modifiers as none", async () => {
+    const { lines } = await layout(
+      {
+        "App/S.swift": swift(
+          "struct S: View {",
+          "  var body: some View {",
+          "    VStack {",
+          "      #if os(iOS)",
+          '      Text("Phone")',
+          "      #if DEBUG",
+          '      Text("Debug")',
+          "      #endif",
+          "      #elseif os(macOS)",
+          '      Image("mac")',
+          "      #else",
+          "      EmptyView()",
+          "      #endif",
+          '      Text("Both")',
+          "        #if os(iOS)",
+          "        .padding()",
+          "        #endif",
+          "      #if DEBUG",
+          "      #endif",
+          "    }",
+          "  }",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(lines).toEqual([
+      ". view-ref → S",
+      "  stack-v stack-v",
+      "    stack-v/conditional conditional",
+      "      stack-v/conditional/other other",
+      "        stack-v/conditional/other/text text",
+      "        stack-v/conditional/other/conditional conditional",
+      "          stack-v/conditional/other/conditional/text text",
+      "      stack-v/conditional/image image",
+      "    stack-v/text text",
+    ]);
+  });
+
+  it("matches a file's `#if`s once, however many are left open", async () => {
+    const open = Array.from({ length: 4000 }, () => "      #if DEBUG").join("\n");
+    const { tree } = await layout(
+      {
+        "App/S.swift": swift(
+          "struct S: View {",
+          "  var body: some View {",
+          "    VStack {",
+          open,
+          '      Text("a")',
+          "    }",
+          "  }",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(tree?.children[0]?.children.map((n) => n.kind)).toEqual(["text"]);
+  });
+
+  it("reads an `#if` around some of a switch's cases as written", async () => {
+    const { lines } = await layout(
+      {
+        "App/S.swift": swift(
+          "struct S: View {",
+          "  var body: some View {",
+          "    switch tab {",
+          '    case .a: Text("a")',
+          "    #if DEBUG",
+          '    case .b: Text("b")',
+          "    #endif",
+          '    default: Text("c")',
+          "    }",
+          "  }",
+          "}",
+        ),
+      },
+      "S",
+    );
+    expect(lines).toEqual([
+      ". view-ref → S",
+      "  conditional conditional",
+      "    conditional/text text",
+      "    conditional/text.1 text",
+      "    conditional/text.2 text",
+    ]);
+  });
+});
+
+describe("layoutOf: Compose overloads", () => {
+  const dialogs = kotlin(
+    "@Composable fun AppDialog(title: String, message: String, onDismiss: () -> Unit) {",
+    "  AppDialog(title = title, message = AnnotatedString(message), onDismiss = onDismiss)",
+    "}",
+    "@Composable fun AppDialog(title: String, message: AnnotatedString, onDismiss: () -> Unit) {",
+    "  Column { Text(title); Text(message) }",
+    "}",
+    "@Composable fun Badge(count: Int) { Text(count.toString()) }",
+    "@Composable fun Badge(label: String, icon: Icon? = null) { Row { Text(label) } }",
+    "@Composable fun Card(content: @Composable () -> Unit) { Column { content() } }",
+    "@Composable fun Card(title: String, modifier: Modifier = Modifier) { Text(title) }",
+  );
+  const files = {
+    "app/src/main/java/a/Dialogs.kt": dialogs,
+    "app/src/main/java/a/S.kt": kotlin(
+      "@Composable fun S() {",
+      '  Column { Badge(label = "New"); Badge(3); Card { Text("x") }; Card("Title") }',
+      "}",
+    ),
+  };
+
+  it("places the overload whose parameters take the call's arguments", async () => {
+    const { tree } = await layout(files, "S");
+    const refs = tree?.children[0]?.children.map((n) => n.ref?.split("#")[1]);
+    const ids = (await readApp(await appIn(files))).screens().filter((s) => s.name !== "S");
+    const at = (name: string, line: number) =>
+      ids.find((s) => s.name === name && s.line === line)?.id.split("#")[1];
+    // The helper's import is line 1, so the overloads are on lines 8 to 11.
+    expect(refs).toEqual([at("Badge", 9), at("Badge", 8), at("Card", 10), at("Card", 11)]);
+  });
+
+  it("tells overloads apart by each rule of what a call takes", async () => {
+    // Each pair's wrong overload is written first, so it's the one placed when no rule tells them apart.
+    const overloads = kotlin(
+      ...Array.from({ length: 9 }, () => "// keeps every line below two digits"),
+      '@Composable fun Named(other: String = "") { Text(other) }',
+      "@Composable fun Named(title: String) { Text(title) }",
+      '@Composable fun Chip(label: String = "", modifier: Modifier = Modifier) { Text(label) }',
+      "@Composable fun Chip(content: @Composable () -> Unit) { Row { content() } }",
+      "@Composable fun Count(count: Int, label: String) { Text(label) }",
+      "@Composable fun Count(count: Int) { Text(count.toString()) }",
+      "@Composable fun Pair(a: Int) { Text(a.toString()) }",
+      "@Composable fun Pair(a: Int, b: Int) { Text(b.toString()) }",
+      "@Composable fun Tags(tag: String) { Text(tag) }",
+      "@Composable fun Tags(vararg tags: String) { Row { Text(tags[0]) } }",
+      "@Composable fun Flag(flag: Boolean) { Text(flag.toString()) }",
+      "@Composable fun Flag(flag: Boolean, label: String) { Text(label) }",
+      "@Composable fun Many(vararg labels: String, required: Int) { Text(labels[0]) }",
+      "@Composable fun Many(label: String) { Text(label) }",
+      "@Composable fun Noted(count: Int) { Text(count.toString()) }",
+      "@Composable fun Noted(label: String) { Text(label) }",
+      "@Composable fun Arrow(content: () -> Unit) { Row { content() } }",
+      "@Composable fun Arrow(count: Int = when (mode) { 1 -> 2; else -> 3 }) { Text(count.toString()) }",
+      "@Composable fun Twice(a: Int, b: Boolean = false) { Text(a.toString()) }",
+      "@Composable fun Twice(x: Int, a: String) { Text(a) }",
+      "@Composable fun Spread(label: String) { Text(label) }",
+      "@Composable fun Spread(vararg labels: String, required: Int) { Text(labels[0]) }",
+      "@Composable fun Gen(a: Any, b: Any) { Text(a.toString()) }",
+      "@Composable fun Gen(a: Any) { Row { Text(a.toString()) } }",
+      "@Composable fun Cmp(flag: Boolean = 1 < 2, required: Int) { Text(flag.toString()) }",
+      "@Composable fun Cmp(flag: Boolean) { Row { Text(flag.toString()) } }",
+      "@Composable fun Bare(a: Int) { Text(a.toString()) }",
+      '@Composable fun Bare() { Text("none") }',
+      "@Composable fun Mixed(x: String, a: Int) { Text(x) }",
+      "@Composable fun Mixed(a: Int, b: String) { Text(b) }",
+    );
+    const files = {
+      "app/src/main/java/a/Overloads.kt": overloads,
+      "app/src/main/java/a/S.kt": kotlin(
+        "@Composable fun S() {",
+        '  Column { Named(title = "a"); Chip { Text("x") }; Chip({ Text("y") }); Count(count = 2); Pair(1, 2); Tags("a", "b", "c")',
+        '    Flag(count<limit, "ok"); Many("ok"); Noted(/* label */ label = "ok"); Arrow(3); Twice(1, a = "ok")',
+        '    Tags(); Spread("a", "b", required = 1)',
+        '    Gen(emptyMap<String, Int>()); Cmp(true); Bare(/* none */); Mixed(a = 1, "x") }',
+        "}",
+      ),
+    };
+    const { tree, app } = await layout(files, "S");
+    const lineOf = (ref: string | undefined) => app.screens().find((s) => s.id === ref)?.line;
+    expect(tree?.children[0]?.children.map((n) => lineOf(n.ref))).toEqual([
+      12, 14, 14, 16, 18, 20, 22, 24, 26, 28, 30, 20, 32, 34, 36, 38, 40,
+    ]);
+  });
+
+  it("places another overload, not itself, when an overload calls one that fits as well", async () => {
+    const { tree, screen, app } = await layout(files, "AppDialog");
+    const placed = tree?.children[0];
+    expect(placed?.kind).toBe("view-ref");
+    expect(placed?.ref).not.toBe(screen.id);
+    expect(app.layoutOf(placed?.ref ?? "")?.children[0]?.kind).toBe("stack-v");
+  });
+});

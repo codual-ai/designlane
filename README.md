@@ -197,17 +197,26 @@ variant.tokensIn("Shop/Views/Card.swift");
   base localization's) from its strings files (Xcode string catalogs and `.strings`, Android `strings.xml`, JSON
   locale files), or `null` when none has it.
 - `layoutOf(screen)` gives a screen's or component's layout as a tree: its stacks, grids, lists, scroll views, tabs,
-  navigation, forms, sections and toolbars, each `if` or `switch` as a `conditional` with a child per branch, each
-  loop as a `repeat` of one item, the app's views it places as a `view-ref` naming the view (whose own layout is
-  `layoutOf` that), and the text, buttons, images, inputs and spacers it shows. Wrappers that only style their content
-  (padding, a background `Box`, a `View` with one child) give way to it. Each node has its span and an id from its
-  path by kind (`stack-v/list/text.1`), which stays the same when nodes of other kinds are added around it, so two
-  versions of a screen can be compared node by node. It's `undefined` for code that can't be read whole (a bracket
-  or tag left open), never a tree of part of the screen.
+  navigation, forms, sections and toolbars, each `if` or `switch` as a `conditional` with a child per branch, each loop
+  as a `repeat` of one item, a SwiftUI `#if` as a `conditional` too (a decision made when the app is built), the app's
+  views it places as a `view-ref` naming the view (whose own layout is `layoutOf` that; of a Compose function's
+  overloads, the one whose parameters take the call's arguments), and the text, buttons, images, inputs and spacers it
+  shows. Wrappers that only style their content (padding, a background `Box`, a `View` with one child) give way to it.
+  Each node has its span and an id from its path by kind (`stack-v/list/text.1`), which stays the same when nodes of
+  other kinds are added around it, so two versions of a screen can be compared node by node. It's `undefined` for code
+  that can't be read whole (a bracket or tag left open), never a tree of part of the screen.
+- `screenParts(screen)` lists a screen's main parts, for picking one to change: stepping in through what holds the
+  whole screen (a navigation, a scroll, a stack, what it writes inside a container of the app's, the one view it
+  places, the biggest branch of an `if` over all of it), the nodes of the first one holding two or more, each with
+  its id in the layout of `view` and a label to show ("Header", "Plans"). The label is a section's or toolbar's
+  title, the placed view's name, the view property it's the first thing of, a short comment above it, what an `if`'s
+  biggest branch or a loop's item is named, the first text it shows, or its kind, in that order. What only runs code
+  or opens dialogs isn't a part. It's `[]` when nothing holds two or more parts, and `undefined` when a layout on the
+  way is.
 - `filesFor(screen)` lists the files that explain a screen or component, each with why: where it's declared, the
   views it places at any depth, the types holding its state (`CartViewModel`), the project's files a React Native
   screen imports, and where the tokens it uses are declared. For giving an agent or a variant generator what it needs
-  to change a screen, and no more.
+  to change a screen, and no more. It takes a layout's `ref` or a part's `view` too, in a view that adds that view.
 - `withChanges(files)` gives a view of the app with some files changed (or `null` for deleted), reading only those
   files again; a view that changes a theme names its tokens by the new theme. Views can be made from views.
 - `update(path, text)` changes the app itself, for a working tree being edited.

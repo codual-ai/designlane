@@ -149,3 +149,14 @@ export const LayoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
     children: z.array(LayoutNodeSchema),
   }),
 );
+
+/** One of a screen's main parts, as a person picks it to change: its node's `id` in the layout of `view` (the screen,
+ * or the view it's all placed in), a name to show for it, where its code is, and, for a view placed, that view's id. */
+export const ScreenPartSchema = z.object({
+  id: z.string(),
+  view: z.string(),
+  label: z.string(),
+  span: CodeSpanSchema,
+  ref: z.string().exactOptional(),
+});
+export type ScreenPart = z.infer<typeof ScreenPartSchema>;

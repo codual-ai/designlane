@@ -39,6 +39,8 @@ export {
   SCREEN_FILE_REASONS,
   type ScreenFile,
   ScreenFileSchema,
+  type ScreenPart,
+  ScreenPartSchema,
   type StringUse,
   StringUseSchema,
   type TokenRef,

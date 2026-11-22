@@ -21,7 +21,8 @@ import type { DesignTokens, FrameworkId, FrameworkScan, ScanResult, ScreenRef } 
 import { changedTokens, tokenFiles } from "./changed-tokens.js";
 import { makeFilesFor } from "./files-for.js";
 import { type LayoutIndex, layoutIndex } from "./layout-of.js";
-import type { FileTokens, LayoutNode, ScreenFile, StringUse } from "./schema.js";
+import type { FileTokens, LayoutNode, ScreenFile, ScreenPart, StringUse } from "./schema.js";
+import { screenParts } from "./screen-parts.js";
 import {
   decodeStrings,
   isStringsFile,
@@ -55,7 +56,8 @@ export interface AppView {
   /** The files that explain the screen or component `screen` (its id, or itself), each once, by the first reason it's
    * related, its own file first: the views it places at any depth, the types holding its state, the project's files
    * it imports, and where the tokens it uses are declared; a view declared in a file this view adds or changes is
-   * followed too. `screen` is one the scan found: throws for one this view doesn't have, or whose file it deletes. */
+   * followed too. `screen` is one the scan found, or one declared in a file this view adds or changes (a layout's ref):
+   * throws for one this view doesn't have, or whose file it deletes. */
   filesFor(screen: string | ScreenRef): ScreenFile[];
   /** The layout of the screen or component `screen` (its id, or itself) as this view has its code: the screen,
    * holding its containers, decisions, loops, the views it places and the elements it shows, in the order written.
@@ -63,6 +65,17 @@ export interface AppView {
    * read whole (left unfinished, or past the reader's limits), never a layout of part of it. `screen` is one the scan found, or one declared in a file this view adds or changes: throws
    * for one this view doesn't have, or whose file it deletes. */
   layoutOf(screen: string | ScreenRef): LayoutNode | undefined;
+  /** The main parts of the screen or component `screen`, as a person picks one to change. Stepping in from the screen
+   * through what holds only one thing (a navigation, a scroll, a stack, what it writes inside a container of the
+   * app's, the one view it places, the biggest branch of an `if` over all of it), they're the nodes of the first one
+   * that holds two or more, each with its id in the layout of `view` (the screen, or the view it's all placed in) and
+   * a label to show. What only runs code or opens dialogs isn't a part. The label is the first of: a section's or
+   * toolbar's title, the placed view's name (`HeaderView` → "Header"), the view property it's the first thing of
+   * (`plansSection` → "Plans section"), a short comment on the line above, what an `if`'s biggest branch or a loop's
+   * item is named, the first text it shows, its kind; at most 24 characters, numbered when another part has it
+   * ("Card", "Card 2"). Empty when no node holds two or more; undefined when a layout on the way is. Throws as
+   * `layoutOf` does. */
+  screenParts(screen: string | ScreenRef): ScreenPart[] | undefined;
   /** A view of this one with `changes` made: each path's new text, or null for a file deleted. */
   withChanges(changes: Readonly<Record<string, string | null>>): Promise<AppView>;
 }
@@ -317,6 +330,26 @@ function viewOf(state: State): AppView {
       ];
     }),
   );
+  /** The view `screen` names, and its framework's layouts: one the scan found, or one declared in a file changed since,
+   * which only the layouts know; none in a file deleted. */
+  const viewNamed = (screen: string | ScreenRef): [ScreenRef, LayoutIndex] => {
+    const id = typeof screen === "string" ? screen : screen.id;
+    // An id starts with its framework's (`swiftui:App/Cart.swift#Cart`), so only that framework is read.
+    const index = [...layouts].find(([framework]) => id.startsWith(`${framework}:`))?.[1]();
+    // A screen the scan found in a file changed since that its rules for changed files don't find is still that screen.
+    const scanned = byId.get(id);
+    const found = index?.views.get(id) ?? (scanned && state.texts.has(scanned.file) ? scanned : undefined);
+    if (!index || !found)
+      throw new Error(`No screen ${id} in the app: pass an id from app.screens() or a layout's ref.`);
+    return [found, index];
+  };
+  const stringsOf = (rel: string, text?: string) => {
+    const framework = frameworkOf(state, rel);
+    const source = text ?? state.texts.get(rel);
+    return framework && source !== undefined
+      ? stringsIn(framework.scan.framework, rel, source, tableOf(state))
+      : undefined;
+  };
   return {
     root: state.root,
     frameworks: scans,
@@ -328,31 +361,44 @@ function viewOf(state: State): AppView {
       const source = text ?? state.texts.get(rel);
       return framework && source !== undefined ? tokensIn(framework.reading, rel, source) : undefined;
     },
-    stringsIn(rel, text) {
-      const framework = frameworkOf(state, rel);
-      const source = text ?? state.texts.get(rel);
-      return framework && source !== undefined
-        ? stringsIn(framework.scan.framework, rel, source, tableOf(state))
-        : undefined;
-    },
+    stringsIn: stringsOf,
     filesFor(screen) {
-      const id = typeof screen === "string" ? screen : screen.id;
-      const found = byId.get(id);
-      const finder = found && finders.get(found.framework);
-      // A view that deletes a screen's file has no screen there, though its scan, read before, lists it.
-      if (!found || !finder || !state.texts.has(found.file))
-        throw new Error(`No screen ${id} in the app: pass an id from app.screens().`);
+      const [found] = viewNamed(screen);
+      const finder = finders.get(found.framework);
+      if (!finder) throw new Error(`No screen ${found.id} in the app: pass an id from app.screens().`);
       return finder(found);
     },
     layoutOf(screen) {
-      const id = typeof screen === "string" ? screen : screen.id;
-      // A screen the scan found, or a view declared in a file changed since, which only the layouts know; none in a
-      // file deleted.
-      for (const index of layouts.values()) {
-        const found = index().views.get(id);
-        if (found) return index().layoutOf(found);
-      }
-      throw new Error(`No screen ${id} in the app: pass an id from app.screens() or a layout's ref.`);
+      const [found, index] = viewNamed(screen);
+      return index.layoutOf(found);
+    },
+    screenParts(screen) {
+      const [found] = viewNamed(screen);
+      // Each view's layout, and each file's text shown, read once for all the views looked into.
+      const layouts = new Map<string, LayoutNode | undefined>();
+      const strings = new Map<string, StringUse[]>();
+      const layoutOf = (id: string) => {
+        if (!layouts.has(id)) {
+          const [view, index] = viewNamed(id);
+          layouts.set(id, state.texts.has(view.file) ? index.layoutOf(view) : undefined);
+        }
+        return layouts.get(id);
+      };
+      return screenParts(found.id, {
+        layoutOf,
+        namesOf: (id) => {
+          const [view, index] = viewNamed(id);
+          const shown = strings.get(view.file) ?? stringsOf(view.file) ?? [];
+          strings.set(view.file, shown);
+          return {
+            text: state.texts.get(view.file) ?? "",
+            code: index.code(view.file) ?? state.texts.get(view.file) ?? "",
+            strings: shown,
+            viewName: (ref) => index.views.get(ref)?.name,
+            memberAt: (offset) => index.memberAt(view.file, offset),
+          };
+        },
+      });
     },
     withChanges: async (changes) => viewOf(await changed(state, new Map(Object.entries(changes)))),
   };
@@ -414,6 +460,7 @@ export async function readApp(root: string): Promise<App> {
     stringsIn: (rel, text) => view.stringsIn(rel, text),
     filesFor: (screen) => view.filesFor(screen),
     layoutOf: (screen) => view.layoutOf(screen),
+    screenParts: (screen) => view.screenParts(screen),
     withChanges: (changes) => view.withChanges(changes),
     // Each update starts from the one before, so two made at once both land; one that fails doesn't stop the next.
     update(rel, text) {

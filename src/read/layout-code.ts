@@ -50,6 +50,8 @@ export class CodeElements {
   private readonly inlining = new Set<string>();
   /** How much code view properties have had read in place. */
   private inlined = 0;
+  /** The file's `#if`s, matched once. */
+  private compiled: Map<number, number[]> | undefined;
   /** Whether a limit stopped the reading short (nesting too deep, too much read in place), so the elements read are
    * only part of what the code writes. */
   cut = false;
@@ -137,7 +139,10 @@ export class CodeElements {
     const before = code[j - 1] ?? "";
     // A member (`.padding`), an attribute or annotation (`@ViewBuilder`), or a compiler directive (`#if`).
     if (before === "." || before === "@" || /\w/.test(before)) return { elements: [], next: j + word.length };
-    if (before === "#") return { elements: [], next: this.lineEnd(j, to) };
+    if (before === "#")
+      return word === "if" && this.r.language === "swift"
+        ? this.compiledIf(j, to, depth)
+        : { elements: [], next: this.lineEnd(j, to) };
     if (word === "if") return this.conditional(j, to, depth);
     if (word === "switch" || word === "when") return this.choice(j, depth);
     if (word === "for" && this.r.language === "kotlin") return this.forLoop(j, to, depth);
@@ -188,6 +193,50 @@ export class CodeElements {
       elements: [{ name: "", kind: "conditional", start: j, end: k, children: [], branches }],
       next: k,
     };
+  }
+
+  /** `#if os(iOS) … #elseif … #else … #endif`: a decision made when the app is built, each clause a branch. One that
+   * only adds modifiers (`#if os(iOS) .padding() #endif`) writes no elements, so it's no decision in the layout; one
+   * whose `#endif` is past the block being read (around some of a `switch`'s cases) is read as written. */
+  private compiledIf(j: number, to: number, depth: number): Step {
+    const directive = this.directives().get(j - 1);
+    const end = directive?.at(-1);
+    // An `#if` around more than this block holds (some of a `switch`'s cases), or left open: each side is read where
+    // it's written.
+    if (!directive || end === undefined || end >= to) return { elements: [], next: this.lineEnd(j, to) };
+    const next = this.lineEnd(end + 1, to);
+    const starts = [j, ...directive.slice(0, -1)].map((at) => this.lineEnd(at + 1, to));
+    const branches = starts.map((from, i) => this.between(from, directive[i] ?? from, depth + 1));
+    if (branches.every((b) => b.length === 0)) return { elements: [], next };
+    return {
+      elements: [{ name: "", kind: "conditional", start: j - 1, end: next, children: [], branches }],
+      next,
+    };
+  }
+
+  /** For each `#if` of the file, where its `#elseif`s, `#else` and `#endif` are written, matched once for the file. */
+  private directives(): Map<number, number[]> {
+    if (this.compiled) return this.compiled;
+    const out = new Map<number, number[]>();
+    const open: number[][] = [];
+    const starts: number[] = [];
+    for (const m of this.r.code.matchAll(/#(if|elseif|else|endif)\b/g)) {
+      const at = m.index ?? 0;
+      if (m[1] === "if") {
+        starts.push(at);
+        open.push([]);
+        continue;
+      }
+      const clauses = open.at(-1);
+      if (!clauses) continue;
+      clauses.push(at);
+      if (m[1] === "endif") {
+        out.set(starts.pop() ?? 0, clauses);
+        open.pop();
+      }
+    }
+    this.compiled = out;
+    return out;
   }
 
   /** After `if`, its condition: where its block opens, or, in Kotlin, where its unbraced branch starts. */

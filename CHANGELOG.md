@@ -33,9 +33,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - `app.layoutOf(screen)` gives a screen's layout as a tree of containers, conditionals, loops, placed views and the
   elements it shows, each with its span and an id from its path by kind that stays the same when other kinds of
   nodes are added around it, for comparing two versions of a screen.
+- `app.screenParts(screen)` lists a screen's main parts, for picking one to change, each with its id in its view's
+  layout, a label to show ("Header", "Plans") and its span; following the one view a screen places and the biggest
+  branch of an `if` over all of it.
+- `layoutOf` reads a SwiftUI `#if` as a `conditional` with a branch per clause, rather than both sides as shown, and
+  places the Compose overload whose parameters take a call's arguments, rather than the first of that name.
 - `app.filesFor(screen)` lists the files that explain a screen or component, each with why: its declaration, the
   views it places at any depth, the types holding its state, the project's files a React Native screen imports, and
-  where the tokens it uses are declared. Views answer for their changes, following a view in a file they add.
+  where the tokens it uses are declared. Views answer for their changes, following a view in a file they add, and
+  taking such a view's id.
 
 ### Changed
 

@@ -91,7 +91,7 @@ const COMPOSE = new Map<string, Entry>([
   // Effects run code when the view appears and show nothing; dialogs and menus open over the screen, not in it.
   ...entries(
     "drop",
-    "LaunchedEffect DisposableEffect SideEffect BackHandler AlertDialog BasicAlertDialog Dialog DropdownMenu ModalBottomSheet",
+    "LaunchedEffect DisposableEffect SideEffect LifecycleEventEffect LifecycleStartEffect LifecycleResumeEffect BackHandler AlertDialog BasicAlertDialog Dialog DropdownMenu ModalBottomSheet",
   ),
 ]);
 
@@ -132,8 +132,9 @@ function navigatorEntry(name: string): Entry | undefined {
 export interface Building {
   framework: FrameworkId;
   span: (start: number, end: number) => LayoutNode["span"];
-  /** The id of the app's view `name` places here, or undefined when it's not one of the app's. */
-  viewNamed: (name: string) => string | undefined;
+  /** The id of the app's view `name` places here, written from `at.start` to `at.end`, or undefined when it's not one
+   * of the app's. */
+  viewNamed: (name: string, at: { start: number; end: number }) => string | undefined;
   /** The framework's own name a local one stands for: `Text` for `Label` in `import { Text as Label }`. */
   builtIn?: (name: string) => string | undefined;
 }
@@ -160,7 +161,7 @@ function nodesOfOne(building: Building, element: Element): Node[] {
     );
   if (element.kind === "group") return nodesOf(building, element.children);
   // The app's own view of a name is that view, whatever its name would make it (an app's `FlatList`).
-  const ref = element.name ? building.viewNamed(element.name) : undefined;
+  const ref = element.name ? building.viewNamed(element.name, element) : undefined;
   if (ref !== undefined) return node("view-ref", nodesOf(building, element.children), ref);
   if (element.kind) return node(element.kind, nodesOf(building, element.children));
   const name = building.builtIn?.(element.name) ?? element.name;
