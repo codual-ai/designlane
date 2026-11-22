@@ -206,18 +206,39 @@ const JSX_ENTITIES: Record<string, string> = {
   bull: "•",
 };
 
-/** JSX text as React shows it: each line's indentation and line break taken out, lines joined by a space,
- * same-line spaces kept, entities read. */
+/** JSX text as React shows it, as Babel cleans it: entities read, tabs as spaces, then each line's spaces taken out at
+ * its start (but the first line's) and its end (but the last line's), lines of spaces alone dropped, and the rest
+ * joined by a space. Only spaces go, not other whitespace (a non-breaking space shows); spaces on the line of a tag or
+ * a `{…}` stay, as they're shown: `{price} / {period}` shows " / ". */
 function jsxText(raw: string): string {
-  const lines = raw.split(/\r\n|\n|\r/);
-  const kept = lines
+  const lines = decodeEntities(raw, JSX_ENTITIES)
+    .replace(/\t/g, " ")
+    .split(/\r\n|\n|\r/);
+  return lines
     .map((line, i) => {
-      const start = i === 0 ? line : line.trimStart();
-      return i === lines.length - 1 ? start : start.trimEnd();
+      const start = i === 0 ? line : line.replace(/^ +/, "");
+      return i === lines.length - 1 ? start : start.replace(/ +$/, "");
     })
-    .filter((line) => line !== "");
-  return decodeEntities(kept.join(" ").trim(), JSX_ENTITIES);
+    .filter((line) => /[^ ]/.test(line))
+    .join(" ");
 }
+
+/** Where JSX text shown is written in `raw`: from its first line's start when that line shows any text, else from its
+ * first text; to its last line's end when that line does, else to its last text. Only spaces, tabs and line breaks
+ * are the whitespace left out. */
+function shownSpan(raw: string): [number, number] {
+  const firstBreak = raw.search(/[\r\n]/);
+  const lastBreak = Math.max(raw.lastIndexOf("\n"), raw.lastIndexOf("\r"));
+  const first = firstBreak === -1 ? raw : raw.slice(0, firstBreak);
+  const last = lastBreak === -1 ? raw : raw.slice(lastBreak + 1);
+  const start = SHOWN.test(first) ? 0 : raw.search(SHOWN);
+  let end = raw.length;
+  if (!SHOWN.test(last)) while (end > 0 && !SHOWN.test(raw[end - 1] ?? "")) end--;
+  return [start, end];
+}
+
+/** A character JSX text shows: not a space, a tab or a line break. */
+const SHOWN = /[^ \t\r\n]/;
 
 /** Components naming a translated string by a prop. */
 const JS_KEY_PROPS: Record<string, string> = { Trans: "i18nKey", FormattedMessage: "id" };
@@ -266,11 +287,13 @@ function jsStrings(rel: string, text: string, table: StringTable): Found[] {
         }
     }
     if (ts.isJsxText(node)) {
-      const raw = node.getText();
-      const trimmed = raw.trim();
-      if (trimmed) {
-        const start = node.getStart() + raw.indexOf(trimmed);
-        out.push(shown({ start, end: start + trimmed.length, text: jsxText(raw) }));
+      // Its full text: `getText` leaves out the spaces it starts with, which are shown.
+      const raw = node.getFullText();
+      // Text of spaces alone (`{a} {b}`) shows no words, so it isn't listed.
+      if (SHOWN.test(raw)) {
+        const [from, to] = shownSpan(raw);
+        const at = node.getFullStart();
+        out.push(shown({ start: at + from, end: at + to, text: jsxText(raw) }));
       }
     } else if (
       ts.isJsxExpression(node) &&

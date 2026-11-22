@@ -25,6 +25,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   members that are values (`DispatchQueue.main`, `Date.now`) and assignments (`rows += Row { … }`) are no longer read
   as elements.
 
+### Fixed
+
+- `stringsIn` keeps the spaces React shows in JSX text: `<Text>{price} / {period}</Text>` is " / ", not "/", and
+  `<Text>  Your cart </Text>` keeps its spaces. Only whitespace with a line break in it, at a line's start or end, is
+  left out, as React leaves it out.
+
 ## 0.4.0 - 2026-11-21
 
 ### Added

@@ -96,6 +96,47 @@ describe("stringsIn: Compose", () => {
 });
 
 describe("stringsIn: React Native", () => {
+  it("keeps JSX text's spaces as React shows them, each where it's written", async () => {
+    const text = tsx(
+      "export function Price() {",
+      "  return (",
+      "    <View>",
+      "      <Text>{price} / {period}</Text>",
+      "      <Text>{price}/ {period}</Text>",
+      "      <Text>Total: {total}</Text>",
+      "      <Text>{count} items</Text>",
+      "      <Text>{a} {b}</Text>",
+      "      <Text>",
+      "        Many words",
+      "        over   two lines",
+      "      </Text>",
+      "      <Text>Ends a line ",
+      "        {name}</Text>",
+      "      <Text>\tTabbed</Text>",
+      "      <Text>",
+      "        \u00a0Kept\u00a0",
+      "        {name}</Text>",
+      "      <Text>A&#9;B{name}</Text>",
+      "    </View>",
+      "  );",
+      "}",
+    );
+    const app = await readApp(await appIn({ ...RN_MANIFEST, "src/Price.tsx": text }));
+    expect(uses(text, app.stringsIn("src/Price.tsx"))).toEqual([
+      ["literal", " / ", null, " / "],
+      ["literal", "/ ", null, "/ "],
+      ["literal", "Total: ", null, "Total: "],
+      ["literal", " items", null, " items"],
+      // Written over two lines, shown as one; a space before a line break isn't shown.
+      ["literal", "Many words\n        over   two lines", null, "Many words over   two lines"],
+      ["literal", "Ends a line", null, "Ends a line"],
+      ["literal", "\tTabbed", null, " Tabbed"],
+      // A non-breaking space isn't a space JSX leaves out; a tab written as an entity is one.
+      ["literal", "\u00a0Kept\u00a0", null, "\u00a0Kept\u00a0"],
+      ["literal", "A&#9;B", null, "A B"],
+    ]);
+  });
+
   it("lists JSX text, shown props and screen titles, and the keys translation calls name", async () => {
     const text = tsx(
       'import { Trans } from "react-i18next";',
@@ -123,7 +164,7 @@ describe("stringsIn: React Native", () => {
     );
     expect(uses(text, app.stringsIn("src/Cart.tsx"))).toEqual([
       ["literal", "Cart", null, "Cart"],
-      ["literal", "Your   cart", null, "Your   cart"],
+      ["literal", "  Your   cart ", null, "  Your   cart "],
       ["literal", "Total", null, "Total"],
       ["literal", "Pay", null, "Pay"],
       ["localized", "cart.search", "cart.search", null],

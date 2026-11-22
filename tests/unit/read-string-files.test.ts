@@ -183,7 +183,8 @@ describe("stringsIn: what the reviews found", () => {
       "Frag",
       "a & b",
       "x &amp; y",
-      "Hello",
+      // The space before `<Text>` is on its line, so it's shown.
+      "Hello ",
       "world",
     ]);
   });
