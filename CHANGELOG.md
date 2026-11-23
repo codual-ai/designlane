@@ -7,6 +7,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An agent map's components are checked too: each is a view Designlane read, declared at the map's line (anywhere
+  in a long parameter list's declaration, the nearest of overloads), and each parameter it lists is one the
+  declaration takes or its body reads (`props.title`, `const { title } = props`). One borne out is the design
+  system's: views get `designSystem` and the map's `category`, the catalog shows them first with a filter, and
+  DESIGN.md lists them.
 - Constants named for a spacing or a corner radius are named in `scales`, each when code in another file uses it,
   whatever their container is called: in Compose (`val ThumbnailCornerRadius = 3.dp`, `DEFAULT_PADDING`,
   `object MailDimens { val SnackbarOuterMargin = 12.dp }`, and shapes, `RoundedCornerShape(12.dp)`), SwiftUI

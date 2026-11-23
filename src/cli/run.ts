@@ -1,6 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { confirmComponents } from "../catalog/map-components.js";
+import { readSources } from "../catalog/sources.js";
 import { writeOutputs } from "../output/write.js";
 import {
   applyMap,
@@ -93,9 +95,15 @@ async function map(
     // With --json, stdout is the scan alone.
     const say = values.json ? error : out;
     if (isMap(json)) {
-      const reading = await usage(() => applyMap(scan, json));
+      const tokens = await usage(() => applyMap(scan, json));
+      // Its components are checked with the catalog's readers, which read the app's sources again.
+      const reading = Object.keys(tokens.components).length
+        ? confirmComponents(tokens, await readSources(tokens.scan))
+        : tokens;
       scan = reading.scan;
-      say(`Confirmed ${plural(reading.confirmed, "token")} of ${agentFile} where it says they're written`);
+      say(
+        `Confirmed ${plural(reading.confirmed, "entry", "entries")} of ${agentFile} where it says they're written`,
+      );
       for (const line of leftOut(reading.unconfirmed)) error(line);
       // Every entry left out, for the agent to fix its map by: as many as there are, which the lines above group.
       if (!values["no-write"]) {

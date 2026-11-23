@@ -2,7 +2,7 @@
  * takes, and which of the app's colours and text styles it uses. */
 
 import { byCode, groupBy } from "../scan/counting.js";
-import type { FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
+import type { Category, FrameworkId, FrameworkScan, ScanResult, ScreenRef } from "../scan/types.js";
 import { jsReader } from "./js-reader.js";
 import { kotlinReader } from "./kotlin-reader.js";
 import type { ComponentReader, Declaration, Placement } from "./reader.js";
@@ -10,18 +10,7 @@ import { type AppSources, codeFiles, type FrameworkSources } from "./sources.js"
 import { swiftReader } from "./swift-reader.js";
 import { tokenUsesReader } from "./token-uses.js";
 
-export const CATEGORIES = [
-  "button",
-  "list",
-  "card",
-  "header",
-  "input",
-  "label",
-  "media",
-  "screen",
-  "other",
-] as const;
-export type Category = (typeof CATEGORIES)[number];
+export { CATEGORIES, type Category } from "../scan/types.js";
 
 export interface ComponentInfo {
   /** The scan's id for the view. */
@@ -32,6 +21,8 @@ export interface ComponentInfo {
   line: number;
   kind: ScreenRef["kind"];
   category: Category;
+  /** Whether an agent's map names it as one of the design system's components. */
+  designSystem: boolean;
   /** How many places in other code place it, and the files they're in, most first. */
   uses: number;
   usedIn: string[];
@@ -60,6 +51,9 @@ const CATEGORY_SUFFIXES: [RegExp, Category][] = [
 
 export const categoryOf = (name: string, kind: ScreenRef["kind"]): Category =>
   CATEGORY_SUFFIXES.find(([suffix]) => suffix.test(name))?.[1] ?? (kind === "screen" ? "screen" : "other");
+
+/** A view's category: what an agent's map says, else its name's. */
+const categoryOfView = (view: ScreenRef): Category => view.category ?? categoryOf(view.name, view.kind);
 
 /** The reader of `sources`' views; with `previews`, a Compose preview the scan lists is a view too. */
 export function readerOf(sources: FrameworkSources, options: { previews?: boolean } = {}): ComponentReader {
@@ -146,7 +140,8 @@ function frameworkComponents(scan: FrameworkScan, sources: FrameworkSources): Co
       file: view.file,
       line: view.line,
       kind: view.kind,
-      category: categoryOf(view.name, view.kind),
+      category: categoryOfView(view),
+      designSystem: view.designSystem === true,
       ...usesOf(view, declaration, placements.get(view.id)),
       params: declaration?.params ?? [],
       ...tokenUses(source, code),
@@ -155,7 +150,7 @@ function frameworkComponents(scan: FrameworkScan, sources: FrameworkSources): Co
   });
 }
 
-/** Every view the scan found, components first, then by how often they're used. */
+/** Every view the scan found, components first, the design system's first of them, then by how often they're used. */
 export function inventory(scan: ScanResult, sources: AppSources): ComponentInfo[] {
   const out: ComponentInfo[] = [];
   for (const framework of scan.frameworks) {
@@ -165,6 +160,7 @@ export function inventory(scan: ScanResult, sources: AppSources): ComponentInfo[
   return out.sort(
     (a, b) =>
       Number(a.kind === "screen") - Number(b.kind === "screen") ||
+      Number(b.designSystem) - Number(a.designSystem) ||
       b.uses - a.uses ||
       byCode(a.name, b.name) ||
       byCode(a.id, b.id),

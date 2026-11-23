@@ -12,6 +12,7 @@ const component = (over: Partial<ComponentInfo>): ComponentInfo => ({
   framework: "swiftui",
   file: `App/${over.name ?? "Row"}.swift`,
   line: 3,
+  designSystem: false,
   kind: "component",
   category: "list",
   uses: 0,

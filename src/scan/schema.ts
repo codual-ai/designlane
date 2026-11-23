@@ -2,7 +2,7 @@
  * process). Each one's type is the matching type in `types.ts`, which a test checks. */
 
 import { z } from "zod";
-import { INHERITABLE, OPENINGS, PLATFORMS, VALUE_KINDS } from "./types.js";
+import { CATEGORIES, INHERITABLE, OPENINGS, PLATFORMS, VALUE_KINDS } from "./types.js";
 
 export const FrameworkIdSchema = z.enum(["swiftui", "compose", "react-native"]);
 
@@ -14,6 +14,8 @@ export const ScreenRefSchema = z.object({
   line: z.number().int(),
   kind: z.enum(["screen", "component"]),
   score: z.number(),
+  category: z.enum(CATEGORIES).exactOptional(),
+  designSystem: z.boolean().exactOptional(),
 });
 
 export const ScreenLinkSchema = z.object({

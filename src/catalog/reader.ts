@@ -92,6 +92,18 @@ export function perSource<S extends object, T>(compute: (source: S) => T): (sour
   };
 }
 
+/** `items` by a key, each key's in order: for finding a file's declarations of a name without reading them all. */
+export function indexed<T>(items: T[], key: (item: T) => string | number): Map<string | number, T[]> {
+  const index = new Map<string | number, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    const same = index.get(k);
+    if (same) same.push(item);
+    else index.set(k, [item]);
+  }
+  return index;
+}
+
 /** Whether `at` falls in one of `ranges`, each `[start, end)`. */
 export const inRanges = (ranges: readonly Range[], at: number) =>
   ranges.some(([start, end]) => at >= start && at < end);

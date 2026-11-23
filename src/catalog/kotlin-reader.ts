@@ -7,6 +7,7 @@ import {
   type ComponentReader,
   callPlacements,
   type Declaration,
+  indexed,
   lineIndex,
   onLine,
   perSource,
@@ -50,11 +51,13 @@ const previewsOf = perSource((source: KotlinSource): Range[] =>
 export function kotlinReader(files: KotlinSource[], { previews = false } = {}): ComponentReader {
   const byFile = new Map(files.map((f) => [f.rel, f]));
   const linesOf = perSource((source: KotlinSource) => lineIndex(source.text));
+  // Each file's functions by name, so finding one view's costs its name's, not the file's whole list.
+  const namedIn = perSource((source: KotlinSource) => indexed(functionsOf(source), (f) => f.name));
   return {
     declaration(view) {
       const source = byFile.get(view.file);
       if (!source) return undefined;
-      const named = functionsOf(source).filter((f) => f.name === view.name);
+      const named = namedIn(source).get(view.name) ?? [];
       const find = (candidates: KotlinFunction[]) =>
         onLine(candidates, view, linesOf(source), (f) => [f.start, f.body[0]]);
       // A function that isn't a preview first, so a preview of the same name never stands in for it.

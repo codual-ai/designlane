@@ -235,11 +235,17 @@ export function toDesignMd(scan: ScanResult): string {
     if (Object.keys(tokens).length) front[section] = tokens;
     else omitted.push({ section, reason });
   }
-  omitted.push({ section: "components", reason: "Component tokens aren't read yet" });
+  const designSystem = frameworks.flatMap((f) => f.screens.filter((s) => s.designSystem));
+  if (designSystem.length === 0)
+    omitted.push({ section: "components", reason: "No agent's map names the design system's components" });
   front.omitted = omitted;
 
   const sections = [`---\n${yaml(front)}\n---`, `# ${name}`, `## Overview\n\n${overview(scan, name)}`];
   if (colors.prose.length) sections.push(`## Colors\n\n${colors.prose.join("\n")}`);
+  if (designSystem.length)
+    sections.push(
+      `## Components\n\n${designSystem.map((c) => `- **${c.name}**${c.category ? ` (${c.category})` : ""}: \`${c.file}:${c.line}\``).join("\n")}`,
+    );
   sections.push(...themesProse(frameworks));
   if (type.prose.length) sections.push(`## Typography\n\n${type.prose.join("\n")}`);
   const spacingUsed = written(frameworks, (f) => f.tokens.spacing);

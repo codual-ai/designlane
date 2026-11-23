@@ -16,6 +16,20 @@ export const FRAMEWORK_NAMES: Record<FrameworkId, string> = {
 const names = Object.values(FRAMEWORK_NAMES);
 export const SUPPORTED_FRAMEWORKS = `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 
+/** What a component is, as the catalog groups them: its name's last word, or what an agent's map says. */
+export const CATEGORIES = [
+  "button",
+  "list",
+  "card",
+  "header",
+  "input",
+  "label",
+  "media",
+  "screen",
+  "other",
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
 export interface ScreenRef {
   /** `<framework>:<path>#<name>`, with `@<line>` added when a file declares the same name twice. */
   id: string;
@@ -27,6 +41,11 @@ export interface ScreenRef {
   kind: "screen" | "component";
   /** How strongly the code looks like a whole screen; the scan lists the highest first. */
   score: number;
+  /** What it is, when an agent's map says: a component the map names has its category. */
+  category?: Category;
+  /** Whether an agent's map names it as one of the design system's components, its declaration borne out by the
+   * code. */
+  designSystem?: boolean;
 }
 
 /**

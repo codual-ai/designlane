@@ -59,7 +59,7 @@ footer{margin:48px auto 40px;color:var(--muted);font-size:12.5px}
 /** Search by words in a card's text, and filter by category; screens are filtered by the words only. */
 export const CATALOG_SCRIPT = String.raw`
 const search=document.getElementById('search');const cards=[...document.querySelectorAll('[data-text]')];const filters=[...document.querySelectorAll('[data-category-filter]')];const shown=document.getElementById('shown');let category='';
-function apply(){const words=search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);let count=0;for(const card of cards){const match=words.every((w)=>card.dataset.text.includes(w))&&(!category||card.dataset.category===category||card.dataset.kind==='screen');card.hidden=!match;if(match)count++}shown.textContent=count+' of '+cards.length+' shown'}
+function apply(){const words=search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);let count=0;for(const card of cards){const match=words.every((w)=>card.dataset.text.includes(w))&&(!category||card.dataset.category===category||(category==='design-system'&&card.dataset.designSystem==='true')||card.dataset.kind==='screen');card.hidden=!match;if(match)count++}shown.textContent=count+' of '+cards.length+' shown'}
 search.addEventListener('input',apply);
 for(const button of filters)button.addEventListener('click',()=>{category=button.dataset.categoryFilter;for(const other of filters)other.setAttribute('aria-pressed',String(other===button));apply()});
 apply();

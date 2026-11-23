@@ -187,28 +187,40 @@ function card(c: ComponentInfo, context: CardContext): string {
   const code = c.source
     ? `<details><summary>Code</summary><pre>${escapeHtml(firstLines(c.source, MAX_CODE_LINES))}</pre></details>`
     : "";
-  return `<article class="card" data-text="${escapeHtml(text)}" data-category="${c.category}" data-kind="${c.kind}">
+  return `<article class="card" data-text="${escapeHtml(text)}" data-category="${c.category}" data-kind="${c.kind}" data-design-system="${c.designSystem}">
 ${picture(c, context.previews.get(c.id), context.tokens.get(c.framework))}
-<span class="kind">${c.kind === "screen" ? "Screen" : CATEGORY_LABELS[c.category]}</span>
+<span class="kind">${c.kind === "screen" ? "Screen" : `${c.designSystem ? "Design system · " : ""}${CATEGORY_LABELS[c.category]}`}</span>
 <div class="top"><span class="name">${escapeHtml(c.name)}</span><span class="uses">${uses}</span></div>
 <span class="mono muted">${escapeHtml(c.file)}:${c.line}</span>
 ${tags(c.params)}${tags(c.colors, context.swatches.get(c.framework))}${tags(c.typeStyles)}${where}${code}
 </article>`;
 }
 
+/** The filter showing the design system's components, which no category is named. */
+const DESIGN_SYSTEM_FILTER = "design-system";
+
 function componentSection(components: ComponentInfo[], context: CardContext): string {
   const parts = components.filter((c) => c.kind === "component");
   const screens = components.filter((c) => c.kind === "screen");
-  const grid = [...parts].sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category));
+  const grid = [...parts].sort(
+    (a, b) =>
+      Number(b.designSystem) - Number(a.designSystem) ||
+      CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category),
+  );
   const counts = CATEGORIES.map((category) => ({
     category,
     n: parts.filter((c) => c.category === category).length,
   })).filter((x) => x.n);
   const filter = (category: string, label: string, pressed: boolean) =>
     `<button type="button" data-category-filter="${category}" aria-pressed="${pressed}">${label}</button>`;
+  // The components an agent's map names as the design system's, when it names any.
+  const designSystem = parts.filter((c) => c.designSystem).length;
+  const ownFilter = designSystem
+    ? filter(DESIGN_SYSTEM_FILTER, `Design system (${designSystem})`, false)
+    : "";
   const filters =
-    counts.length > 1
-      ? `<div class="filters" role="group" aria-label="Filter components by kind">${filter("", `All (${parts.length})`, true)}${counts.map((x) => filter(x.category, `${CATEGORY_LABELS[x.category]} (${x.n})`, false)).join("")}</div>`
+    counts.length > 1 || designSystem
+      ? `<div class="filters" role="group" aria-label="Filter components by kind">${filter("", `All (${parts.length})`, true)}${ownFilter}${counts.map((x) => filter(x.category, `${CATEGORY_LABELS[x.category]} (${x.n})`, false)).join("")}</div>`
       : "";
   const cards = (list: ComponentInfo[]) => list.map((c) => card(c, context)).join("");
   return `<h2 id="components">Components</h2>

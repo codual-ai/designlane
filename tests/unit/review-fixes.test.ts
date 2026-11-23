@@ -122,6 +122,7 @@ describe("near-duplicate search on many components", () => {
     name: `View${i}`,
     framework: "swiftui",
     file: `App/V${i}.swift`,
+    designSystem: false,
     line: 1,
     kind: "component",
     category: "other",

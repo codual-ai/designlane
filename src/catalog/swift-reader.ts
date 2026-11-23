@@ -8,6 +8,7 @@ import {
   type ComponentReader,
   callPlacements,
   type Declaration,
+  indexed,
   lineIndex,
   onLine,
   perSource,
@@ -45,11 +46,13 @@ export function swiftReader(files: SwiftSource[]): ComponentReader {
   const enclosingOf = perSource((source: SwiftSource) => bracketTree(source.code).enclosing);
   const byFile = new Map(files.map((f) => [f.rel, f]));
   const linesOf = perSource((source: SwiftSource) => lineIndex(source.text));
+  // Each file's structs by name, so finding one view's costs its name's, not the file's whole list.
+  const namedIn = perSource((source: SwiftSource) => indexed(declared(source), (s) => s.name));
   return {
     declaration(view) {
       const source = byFile.get(view.file);
       if (!source) return undefined;
-      const candidates = declared(source).filter((s) => s.name === view.name);
+      const candidates = namedIn(source).get(view.name) ?? [];
       const found = onLine(candidates, view, linesOf(source), (s) => [s.start, s.open]);
       return found && declarationOf(source, found, enclosingOf(source));
     },

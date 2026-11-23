@@ -398,7 +398,7 @@ describe("designlane --from-agent with a map", () => {
       "Theme.accent2": { light: { value: "#000000", at: "App/Theme.swift:5" } },
     });
     expect(code).toBe(0);
-    expect(out[0]).toMatch(/^Confirmed 1 token of .*agent\.json where it says they're written$/);
+    expect(out[0]).toMatch(/^Confirmed 1 entry of .*agent\.json where it says they're written$/);
     expect(error).toEqual(
       expect.arrayContaining([
         "designlane: left out 3 entries the code doesn't bear out:",

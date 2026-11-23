@@ -111,6 +111,8 @@ export const UNCONFIRMED_KINDS = {
   "no-weight": "the weight isn't written there",
   "no-size-or-family": "the map gives neither a size nor a family",
   "unread-name": "it's written as a name Designlane couldn't read",
+  "no-component": "no view of that name is declared there",
+  "no-parameter": "the component doesn't take that parameter",
 } as const;
 export type UnconfirmedKind = keyof typeof UNCONFIRMED_KINDS;
 
@@ -123,8 +125,12 @@ export interface Unconfirmed {
   why: string;
 }
 
+export type MapComponent = z.infer<typeof ComponentSchema>;
+
 export interface MapReading {
   scan: ScanResult;
+  /** The map's components, by name, for the catalog to check: its readers read a view's declaration. */
+  components: Record<string, MapComponent>;
   confirmed: number;
   unconfirmed: Unconfirmed[];
 }
@@ -317,7 +323,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
   if (scales.spacing.length > 0 || scales.radii.length > 0) tokens.scales = scales;
   else delete tokens.scales;
   const merged: FrameworkScan = { ...framework, tokens };
-  return { scan: { ...scan, frameworks: [merged] }, confirmed, unconfirmed };
+  return { scan: { ...scan, frameworks: [merged] }, components: map.components, confirmed, unconfirmed };
 }
 
 /** The last name in a reference: `surface` in `Theme.surface`, `md` in `spacing.md`. */

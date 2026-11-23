@@ -3,7 +3,7 @@
 import ts from "typescript";
 import { eachNode, type JsSource, lineOf } from "../frameworks/js-sources.js";
 import { componentFunction } from "../frameworks/rn-views.js";
-import { type ComponentReader, type Placement, perSource } from "./reader.js";
+import { type ComponentReader, indexed, type Placement, perSource } from "./reader.js";
 
 interface Candidate {
   name: string;
@@ -13,15 +13,18 @@ interface Candidate {
 
 export function jsReader(files: JsSource[]): ComponentReader {
   const byFile = new Map(files.map((f) => [f.rel, f]));
-  const declaredIn = perSource((source: JsSource) => candidatesIn(source.file));
+  const declaredIn = perSource((source: JsSource) => {
+    const candidates = candidatesIn(source.file);
+    // By line and by name, so finding one view's costs a lookup, not a pass over the file's components.
+    return { byLine: indexed(candidates, (c) => lineOf(c.node)), byName: indexed(candidates, (c) => c.name) };
+  });
   return {
     declaration(view) {
       const source = byFile.get(view.file);
       if (!source) return undefined;
-      const candidates = declaredIn(source);
+      const { byLine, byName } = declaredIn(source);
       const match =
-        candidates.find((c) => lineOf(c.node) === view.line && (c.name === view.name || !c.name)) ??
-        candidates.find((c) => c.name === view.name);
+        byLine.get(view.line)?.find((c) => c.name === view.name || !c.name) ?? byName.get(view.name)?.[0];
       if (!match) return undefined;
       return {
         start: match.node.getStart(),
