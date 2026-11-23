@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -108,11 +108,28 @@ describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
     const agent = path.join(app, "designlane", "agent.json");
     const check = path.join(app, "designlane", "agent-check.json");
     const summary = path.join(dir, "summary.md");
+    // Designlane built as the Action builds it, into a folder of its own: the step runs what's built, not a dist/ an
+    // earlier build left.
+    const designlane = path.join(dir, "designlane-build");
+    const tsc = path.join(process.cwd(), "node_modules", "typescript", "bin", "tsc");
+    execFileSync(
+      process.execPath,
+      [tsc, "-p", "tsconfig.build.json", "--outDir", path.join(designlane, "dist")],
+      {
+        cwd: process.cwd(),
+        stdio: "ignore",
+      },
+    );
+    writeFileSync(
+      path.join(designlane, "package.json"),
+      readFileSync(path.join(process.cwd(), "package.json")),
+    );
+    symlinkSync(path.join(process.cwd(), "node_modules"), path.join(designlane, "node_modules"), "dir");
     const { script } = step("Write the design tokens");
     const run = () => {
       writeFileSync(summary, "");
       const result = bash(script, app, {
-        DESIGNLANE: process.cwd(),
+        DESIGNLANE: designlane,
         APP: ".",
         OUT: "designlane",
         GITHUB_STEP_SUMMARY: summary,
@@ -135,5 +152,5 @@ describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
     writeFileSync(agent, JSON.stringify({ colors: { "Theme.surface": { light: "#ffffff" } } }));
     expect(run()).toBe("");
     expect(() => readFileSync(check)).toThrow();
-  }, 60000);
+  }, 120000);
 });
