@@ -128,18 +128,27 @@ check its own changes with `check_drift`. Designlane names a colour or text styl
 and corners it says which value the code uses often nearby, not yet which named step to use. Theme and
 token files (`Theme.kt`, `AppColors.swift`, `theme/`) and previews are left out, as values belong there.
 
-## Unusual setup? Let your coding agent read it
+## Let your coding agent map the design system
 
-Designlane's own reading covers the common ways apps define colours and text styles. If your app builds its theme
-some other way, have your coding agent do the reading, and Designlane checks it before anything reaches Figma:
+Designlane's own reading covers the common ways apps define their tokens, but it can only guess which values are the
+design system. A coding agent can tell, so let it map them, and Designlane checks every entry against the code:
 
 ```sh
 claude -p "$(npx designlane prompt)" --allowedTools Read Glob Grep Write   # writes designlane/agent.json
 npx designlane --from-agent designlane/agent.json                           # checks it, writes tokens.json
 ```
 
-A colour is kept only when the code writes its exact value and uses its name; whatever isn't is listed and left out.
-Any agent works: `designlane prompt` prints plain instructions.
+The map lists each color (with its dark value and themes), text style, spacing step, corner radius and reusable
+component, each with the file and line it's written on. Designlane reads the value written there with its own readers,
+following a color written as another's name (`primary = Purple40`), and keeps only what the code bears out: a value
+that's computed, written elsewhere, or not what the map says is left out. A component must be a view declared there,
+taking the parameters the map lists. The tokens it keeps are the app's design system, with where each is written, so
+`designlane edit` and the Figma plugin change the right line.
+
+What's left out is summed up by reason, and `designlane/agent-check.json` lists every entry with where and why. Run the
+agent again and it fixes its map from that file. With the GitHub Action, the map is checked again on every push, and
+an entry the code has moved on from is listed in the run's summary. Any agent works: `designlane prompt` prints plain
+instructions.
 
 ## Change a token in the code
 
@@ -343,15 +352,14 @@ outside the app. Add Designlane to the library's repo instead, and connect your 
   reports on open-source apps and on yours.
 - **Fewer guesses.** A name several views share, or a React Native import Designlane can't follow, is resolved by
   rules rather than picked.
-- **A design system map kept up to date.** A coding agent maps the design system once; Designlane checks it against
-  the code, reads it again on every push, and says when it's out of date.
+- **Components in Figma.** The components an agent's map names, in tokens.json for the plugin to show.
 
 Something you'd like Designlane to read, or a screen it reads wrong?
 [Open an issue](https://github.com/codual-ai/designlane/issues).
 
 ## Status
 
-Version 0.5. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
+Version 0.6. Designlane reads SwiftUI, Jetpack Compose and React Native apps, syncs to Figma, and turns changes made
 in Figma into pull requests. Feedback and issues are welcome.
 
 ## License

@@ -17,7 +17,7 @@ import { isFolder, readGaps } from "../scan/files.js";
 import { scanRepo } from "../scan/index.js";
 import { scanNotes } from "../scan/notes.js";
 import { FRAMEWORK_NAMES, type ScanResult, SUPPORTED_FRAMEWORKS } from "../scan/types.js";
-import { AGENT_PROMPT } from "./agent-prompt.js";
+import { AGENT_PROMPT, CHECK_FILE } from "./agent-prompt.js";
 import { type Output, UsageError } from "./command.js";
 import { DOCTOR_USAGE, doctor } from "./doctor.js";
 import { EDIT_USAGE, edit } from "./edit.js";
@@ -143,9 +143,6 @@ async function map(
   }
   return 0;
 }
-
-/** The file beside the agent's map that lists every entry the code doesn't bear out. */
-export const CHECK_FILE = "agent-check.json";
 
 /** The entries left out, a line for each kind of reason, most first, with one for example: a few lines, however many
  * there are. */

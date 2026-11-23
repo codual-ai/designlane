@@ -46,29 +46,49 @@ runs:
           fi
         fi
         echo "out=$OUT" >> "$GITHUB_OUTPUT"
+    # With a coding agent's map, it's checked again on every push: an entry the code has moved on from is left out,
+    # and listed in the run's summary and in designlane/agent-check.json.
     - name: Write the design tokens
       shell: bash
       env:
         DESIGNLANE: ${{ github.action_path }}
         APP: ${{ inputs.app }}
         OUT: ${{ steps.folder.outputs.out }}
-      run: node "$DESIGNLANE/dist/cli/main.js" "$APP" --out "$OUT"
+      run: |
+        AGENT="$APP/designlane/agent.json"
+        CHECK="$APP/designlane/agent-check.json"
+        if [ -f "$AGENT" ]; then
+          # Only a map of version 1 is checked into a check file: an older one's mustn't stand for this run.
+          rm -f "$CHECK"
+          node "$DESIGNLANE/dist/cli/main.js" "$APP" --out "$OUT" --from-agent "$AGENT"
+        else
+          node "$DESIGNLANE/dist/cli/main.js" "$APP" --out "$OUT"
+        fi
+        if [ -f "$CHECK" ]; then
+          # The summary module by its file URL, so no path, a Windows runner's included, breaks the import.
+          node --input-type=module -e "const { pathToFileURL } = await import('node:url'); const { printSummary } = await import(pathToFileURL(process.argv[1]).href); await printSummary(process.argv[2], console.log);" "$DESIGNLANE/dist/cli/agent-summary.js" "$CHECK" >> "$GITHUB_STEP_SUMMARY"
+        fi
     # [skip ci] keeps this commit from starting the workflow that made it.
     - name: Commit them if they changed
       shell: bash
       env:
+        APP: ${{ inputs.app }}
         OUT: ${{ steps.folder.outputs.out }}
         GIT_AUTHOR_NAME: github-actions[bot]
         GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         GIT_COMMITTER_NAME: github-actions[bot]
         GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
       run: |
-        git add -- "$OUT"
-        if git diff --cached --quiet -- "$OUT"; then
+        # The tokens, and the agent map's check file when there is or was one: nothing else staged before.
+        PATHS=("$OUT")
+        CHECK="$APP/designlane/agent-check.json"
+        if [ -f "$CHECK" ] || git ls-files --error-unmatch -- "$CHECK" > /dev/null 2>&1; then PATHS+=("$CHECK"); fi
+        git add -A -- "${PATHS[@]}"
+        if git diff --cached --quiet -- "${PATHS[@]}"; then
           echo "The design tokens haven't changed."
           exit 0
         fi
-        git commit -m "Update design tokens [skip ci]" -- "$OUT"
+        git commit -m "Update design tokens [skip ci]" -- "${PATHS[@]}"
         # Another push may have landed while this ran.
         git pull --rebase --autostash origin "$GITHUB_REF_NAME"
         git push origin "HEAD:$GITHUB_REF_NAME"

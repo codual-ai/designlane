@@ -21,7 +21,9 @@ Action and the plugin keep using; Figma files synced before, and pull requests o
 
 Add this workflow to the app's repo as `.github/workflows/design-tokens.yml`. On every push to `main` it writes
 `designlane/tokens.json` from the code, and commits it when it changed. A `main` protected from direct pushes refuses
-that commit; allow GitHub Actions to push, or run the workflow on another branch.
+that commit; allow GitHub Actions to push, or run the workflow on another branch. When the app has a coding agent's map,
+`designlane/agent.json`, it's checked against the code each time too: what the code bears out makes the tokens, and
+each entry the code has moved on from is listed in the run's summary and in `designlane/agent-check.json`.
 
 ```yaml
 name: Design tokens
@@ -35,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: codual-ai/designlane@v0.5.0
+      - uses: codual-ai/designlane@v0.6.0
         with:
           app: . # the app's folder, if it isn't the repo's root
 ```

@@ -95,4 +95,45 @@ describe.skipIf(process.platform === "win32")("the GitHub Action", () => {
     ]);
     expect(commit().stdout).toContain("The design tokens haven't changed.");
   });
+
+  it("checks an agent's map of version 1 into a summary, and an older map's into none, nor a stale one", () => {
+    dir = mkdtempSync(path.join(tmpdir(), "designlane-action-"));
+    const app = path.join(dir, "app");
+    mkdirSync(path.join(app, "App"), { recursive: true });
+    mkdirSync(path.join(app, "designlane"));
+    writeFileSync(
+      path.join(app, "App", "Theme.swift"),
+      'import SwiftUI\nenum Theme {\n  static let surface = Color.white\n}\nstruct S: View { var body: some View { Text("a").foregroundStyle(Theme.surface) } }\n',
+    );
+    const agent = path.join(app, "designlane", "agent.json");
+    const check = path.join(app, "designlane", "agent-check.json");
+    const summary = path.join(dir, "summary.md");
+    const { script } = step("Write the design tokens");
+    const run = () => {
+      writeFileSync(summary, "");
+      const result = bash(script, app, {
+        DESIGNLANE: process.cwd(),
+        APP: ".",
+        OUT: "designlane",
+        GITHUB_STEP_SUMMARY: summary,
+      });
+      expect(result.status, result.stderr).toBe(0);
+      return readFileSync(summary, "utf8");
+    };
+    writeFileSync(
+      agent,
+      JSON.stringify({
+        version: 1,
+        colors: {
+          "Theme.surface": { light: { value: "#ffffff", at: "App/Theme.swift:3" } },
+          "Theme.gone": { light: { value: "#000000", at: "App/Theme.swift:40" } },
+        },
+      }),
+    );
+    expect(run()).toContain("1 of 2 entries match the code.");
+    // An older, unversioned map writes no check file: the one before it isn't summed up again.
+    writeFileSync(agent, JSON.stringify({ colors: { "Theme.surface": { light: "#ffffff" } } }));
+    expect(run()).toBe("");
+    expect(() => readFileSync(check)).toThrow();
+  }, 60000);
 });

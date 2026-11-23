@@ -3,10 +3,13 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.6.0 - 2026-11-22
 
 ### Added
 
+- `designlane prompt` asks a coding agent for the version 1 map, and to fix the entries `designlane/agent-check.json`
+  lists. The GitHub Action checks the map again on every push when the app has one, lists each entry the code has
+  moved on from in the run's summary, and commits the check file with the tokens.
 - An agent map's components are checked too: each is a view Designlane read, declared at the map's line (anywhere
   in a long parameter list's declaration, the nearest of overloads), and each parameter it lists is one the
   declaration takes or its body reads (`props.title`, `const { title } = props`). One borne out is the design
