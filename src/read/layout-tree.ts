@@ -84,7 +84,7 @@ const COMPOSE = new Map<string, Entry>([
   ...entries("text", "Text BasicText"),
   ...entries(
     "button",
-    "Button TextButton OutlinedButton ElevatedButton FilledTonalButton IconButton FilledIconButton OutlinedIconButton IconToggleButton FloatingActionButton SmallFloatingActionButton LargeFloatingActionButton ExtendedFloatingActionButton SmallExtendedFloatingActionButton Tab LeadingIconTab NavigationBarItem NavigationRailItem NavigationDrawerItem FilterChip AssistChip InputChip SuggestionChip SegmentedButton DropdownMenuItem",
+    "Button TextButton OutlinedButton ElevatedButton FilledTonalButton IconButton FilledIconButton OutlinedIconButton IconToggleButton FilledIconToggleButton FloatingActionButton SmallFloatingActionButton LargeFloatingActionButton ExtendedFloatingActionButton SmallExtendedFloatingActionButton Tab LeadingIconTab NavigationBarItem NavigationRailItem NavigationDrawerItem FilterChip AssistChip InputChip SuggestionChip SegmentedButton DropdownMenuItem",
   ),
   ...entries("image", "Image Icon AsyncImage SubcomposeAsyncImage GlideImage"),
   ...entries(
