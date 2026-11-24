@@ -1,8 +1,0 @@
-Bar (component, Bar.kt:4)
-  part labelled by its kind only: Button at line 6
-  Parts: Button | Like
-  Layout:
-    view-ref Bar  line 4
-      stack-h  line 5
-        button  line 6
-        text  line 7
