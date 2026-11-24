@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting it. A few lines of code that read wrong are worth more than anything else here.
-        Leave out anything private: cut your code down until it still shows the problem.
+        Thanks for reporting this. The most helpful thing is a short piece of code that shows the problem.
+        Please leave out anything private.
   - type: dropdown
     id: framework
     attributes:
