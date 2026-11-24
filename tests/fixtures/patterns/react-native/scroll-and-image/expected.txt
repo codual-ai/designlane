@@ -1,0 +1,8 @@
+Gallery (component, Gallery.tsx:3)
+  part labelled by its kind only: Image at line 7
+  Parts: Gallery | Image
+  Layout:
+    view-ref Gallery  line 3
+      scroll  line 5
+        text  line 6
+        image  line 7

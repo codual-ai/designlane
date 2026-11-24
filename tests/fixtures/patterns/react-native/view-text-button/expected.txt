@@ -1,0 +1,7 @@
+Profile (component, Profile.tsx:3)
+  Parts: Your profile | Save
+  Layout:
+    view-ref Profile  line 3
+      stack-v  line 5
+        text  line 6
+        button  line 7

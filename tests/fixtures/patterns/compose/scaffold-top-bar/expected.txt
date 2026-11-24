@@ -1,0 +1,8 @@
+Home (component, Home.kt:4)
+  Parts: Home | Welcome
+  Layout:
+    view-ref Home  line 4
+      nav  line 5
+        toolbar  line 6
+          text  line 6
+        text  line 8

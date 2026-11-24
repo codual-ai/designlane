@@ -1,0 +1,9 @@
+Settings (screen, Settings.swift:3)
+  Parts: Notifications | Done
+  Layout:
+    view-ref Settings  line 3
+      nav  line 5
+        form  line 6
+          input  line 7
+        toolbar  line 10
+          button  line 11

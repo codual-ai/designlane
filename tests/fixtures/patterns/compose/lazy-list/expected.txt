@@ -1,0 +1,7 @@
+Items (component, Items.kt:4)
+  Parts: none
+  Layout:
+    view-ref Items  line 4
+      lazy-list  line 5
+        repeat  line 6
+          text  line 7

@@ -7,6 +7,7 @@ body:
       value: |
         Thanks for reporting this. The most helpful thing is a short piece of code that shows the problem.
         Please leave out anything private.
+        Or skip this form and open a pull request with a case: see "Add a case" in CONTRIBUTING.md.
   - type: dropdown
     id: framework
     attributes:

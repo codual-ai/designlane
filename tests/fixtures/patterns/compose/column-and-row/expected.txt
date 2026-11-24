@@ -1,0 +1,8 @@
+Profile (component, Profile.kt:4)
+  Parts: Your profile | Save
+  Layout:
+    view-ref Profile  line 4
+      stack-v  line 5
+        text  line 6
+        stack-h  line 7
+          button  line 8

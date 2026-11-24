@@ -22,32 +22,32 @@ what it couldn't.
 ## Your first fix, in about ten minutes
 
 Designlane knows the common elements of each framework, and shows one it doesn't know as `other`. Teaching it one
-is a good first fix. Say a Compose screen uses Material's `FilledIconToggleButton`, and `designlane doctor` lists it
-as an unknown element.
+is a good first fix, and there's one waiting: Compose's `FilledIconToggleButton`.
 
-1. **Write the test.** In `tests/unit/read-layout.test.ts`, add:
-
-   ```ts
-   it("reads FilledIconToggleButton as a button", async () => {
-     const { lines } = await layout(
-       {
-         "app/src/main/java/a/Bar.kt": kotlin(
-           "@Composable fun Bar() = Row { FilledIconToggleButton(checked = true, onCheckedChange = {}) { Icon(icon, null) } }",
-         ),
-       },
-       "Bar",
-     );
-     expect(lines).toContain("    stack-h/button button");
-   });
-   ```
-
-2. **See it fail.** `pnpm vitest run tests/unit/read-layout.test.ts -t FilledIconToggleButton` shows it read as
-   `stack-h/other other`.
-3. **Fix it.** In `src/read/layout-tree.ts`, add `FilledIconToggleButton` to Compose's `button` names, beside
+1. **See the case.** `tests/fixtures/patterns/needs-fix/compose/filled-icon-toggle-button/` holds a few lines of
+   code using it, and `expected.txt`: what `designlane doctor` should print for it, a `button`. Today Designlane
+   prints `other`, so the case is in `needs-fix/`.
+2. **Fix it.** In `src/read/layout-tree.ts`, add `FilledIconToggleButton` to Compose's `button` names, beside
    `IconToggleButton`.
-4. **See it pass**, run `pnpm check`, and open a pull request.
+3. **Run `pnpm vitest run tests/unit/patterns.test.ts`.** It now says the bug is fixed and asks you to move the
+   folder: move it to `tests/fixtures/patterns/compose/`, where it's checked from then on.
+4. **Run `pnpm check`**, and open a pull request.
 
-The same steps fit most fixes: a test of the smallest code that reads wrong, then the change that makes it right.
+## Add a case
+
+A case is the quickest way to show Designlane something it reads wrong, and you don't need to write a test:
+
+1. Make a folder, `tests/fixtures/patterns/needs-fix/<framework>/<what-it-shows>/`, where `<framework>` is
+   `swiftui`, `compose` or `react-native`.
+2. Put a few lines of code in it, as a file of its own (`Card.swift`, `Card.kt`, `Card.tsx`), declaring one screen or
+   component. Nothing private.
+3. Run `pnpm pattern <the folder>`. It writes `expected.txt`: what `designlane doctor` prints for it today.
+4. Change what's wrong in `expected.txt` to what it should be, and open a pull request.
+
+The case waits in `needs-fix/`, and CI passes while it reads differently. Whoever fixes Designlane moves it out. A case
+that already reads right goes straight into `tests/fixtures/patterns/<framework>/`, so it stays right. After a change
+that improves what Designlane reads, `pnpm pattern --all` rewrites the passing cases' `expected.txt`, and the diff
+shows what changed.
 
 ## Where things are
 
@@ -71,8 +71,9 @@ always gives the same result.
 
 1. **Find the smallest code that reads wrong.** `pnpm designlane doctor <app folder> --screen <name>` points at the
    line. Cut it down to a few lines that still show the problem, with nothing private in them.
-2. **Write a test that fails.** Add it next to the tests of the same area, building the app with `tempDir` from
-   `tests/helpers/temp.ts`. Check that it fails before your fix, and says why in its name.
+2. **Show what's wrong.** Add a case for it in `needs-fix/` (above), which your fix then moves out; or write a test
+   next to the tests of the same area, building the app with `tempDir` from `tests/helpers/temp.ts`, and check it
+   fails before your fix.
 3. **Fix it as a rule.** A rule covers the pattern, not just your example: a guess that's usually right is worse than
    reading nothing, so when Designlane can't tell, it should say so rather than pick.
 4. **Run `pnpm check`.** It must pass on every platform CI runs: macOS, Linux and Windows.

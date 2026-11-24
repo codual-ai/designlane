@@ -1,0 +1,7 @@
+Items (component, Items.tsx:3)
+  Parts: none
+  Layout:
+    view-ref Items  line 3
+      lazy-list  line 4
+        repeat  line 4
+          text  line 4

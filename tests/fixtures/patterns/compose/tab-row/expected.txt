@@ -1,0 +1,7 @@
+Tabs (component, Tabs.kt:4)
+  Parts: Recent | Saved
+  Layout:
+    view-ref Tabs  line 4
+      tabs  line 5
+        button  line 6
+        button  line 7

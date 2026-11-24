@@ -1,0 +1,7 @@
+Items (component, Items.swift:3)
+  Parts: none
+  Layout:
+    view-ref Items  line 3
+      list  line 7
+        repeat  line 8
+          text  line 9
