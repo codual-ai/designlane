@@ -1,0 +1,43 @@
+name: Designlane reads my app wrong
+description: A screen, part, token or component it reads wrong, or can't read.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. A few lines of code that read wrong are worth more than anything else here.
+        Leave out anything private: cut your code down until it still shows the problem.
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options: [SwiftUI, Jetpack Compose, React Native]
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: The code it reads wrong
+      description: The smallest piece that still shows the problem.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What Designlane says
+      description: The output of `designlane doctor --screen <name>`, or the part of tokens.json or catalog.html that's wrong.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Designlane version
+      placeholder: "0.6.0"

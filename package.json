@@ -41,6 +41,7 @@
     "format": "biome format --write .",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm build:plugin",
     "build:plugin": "node figma-plugin/build.mjs",
+    "designlane": "pnpm --silent build && node dist/cli/main.js",
     "prepack": "node scripts/npm-readme.mjs pack",
     "postpack": "node scripts/npm-readme.mjs restore"
   },

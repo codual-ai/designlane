@@ -279,7 +279,8 @@ Designlane reads code by its structure, without compiling it, so some screens re
 - **A screen that can't be read**: `designlane doctor --screen <name>` points at the line. Open an issue with a
   small piece of code that reads the same way, or a pull request with a test of it.
 
-Every fix comes with a test that fails without it.
+Every fix comes with a test that fails without it. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup, where things
+are, and how a fix is made.
 
 ## Supported
 
@@ -344,6 +345,7 @@ outside the app. Add Designlane to the library's repo instead, and connect your 
 - [Figma plugin](figma-plugin/README.md): install, connect a repo, and what a sync does
 - [Keeping tokens.json up to date](figma-plugin/README.md#keeping-tokensjson-up-to-date): the GitHub Action
 - [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md): set up, find your way around the code, and make a fix
 
 ## What's next
 
