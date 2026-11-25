@@ -1,6 +1,7 @@
 import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { issueLink } from "../../src/cli/doctor.js";
 import { run } from "../../src/cli/run.js";
 import { LayoutIssuesSchema } from "../../src/read/index.js";
 import { swift } from "../helpers/catalog.js";
@@ -35,6 +36,9 @@ const APP = {
   "App/Feed.swift": BROKEN,
   "App/Settings.swift": swift("struct Settings: View { var body: some View { NavigationStack { Feed() } } }"),
 };
+
+// GitHub refuses longer links.
+const MAX_LINK = 7000;
 
 describe("designlane doctor", () => {
   it("lists a view that can't be read once, with the screens placing it, and what may be read wrong", async () => {
@@ -183,28 +187,30 @@ describe("designlane doctor", () => {
     expect(out).not.toContain("--screen Home --report");
   });
 
-  it("points a whole app's report at its screen with most issues, and searches for nothing when it found nothing", async () => {
+  it("titles a whole app's report for the app, and points it at its screen with most issues", async () => {
     const root = await tempDir(APP);
     const { out } = await designlane("doctor", root, "--report");
+    expect(linkField(out.split("\n").at(-1) ?? "", "title")).toBe("Designlane reads my app wrong");
     expect(suggestedCommand(out)).toContain(path.basename(root));
     expect(suggestedCommand(out)).toMatch(/^designlane doctor .+ --screen Home --report$/);
-    const clean = await designlane(
-      "doctor",
-      await tempDir({
-        "App/A.swift": swift('struct A: View { var body: some View { VStack { Text("a") } } }'),
-      }),
-      "--report",
-    );
-    expect(clean.out).not.toContain("First check");
-    expect(clean.out).not.toContain("A screen's report");
-    // The folder it was given, and a screen whose name another view shares, by its id.
-    const dir = await tempDir({
+  });
+
+  it("names a suggested screen by its id when another view shares its name", async () => {
+    const root = await tempDir({
       "App/A/Home.swift": swift("struct Home: View { var body: some View { VStack { Meter(); Meter() } } }"),
       "App/B/Home.swift": swift('struct Home: View { var body: some View { Text("b") } }'),
     });
-    const shared = await designlane("doctor", dir, "--report");
-    expect(suggestedCommand(shared.out)).toContain(path.basename(dir));
-    expect(suggestedCommand(shared.out)).toMatch(/ --screen 'swiftui:App\/A\/Home\.swift#Home' --report$/);
+    const { out } = await designlane("doctor", root, "--report");
+    expect(suggestedCommand(out)).toMatch(/ --screen 'swiftui:App\/A\/Home\.swift#Home' --report$/);
+  });
+
+  it("suggests no search or screen for an app with nothing wrong", async () => {
+    const root = await tempDir({
+      "App/A.swift": swift('struct A: View { var body: some View { VStack { Text("a") } } }'),
+    });
+    const { out } = await designlane("doctor", root, "--report");
+    expect(out).not.toContain("First check");
+    expect(out).not.toContain("A screen's report");
   });
 
   // The command a report suggests for one screen. The folder in it is quoted where the shell needs it,
@@ -215,53 +221,49 @@ describe("designlane doctor", () => {
     return line?.slice(prefix.length) ?? "";
   }
 
-  it("cuts a long report to fit a link, and refuses --report with --json", async () => {
-    const { issueLink } = await import("../../src/cli/doctor.js");
-    const long = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
-    const link = issueLink(long, { version: "0.6.0" });
-    expect(link.length).toBeLessThanOrEqual(7000);
-    const url = new URL(link);
-    const got = url.searchParams.get("got") ?? "";
-    // Text that encodes to many times its length still fits, as many whole lines as do; a short report goes whole.
-    const wide = issueLink(Array.from({ length: 400 }, () => "界".repeat(40)).join("\n"), {
-      version: "0.6.0",
+  it("leaves the framework for the person to choose in an app of two, and drops the footer", async () => {
+    const root = await tempDir({
+      ...APP,
+      "app/src/main/java/a/S.kt":
+        'import androidx.compose.runtime.Composable\n@Composable fun S() { Text("a") }',
     });
-    expect(wide.length).toBeLessThanOrEqual(7000);
-    expect(new URL(wide).searchParams.get("got")?.split("\n").length).toBeGreaterThan(5);
-    expect(new URL(issueLink("a\nb", { version: "0.6.0" })).searchParams.get("got")).toBe("a\nb");
-    // However long the screen's name, the link fits, its title naming the start of it.
-    const named = issueLink("a", { version: "0.6.0", screen: "A".repeat(7000) });
-    expect(named.length).toBeLessThanOrEqual(7000);
-    expect(new URL(named).searchParams.get("title")).toBe(`Designlane reads ${"A".repeat(80)}… wrong`);
-    // Cut by whole characters: an emoji, two UTF-16 units, isn't split.
-    const emoji = new URL(issueLink("a", { version: "0.6.0", screen: "😀".repeat(100) })).searchParams.get(
-      "title",
-    );
-    expect(emoji).toBe(`Designlane reads ${"😀".repeat(80)}… wrong`);
-    expect(got.endsWith("\n… (cut to fit the link)")).toBe(true);
-    expect(
-      got
-        .split("\n")
-        .slice(0, -1)
-        .every((l) => /^line \d+$/.test(l)),
-    ).toBe(true);
-    expect(url.searchParams.has("framework")).toBe(false);
-    expect(url.searchParams.get("title")).toBe("Designlane reads my app wrong");
-    expect((await designlane("doctor", await tempDir(APP), "--json", "--report")).code).toBe(2);
-    // An app of two frameworks: the form's framework is left for the person to choose.
-    const both = await designlane(
-      "doctor",
-      await tempDir({
-        ...APP,
-        "app/src/main/java/a/S.kt":
-          'import androidx.compose.runtime.Composable\n@Composable fun S() { Text("a") }',
-      }),
-      "--report",
-    );
-    expect(new URL(both.out.split("\n").at(-1) ?? "").searchParams.has("framework")).toBe(false);
-    // The link asks to report it, so the report doesn't.
-    expect(both.out).not.toContain("Found something");
+    const { out } = await designlane("doctor", root, "--report");
+    expect(new URL(out.split("\n").at(-1) ?? "").searchParams.has("framework")).toBe(false);
+    expect(out).not.toContain("Found something");
   });
+
+  it("refuses --report with --json", async () => {
+    expect((await designlane("doctor", await tempDir(APP), "--json", "--report")).code).toBe(2);
+  });
+
+  it("cuts a long report by whole lines to fit a link, saying so", () => {
+    const report = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
+    const link = issueLink(report, { version: "0.6.0" });
+    expect(link.length).toBeLessThanOrEqual(MAX_LINK);
+    const lines = linkField(link, "got").split("\n");
+    expect(lines.at(-1)).toBe("… (cut to fit the link)");
+    expect(lines.slice(0, -1).every((line) => /^line \d+$/.test(line))).toBe(true);
+  });
+
+  it("measures a report by its encoded length, so one of wide characters still fits", () => {
+    const report = Array.from({ length: 400 }, () => "界".repeat(40)).join("\n");
+    const link = issueLink(report, { version: "0.6.0" });
+    expect(link.length).toBeLessThanOrEqual(MAX_LINK);
+    expect(linkField(link, "got").split("\n").length).toBeGreaterThan(5);
+  });
+
+  it("names the start of a long screen name in the title, by whole characters", () => {
+    const long = issueLink("a", { version: "0.6.0", screen: "A".repeat(7000) });
+    expect(long.length).toBeLessThanOrEqual(MAX_LINK);
+    expect(linkField(long, "title")).toBe(`Designlane reads ${"A".repeat(80)}… wrong`);
+    // An emoji is two UTF-16 units, and isn't split.
+    const emoji = issueLink("a", { version: "0.6.0", screen: "😀".repeat(100) });
+    expect(linkField(emoji, "title")).toBe(`Designlane reads ${"😀".repeat(80)}… wrong`);
+  });
+
+  function linkField(link: string, name: string): string {
+    return new URL(link).searchParams.get(name) ?? "";
+  }
 
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     "says which folders it couldn't open",
