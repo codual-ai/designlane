@@ -346,6 +346,7 @@ outside the app. Add Designlane to the library's repo instead, and connect your 
 - [Keeping tokens.json up to date](figma-plugin/README.md#keeping-tokensjson-up-to-date): the GitHub Action
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md): set up, find your way around the code, and make a fix
+- [How we check Designlane](docs/how-we-check.md): what counts as a token, and how what it gets wrong is found and fixed
 
 ## What's next
 

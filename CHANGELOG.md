@@ -11,6 +11,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   version filled in, for you to check and send. Before it, a search for issues already reporting what it found, and,
   for a whole app's report, the command for its screen with most issues, whose report says where each is.
 
+### Changed
+
+- `designlane prompt` asks the agent for the tokens the code declares for the whole app, including the raw palette,
+  values a design-system module declares for one of its components, and tokens nothing uses yet, and to leave out a
+  value one screen or feature sets for itself, even when it's named. docs/how-we-check.md says what counts as a token.
+
 ## 0.6.0 - 2026-11-22
 
 ### Added

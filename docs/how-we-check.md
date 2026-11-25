@@ -27,7 +27,7 @@ All three tiers count:
 - **Component**: a value the design system declares for one of its components, such as `Button.cornerRadius` in a
   design-system module.
 
-A token counts even when nothing uses it yet: Designlane lists it and says it's unused.
+A token counts even when nothing uses it yet.
 
 ## The three outcomes
 
