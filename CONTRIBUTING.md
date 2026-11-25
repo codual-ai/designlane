@@ -90,6 +90,10 @@ Common fixes:
 - **A coding agent's map entry it refuses wrongly**: `src/scan/map-values.ts` and `src/scan/agent-map.ts`, with a test
   in `tests/unit/agent-map.test.ts`. A wrong confirmation is worse than a wrong refusal, so test both.
 
+## Code style
+
+Please prioritize readable code. Name things for what they mean, and keep each function to a single responsibility.
+
 ## Pull requests
 
 - One change per pull request, with its tests.
