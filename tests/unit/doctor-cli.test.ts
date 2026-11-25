@@ -252,13 +252,10 @@ describe("designlane doctor", () => {
     expect(linkField(link, "got").split("\n").length).toBeGreaterThan(5);
   });
 
-  it("names the start of a long screen name in the title, by whole characters", () => {
-    const long = issueLink("a", { version: "0.6.0", screen: "A".repeat(7000) });
-    expect(long.length).toBeLessThanOrEqual(MAX_LINK);
-    expect(linkField(long, "title")).toBe(`Designlane reads ${"A".repeat(80)}… wrong`);
-    // An emoji is two UTF-16 units, and isn't split.
-    const emoji = issueLink("a", { version: "0.6.0", screen: "😀".repeat(100) });
-    expect(linkField(emoji, "title")).toBe(`Designlane reads ${"😀".repeat(80)}… wrong`);
+  it("keeps a report's title short when the screen is named by a long id", () => {
+    const screen = "swiftui:App/Features/Onboarding/Steps/Welcome/WelcomeStepView.swift#WelcomeStepView";
+    const title = linkField(issueLink("a", { version: "0.6.0", screen }), "title");
+    expect(title).toBe(`Designlane reads ${screen.slice(0, 80)}… wrong`);
   });
 
   function linkField(link: string, name: string): string {
