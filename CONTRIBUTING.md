@@ -44,10 +44,13 @@ A case is the quickest way to show Designlane something it reads wrong, and you 
 3. Run `pnpm pattern <the folder>`. It writes `expected.txt`: what `designlane doctor` prints for it today.
 4. Change what's wrong in `expected.txt` to what it should be, and open a pull request.
 
-The case waits in `needs-fix/`, and CI passes while it reads differently. Whoever fixes Designlane moves it out. A case
-that already reads right goes straight into `tests/fixtures/patterns/<framework>/`, so it stays right. After a change
-that improves what Designlane reads, `pnpm pattern --all` rewrites the passing cases' `expected.txt`, and the diff
-shows what changed.
+To make a case of an issue filed with the "reads wrong" form, run `pnpm pattern --issue <number>`. It puts the issue's
+code in `needs-fix/<framework>/issue-<number>/` with its `expected.txt`, and you do step 4.
+
+The case waits in `needs-fix/`, and CI passes while it reads differently. Whoever fixes Designlane moves it out, and
+for a case of an issue, puts `Fixes #<number>` in the pull request so the issue closes with it. A case that already
+reads right goes straight into `tests/fixtures/patterns/<framework>/`, so it stays right. After a change that improves
+what Designlane reads, `pnpm pattern --all` rewrites the passing cases' `expected.txt`, and the diff shows what changed.
 
 ## Where things are
 

@@ -5,22 +5,25 @@
  * `expected.txt` from what Designlane prints today; see CONTRIBUTING.md.
  */
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { run } from "../../src/cli/run.js";
 import { LayoutIssuesSchema } from "../../src/read/index.js";
+import { caseOfIssue, FRAMEWORKS, type Framework, IMPORT_NEEDED } from "../helpers/issue-case.js";
 import { tempDir } from "../helpers/temp.js";
 
 const ROOT = path.join(process.cwd(), "tests", "fixtures", "patterns");
 const NEEDS_FIX = "needs-fix";
 const EXPECTED = "expected.txt";
-const FRAMEWORKS = ["swiftui", "compose", "react-native"] as const;
-type Framework = (typeof FRAMEWORKS)[number];
 
 /** What `pnpm pattern` asks for: write the expected output of this case folder, or of every passing case. */
 const WRITE = process.env.DESIGNLANE_PATTERN_WRITE;
+/** What `pnpm pattern --issue` asks for: a case of the issue it saved to this file, as `{ number, body }`. */
+const ISSUE = process.env.DESIGNLANE_PATTERN_ISSUE;
+/** A case made from an issue is named for it, so whoever fixes it can say which issue the fix closes. */
+const FROM_ISSUE = /^issue-(\d+)$/;
 
 interface Case {
   dir: string;
@@ -103,6 +106,9 @@ async function doctorOf(c: Case, expected: string | undefined): Promise<string> 
   return output;
 }
 
+/** A folder as the person running the tests would type it. */
+const shown = (folder: string) => path.relative(process.cwd(), folder);
+
 /** What doctor says of a view it can't read. */
 const UNREADABLE = "Can't be read";
 
@@ -161,10 +167,37 @@ describe("pattern cases", () => {
         return;
       }
       // A known bug: it reads differently until it's fixed, and once it reads as expected, it moves out.
-      if (actual === normal(expected))
+      if (actual === normal(expected)) {
+        const issue = FROM_ISSUE.exec(c.name)?.[1];
         throw new Error(
-          `${label} now reads as its ${EXPECTED} says: the bug is fixed. Move the folder to tests/fixtures/patterns/${c.framework}/.`,
+          `${label} now reads as its ${EXPECTED} says: the bug is fixed. Move the folder to tests/fixtures/patterns/${c.framework}/` +
+            (issue ? `, and put "Fixes #${issue}" in the pull request.` : "."),
         );
+      }
     });
   }
+
+  it.runIf(ISSUE)("makes a case of an issue", async () => {
+    const { number, body } = z
+      .object({ number: z.number(), body: z.string() })
+      .parse(JSON.parse(readFileSync(ISSUE!, "utf8")));
+    const { framework, file, code } = caseOfIssue(body);
+    const name = `issue-${number}`;
+    const dir = path.join(ROOT, NEEDS_FIX, framework, name);
+    const existing = [dir, path.join(ROOT, framework, name)].find((each) => existsSync(each));
+    if (existing) throw new Error(`There's a case of issue #${number} already: ${shown(existing)}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, file), code);
+    try {
+      writeFileSync(
+        path.join(dir, EXPECTED),
+        await doctorOf({ dir, framework, needsFix: true, name }, undefined),
+      );
+    } catch (e) {
+      throw new Error(
+        `${(e as Error).message}\nThe issue's code is in ${shown(path.join(dir, file))}. Fix it there (it may need ` +
+          `${IMPORT_NEEDED[framework]}), then run pnpm pattern ${shown(dir)}`,
+      );
+    }
+  });
 });
