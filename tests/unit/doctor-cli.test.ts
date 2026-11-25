@@ -191,6 +191,11 @@ describe("designlane doctor", () => {
     const named = issueLink("a", { version: "0.6.0", screen: "A".repeat(7000) });
     expect(named.length).toBeLessThanOrEqual(7000);
     expect(new URL(named).searchParams.get("title")).toBe(`Designlane reads ${"A".repeat(80)}… wrong`);
+    // Cut by whole characters: an emoji, two UTF-16 units, isn't split.
+    const emoji = new URL(issueLink("a", { version: "0.6.0", screen: "😀".repeat(100) })).searchParams.get(
+      "title",
+    );
+    expect(emoji).toBe(`Designlane reads ${"😀".repeat(80)}… wrong`);
     expect(got.endsWith("\n… (cut to fit the link)")).toBe(true);
     expect(
       got

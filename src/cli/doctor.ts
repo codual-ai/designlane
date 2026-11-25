@@ -114,8 +114,11 @@ export async function doctor(argv: string[], { out, error }: Output): Promise<nu
 
 /** How much of a screen's name the title carries: enough to say which, never so much the link can't fit. */
 const MAX_TITLE_NAME = 80;
-const shortened = (name: string) =>
-  name.length > MAX_TITLE_NAME ? `${name.slice(0, MAX_TITLE_NAME)}…` : name;
+/** Cut by whole characters, so an emoji or other character of two UTF-16 units is never split. */
+const shortened = (name: string) => {
+  const chars = [...name];
+  return chars.length > MAX_TITLE_NAME ? `${chars.slice(0, MAX_TITLE_NAME).join("")}…` : name;
+};
 
 /** The longest link, encoded, that GitHub opens: it refuses a link of much more than eight thousand characters. */
 const MAX_LINK = 7000;
