@@ -72,7 +72,8 @@ Sometimes Designlane can't confirm an agent's entry at all. Either the agent got
 way Designlane can't read yet.
 
 Even when they coincide, they can both be wrong, so we check those too. A token neither of them finds can't be caught
-this way: those gaps come to light through issues, from people who read the code or use Designlane on their own app.
+this way: those gaps come to light through issues, when someone sees a token missing from what Designlane lists for
+their app.
 
 The second job works the same way: each one-off design value should be flagged in `drift.md`. Listing it as a token,
 or not flagging it, is wrong.
