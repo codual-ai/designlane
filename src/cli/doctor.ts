@@ -205,23 +205,21 @@ export function issueLink(
     }).toString()}`;
   const whole = linkOf(text);
   if (whole.length <= MAX_LINK) return whole;
-  // Too long: keep as many lines from the top as fit, and say the rest was cut.
-  const lines = text.split("\n");
-  const cutTo = (count: number) => linkOf([...lines.slice(0, count), CUT].join("\n"));
-  return cutTo(mostThatFit(lines.length, (count) => cutTo(count).length <= MAX_LINK));
+  // Too long: keep lines from the top while they fit, leaving room to say the rest was cut.
+  let room = MAX_LINK - linkOf(CUT).length;
+  const kept: string[] = [];
+  for (const line of text.split("\n")) {
+    room -= encodedLength(`${line}\n`);
+    if (room < 0) break;
+    kept.push(line);
+  }
+  return linkOf([...kept, CUT].join("\n"));
 }
 
-/** The largest count, from 0 to `most`, for which `fits` holds, when every smaller count fits too. Found by halving
- * the range, so a long report takes a few tries rather than one per line. */
-function mostThatFit(most: number, fits: (count: number) => boolean): number {
-  let fitting = 0;
-  let tooMany = most;
-  while (tooMany - fitting > 1) {
-    const middle = Math.floor((fitting + tooMany) / 2);
-    if (fits(middle)) fitting = middle;
-    else tooMany = middle;
-  }
-  return fitting;
+/** How long text is once it's in a link, where a space becomes + and 界 becomes %E7%95%8C. Each character is
+ * encoded on its own, so the lengths of a report's lines add up to the length of the report. */
+function encodedLength(text: string): number {
+  return new URLSearchParams({ got: text }).toString().length - "got=".length;
 }
 
 function parse(argv: string[]) {
