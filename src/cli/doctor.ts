@@ -140,16 +140,23 @@ export function issueLink(
     }).toString()}`;
   const whole = linkOf(text);
   if (whole.length <= MAX_LINK) return whole;
-  // The most lines that fit, encoded: text in any script, which encodes to a few times its length or more.
+  // Too long: keep as many lines from the top as fit, and say the rest was cut.
   const lines = text.split("\n");
-  let fits = 0;
-  let over = lines.length;
-  while (over - fits > 1) {
-    const mid = Math.floor((fits + over) / 2);
-    if (linkOf([...lines.slice(0, mid), CUT].join("\n")).length <= MAX_LINK) fits = mid;
-    else over = mid;
+  const cutTo = (count: number) => linkOf([...lines.slice(0, count), CUT].join("\n"));
+  return cutTo(mostThatFit(lines.length, (count) => cutTo(count).length <= MAX_LINK));
+}
+
+/** The largest count, from 0 to `most`, for which `fits` holds, when every smaller count fits too. Found by halving
+ * the range, so a long report takes a few tries rather than one per line. */
+function mostThatFit(most: number, fits: (count: number) => boolean): number {
+  let fitting = 0;
+  let tooMany = most;
+  while (tooMany - fitting > 1) {
+    const middle = Math.floor((fitting + tooMany) / 2);
+    if (fits(middle)) fitting = middle;
+    else tooMany = middle;
   }
-  return linkOf([...lines.slice(0, fits), CUT].join("\n"));
+  return fitting;
 }
 
 function parse(argv: string[]) {
