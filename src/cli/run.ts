@@ -18,7 +18,7 @@ import { scanRepo } from "../scan/index.js";
 import { scanNotes } from "../scan/notes.js";
 import { FRAMEWORK_NAMES, type ScanResult, SUPPORTED_FRAMEWORKS } from "../scan/types.js";
 import { AGENT_PROMPT, CHECK_FILE } from "./agent-prompt.js";
-import { type Output, UsageError } from "./command.js";
+import { type Output, UsageError, packageVersion as version } from "./command.js";
 import { DOCTOR_USAGE, doctor } from "./doctor.js";
 import { EDIT_USAGE, edit } from "./edit.js";
 
@@ -238,9 +238,4 @@ function summary(scan: ScanResult): string {
 function shown(file: string): string {
   const relative = path.relative(process.cwd(), file);
   return relative.startsWith("..") ? file : relative;
-}
-
-async function version(): Promise<string> {
-  const manifest = new URL("../../package.json", import.meta.url);
-  return JSON.parse(await readFile(manifest, "utf8")).version;
 }

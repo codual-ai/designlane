@@ -7,12 +7,14 @@ import type { LayoutIssueKind, LayoutIssues, LayoutNode, UnreadableReason } from
 import { plural } from "../scan/counting.js";
 import { isFolder, readGaps } from "../scan/files.js";
 import type { ScreenRef } from "../scan/types.js";
-import { type Output, UsageError } from "./command.js";
+import { FRAMEWORK_NAMES } from "../scan/types.js";
+import { type Output, packageVersion, UsageError } from "./command.js";
 
-export const DOCTOR_USAGE = `  designlane doctor [dir] [--json] [--all] [--screen <name>]
+export const DOCTOR_USAGE = `  designlane doctor [dir] [--json] [--all] [--screen <name>] [--report]
                     List the screens whose layout Designlane can't read, with where, and sum up what it may read
                     wrong. --all lists every issue where it is; --screen shows one screen's issues, parts and
-                    layout; --json prints the issues as JSON, of every screen or of --screen's`;
+                    layout; --json prints the issues as JSON, of every screen or of --screen's; --report adds a link
+                    to a GitHub issue with them filled in, which you check before you send it`;
 
 const ISSUES_URL = "https://github.com/codual-ai/designlane/issues";
 
@@ -76,6 +78,8 @@ export async function doctor(argv: string[], { out, error }: Output): Promise<nu
     if (screens.length === 0) throw new UsageError(`no screen or component named ${name}`, 1);
   }
   const all = screens.map((s) => ({ screen: s, issues: app.layoutIssues(s.id) }));
+  if (values.json && values.report)
+    throw new UsageError(`--report goes with the report, not --json\n\n${DOCTOR_USAGE}`, 2);
   if (values.json)
     out(
       JSON.stringify(
@@ -84,14 +88,65 @@ export async function doctor(argv: string[], { out, error }: Output): Promise<nu
         2,
       ),
     );
-  else if (values.screen !== undefined)
-    out(
-      all
-        .map((a) => detail(a.screen, a.issues, app.layoutOf(a.screen.id), app.screenParts(a.screen.id)))
-        .join("\n\n"),
-    );
-  else out(report(all, values.all === true));
+  else {
+    const text =
+      values.screen !== undefined
+        ? all
+            .map((a) => detail(a.screen, a.issues, app.layoutOf(a.screen.id), app.screenParts(a.screen.id)))
+            .join("\n\n")
+        : report(all, { everything: values.all === true, askToReport: values.report !== true });
+    out(text);
+    if (values.report) {
+      const frameworks = [...new Set(screens.map((s) => s.framework))];
+      const link = issueLink(text, {
+        version: await packageVersion(),
+        ...(frameworks.length === 1 && frameworks[0] && { framework: FRAMEWORK_NAMES[frameworks[0]] }),
+        ...(values.screen !== undefined && { screen: values.screen }),
+      });
+      out(
+        "\nTo report it, open this link. Designlane sends nothing itself; the link gives GitHub the lines above, file and screen names included, filled into a new issue. Check them, add the code it reads wrong, and submit it to publish it:",
+      );
+      out(link);
+    }
+  }
   return 0;
+}
+
+/** How much of a screen's name the title carries: enough to say which, never so much the link can't fit. */
+const MAX_TITLE_NAME = 80;
+const shortened = (name: string) =>
+  name.length > MAX_TITLE_NAME ? `${name.slice(0, MAX_TITLE_NAME)}…` : name;
+
+/** The longest link, encoded, that GitHub opens: it refuses a link of much more than eight thousand characters. */
+const MAX_LINK = 7000;
+const CUT = "… (cut to fit the link)";
+
+/** A link to a new issue, the form for something Designlane reads wrong, with the report, the framework and the
+ * version filled in. */
+export function issueLink(
+  text: string,
+  { version, framework, screen }: { version: string; framework?: string; screen?: string },
+): string {
+  const linkOf = (got: string) =>
+    `${ISSUES_URL}/new?${new URLSearchParams({
+      template: "reads-wrong.yml",
+      title: screen ? `Designlane reads ${shortened(screen)} wrong` : "Designlane reads my app wrong",
+      got,
+      version,
+      ...(framework && { framework }),
+    }).toString()}`;
+  const whole = linkOf(text);
+  if (whole.length <= MAX_LINK) return whole;
+  // The most lines that fit, encoded: text in any script, which encodes to a few times its length or more.
+  const lines = text.split("\n");
+  let fits = 0;
+  let over = lines.length;
+  while (over - fits > 1) {
+    const mid = Math.floor((fits + over) / 2);
+    if (linkOf([...lines.slice(0, mid), CUT].join("\n")).length <= MAX_LINK) fits = mid;
+    else over = mid;
+  }
+  return linkOf([...lines.slice(0, fits), CUT].join("\n"));
 }
 
 function parse(argv: string[]) {
@@ -103,6 +158,7 @@ function parse(argv: string[]) {
         json: { type: "boolean" },
         all: { type: "boolean" },
         screen: { type: "string" },
+        report: { type: "boolean" },
         help: { type: "boolean", short: "h" },
       },
     });
@@ -118,9 +174,12 @@ const counted = (n: number, [one, many]: [string, string]) => `${n} ${n === 1 ? 
 const byPlace = (a: { file: string; line: number }, b: { file: string; line: number }) =>
   a.file.localeCompare(b.file) || a.line - b.line;
 
-/** The app's issues, for a person: what can't be read, then what may be read wrong, kind by kind. A view's issues are
- * counted once, though every screen it's placed in has them. */
-function report(all: { screen: ScreenRef; issues: LayoutIssues }[], everything: boolean): string {
+/** The app's issues, for a person: what can't be read, then what may be read wrong, kind by kind, and, unless a link
+ * to report them follows, how to. A view's issues are counted once, though every screen it's placed in has them. */
+function report(
+  all: { screen: ScreenRef; issues: LayoutIssues }[],
+  { everything, askToReport }: { everything: boolean; askToReport: boolean },
+): string {
   const own = all.filter((a) => a.issues.unreadable?.view === a.screen.id).length;
   const stopped = all.filter((a) => a.issues.unreadable && a.issues.unreadable.view !== a.screen.id).length;
   const lines = [
@@ -153,10 +212,11 @@ function report(all: { screen: ScreenRef; issues: LayoutIssues }[], everything: 
       "",
       `${summed.map(([kind, found]) => counted(found.length, KINDS[kind])).join(", ")} (--all lists them)`,
     );
-  if (lines.length > 1)
+  // With --report, the link that follows asks instead.
+  if (lines.length > 1 && askToReport)
     lines.push(
       "",
-      `Found something Designlane should read better? Open an issue with the lines above: ${ISSUES_URL}`,
+      `Found something Designlane should read better? designlane doctor --report gives a link to an issue with the lines above: ${ISSUES_URL}`,
     );
   return lines.join("\n");
 }

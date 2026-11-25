@@ -203,9 +203,9 @@ May be read wrong
 ```
 
 `--screen <name>` shows one screen's issues, parts and layout tree; `--all` lists every issue where it is;
-`--json` prints the issues for a script. It reads offline and sends nothing anywhere; if
-something should read better, [open an issue](https://github.com/codual-ai/designlane/issues) with the lines it
-printed.
+`--json` prints the issues for a script. It reads offline and sends nothing anywhere. If something should read
+better, `--report` adds a link to a GitHub issue with the lines it printed filled in: you check it, add the code it
+reads wrong, and send it yourself.
 
 ## Use it as a library
 

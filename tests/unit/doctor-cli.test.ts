@@ -51,7 +51,7 @@ describe("designlane doctor", () => {
       "",
       "2 parts labelled by their kind only (--all lists them)",
       "",
-      "Found something Designlane should read better? Open an issue with the lines above: https://github.com/codual-ai/designlane/issues",
+      "Found something Designlane should read better? designlane doctor --report gives a link to an issue with the lines above: https://github.com/codual-ai/designlane/issues",
     ]);
   });
 
@@ -157,6 +157,63 @@ describe("designlane doctor", () => {
     const issues = JSON.parse((await designlane("doctor", await tempDir(APP), "--json")).out) as unknown[];
     expect(issues).toHaveLength(3);
     expect(issues.every((i) => LayoutIssuesSchema.safeParse(i).success)).toBe(true);
+  });
+
+  it("gives a link to an issue with the report, the framework and the version filled in, with --report", async () => {
+    const { code, out } = await designlane("doctor", await tempDir(APP), "--screen", "Home", "--report");
+    expect(code).toBe(0);
+    const link = out.split("\n").at(-1) ?? "";
+    expect(out).toContain("Designlane sends nothing itself");
+    const url = new URL(link);
+    expect(`${url.origin}${url.pathname}`).toBe("https://github.com/codual-ai/designlane/issues/new");
+    expect(url.searchParams.get("template")).toBe("reads-wrong.yml");
+    expect(url.searchParams.get("title")).toBe("Designlane reads Home wrong");
+    expect(url.searchParams.get("framework")).toBe("SwiftUI");
+    expect(url.searchParams.get("version")).toMatch(/^\d+\.\d+\.\d+/);
+    expect(url.searchParams.get("got")).toBe(out.slice(0, out.indexOf("\n\nTo report it")));
+  });
+
+  it("cuts a long report to fit a link, and refuses --report with --json", async () => {
+    const { issueLink } = await import("../../src/cli/doctor.js");
+    const long = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
+    const link = issueLink(long, { version: "0.6.0" });
+    expect(link.length).toBeLessThanOrEqual(7000);
+    const url = new URL(link);
+    const got = url.searchParams.get("got") ?? "";
+    // Text that encodes to many times its length still fits, as many whole lines as do; a short report goes whole.
+    const wide = issueLink(Array.from({ length: 400 }, () => "界".repeat(40)).join("\n"), {
+      version: "0.6.0",
+    });
+    expect(wide.length).toBeLessThanOrEqual(7000);
+    expect(new URL(wide).searchParams.get("got")?.split("\n").length).toBeGreaterThan(5);
+    expect(new URL(issueLink("a\nb", { version: "0.6.0" })).searchParams.get("got")).toBe("a\nb");
+    // However long the screen's name, the link fits, its title naming the start of it.
+    const named = issueLink("a", { version: "0.6.0", screen: "A".repeat(7000) });
+    expect(named.length).toBeLessThanOrEqual(7000);
+    expect(new URL(named).searchParams.get("title")).toBe(`Designlane reads ${"A".repeat(80)}… wrong`);
+    expect(got.endsWith("\n… (cut to fit the link)")).toBe(true);
+    expect(
+      got
+        .split("\n")
+        .slice(0, -1)
+        .every((l) => /^line \d+$/.test(l)),
+    ).toBe(true);
+    expect(url.searchParams.has("framework")).toBe(false);
+    expect(url.searchParams.get("title")).toBe("Designlane reads my app wrong");
+    expect((await designlane("doctor", await tempDir(APP), "--json", "--report")).code).toBe(2);
+    // An app of two frameworks: the form's framework is left for the person to choose.
+    const both = await designlane(
+      "doctor",
+      await tempDir({
+        ...APP,
+        "app/src/main/java/a/S.kt":
+          'import androidx.compose.runtime.Composable\n@Composable fun S() { Text("a") }',
+      }),
+      "--report",
+    );
+    expect(new URL(both.out.split("\n").at(-1) ?? "").searchParams.has("framework")).toBe(false);
+    // The link asks to report it, so the report doesn't.
+    expect(both.out).not.toContain("Found something");
   });
 
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(

@@ -1,4 +1,6 @@
-/** What every command shares: where it prints, and a mistake in how it was run. */
+/** What every command shares: where it prints, a mistake in how it was run, and Designlane's version. */
+
+import { readFile } from "node:fs/promises";
 
 export interface Output {
   out: (text: string) => void;
@@ -13,4 +15,10 @@ export class UsageError extends Error {
   ) {
     super(message);
   }
+}
+
+/** The version of Designlane running, from its package.json. */
+export async function packageVersion(): Promise<string> {
+  const manifest = new URL("../../package.json", import.meta.url);
+  return JSON.parse(await readFile(manifest, "utf8")).version;
 }
