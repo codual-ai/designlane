@@ -64,15 +64,15 @@ declared and how the app uses it.
 
 ## When they disagree
 
-Designlane and the agent don't always agree, and neither is always right. Whichever one matches the definition wins.
-If the agent finds a real token that Designlane missed, Designlane has a gap to close. If the agent lists a one-off as
-a token, the agent got it wrong, even when the value really is in the code.
+Designlane and the agent don't always coincide, for multiple reasons. If the agent finds a real token that Designlane
+missed, Designlane has a gap to close. If the agent lists a one-off as a token, the agent got it wrong, even when the
+value really is in the code.
 
 Sometimes Designlane can't confirm an agent's entry at all. Either the agent got it wrong, or the token is written in a
 way Designlane can't read yet.
 
-Even when they agree, they can both be wrong, so we check those too. And when neither of them finds a token, nobody
-knows it's missing until a person reads the code or someone reports it.
+Even when they coincide, they can both be wrong, so we check those too. A token neither of them finds can't be caught
+this way: those gaps come to light through issues, from people who read the code or use Designlane on their own app.
 
 The second job works the same way: each one-off design value should be flagged in `drift.md`. Listing it as a token,
 or not flagging it, is wrong.
