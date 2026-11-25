@@ -64,12 +64,15 @@ declared and how the app uses it.
 
 ## When they disagree
 
-Designlane and the agent each say whether a value is a token, and either can be wrong. When they disagree, the one
-that matches the definition is right: a token the agent lists but Designlane misses is a gap in Designlane's reading,
-and a one-off the agent lists is the agent's mistake, even when the check confirms its value is there. An entry the
-check refuses is either the agent's mistake or something Designlane can't read yet. Agreeing isn't proof: both can
-call a one-off a token, so agreements are checked too. And a token neither of them finds never comes up at all; only a
-person reading the app, or someone reporting it, shows it.
+Designlane and the agent don't always agree, and neither is always right. Whichever one matches the definition wins.
+If the agent finds a real token that Designlane missed, Designlane has a gap to close. If the agent lists a one-off as
+a token, the agent got it wrong, even when the value really is in the code.
+
+Sometimes Designlane can't confirm an agent's entry at all. Either the agent got it wrong, or the token is written in a
+way Designlane can't read yet.
+
+Even when they agree, they can both be wrong, so we check those too. And when neither of them finds a token, nobody
+knows it's missing until a person reads the code or someone reports it.
 
 The second job works the same way: each one-off design value should be flagged in `drift.md`. Listing it as a token,
 or not flagging it, is wrong.
