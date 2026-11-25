@@ -30,9 +30,7 @@ function writeExpected(target) {
 /** Fetches the issue from GitHub and hands it to the pattern tests, which make its case folder. */
 async function caseOfIssue(number) {
   if (!/^\d+$/.test(number ?? "")) fail(USAGE);
-  const response = await fetch(`${ISSUES}/${number}`, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "designlane-pattern" },
-  });
+  const response = await fetch(`${ISSUES}/${number}`);
   if (!response.ok)
     fail(`Couldn't get issue #${number} from GitHub: ${response.status} ${response.statusText}`);
   const issue = await response.json();
