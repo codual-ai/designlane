@@ -186,9 +186,8 @@ describe("designlane doctor", () => {
   it("points a whole app's report at its screen with most issues, and searches for nothing when it found nothing", async () => {
     const root = await tempDir(APP);
     const { out } = await designlane("doctor", root, "--report");
-    expect(out).toContain(
-      `A screen's report, with where each issue is, is easier to act on: designlane doctor ${root} --screen Home --report`,
-    );
+    expect(suggestedCommand(out)).toContain(path.basename(root));
+    expect(suggestedCommand(out)).toMatch(/^designlane doctor .+ --screen Home --report$/);
     const clean = await designlane(
       "doctor",
       await tempDir({
@@ -204,10 +203,17 @@ describe("designlane doctor", () => {
       "App/B/Home.swift": swift('struct Home: View { var body: some View { Text("b") } }'),
     });
     const shared = await designlane("doctor", dir, "--report");
-    expect(shared.out).toContain(
-      `designlane doctor ${dir} --screen 'swiftui:App/A/Home.swift#Home' --report`,
-    );
+    expect(suggestedCommand(shared.out)).toContain(path.basename(dir));
+    expect(suggestedCommand(shared.out)).toMatch(/ --screen 'swiftui:App\/A\/Home\.swift#Home' --report$/);
   });
+
+  // The command a report suggests for one screen. The folder in it is quoted where the shell needs it,
+  // as on Windows, so tests look for the folder's name rather than its exact spelling.
+  function suggestedCommand(out: string): string {
+    const prefix = "A screen's report, with where each issue is, is easier to act on: ";
+    const line = out.split("\n").find((each) => each.startsWith(prefix));
+    return line?.slice(prefix.length) ?? "";
+  }
 
   it("cuts a long report to fit a link, and refuses --report with --json", async () => {
     const { issueLink } = await import("../../src/cli/doctor.js");
