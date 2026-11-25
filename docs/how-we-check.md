@@ -62,35 +62,20 @@ Three readings of an app can disagree:
 None of them is the answer. What a value really is gets decided against the definition above, by reading where it's
 declared and how the app uses it.
 
-## Every case
+## When they disagree
 
-Anything Designlane or the agent puts forward ends up in one of these cases:
+Designlane and the agent each say whether a value is a token, and either can be wrong. When they disagree, the one
+that matches the definition is right: a token the agent lists but Designlane misses is a gap in Designlane's reading,
+and a one-off the agent lists is the agent's mistake, even when the check confirms its value is there. An entry the
+check refuses is either the agent's mistake or something Designlane can't read yet. Agreeing isn't proof: both can
+call a one-off a token, so agreements are checked too. And a token neither of them finds never comes up at all; only a
+person reading the app, or someone reporting it, shows it.
 
-| The agent lists it as a token | Designlane alone | What it really is | What it means | What we do |
-|---|---|---|---|---|
-| Yes | Lists it | A token | Both right | Nothing |
-| Yes | Lists it | A one-off | Both wrong: they agree on something that isn't a token | Fix the rule both follow, and the prompt |
-| Yes | Doesn't, but the check confirms it | A token | Designlane misses a real token | Fix Designlane's reader |
-| Yes | Doesn't, but the check confirms it | A one-off | The agent is wrong; Designlane is right to leave it out, but the check only confirmed the value is there | Make the check refuse it, and tighten the prompt |
-| Yes | Doesn't, and the check refuses it | A token | Designlane can't read how it's written | Fix Designlane's reader |
-| Yes | Doesn't, and the check refuses it | A one-off | The agent is wrong, and the check rightly refuses it | Nothing; the prompt may need tightening |
-| No | Lists it | A token | Designlane is right, and the agent missed it | Tighten the prompt |
-| No | Lists it | A one-off | Designlane lists something that isn't a token | Fix Designlane's rule |
-| No | Doesn't | A token | Nobody found it | Only a person reading the app, or someone reporting it, shows this |
+The second job works the same way: each one-off design value should be flagged in `drift.md`. Listing it as a token,
+or not flagging it, is wrong.
 
-And for the second job, every one-off design value:
-
-| Designlane | What it means | What we do |
-|---|---|---|
-| Flags it in `drift.md` | Right | Nothing |
-| Lists it as a token | Wrong: it's in the design system when it isn't one | Fix Designlane's rule |
-| Neither | Missed: nobody is told about it | Fix Designlane's drift check |
-
-Two cases are easy to overlook:
-
-- **Both wrong.** When Designlane and the agent agree, nothing flags it, so agreements are checked too.
-- **Nobody found it.** A token neither finds never becomes a candidate, so no check counts it. What we miss is always
-  at least what we know about.
+Every wrong answer points at one thing to fix: a Designlane reader, one of its rules, its drift check, its check of an
+agent's map, or the agent's instructions.
 
 ## How a case is decided
 
