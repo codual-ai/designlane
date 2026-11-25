@@ -137,10 +137,10 @@ async function targetOf(
   if ("reason" in ownFile) return ownFile;
   const name = spanText(ownFile.source, own);
   if ("reason" in name) return { reason: changedSince(own, name) };
-  const faded = await withOpacityOnTheWay(location.via ?? [], read);
-  if (faded) {
+  const withOpacity = await firstNameWithOpacity(location.via ?? [], read);
+  if (withOpacity) {
     return {
-      reason: `${key} is \`${faded.text}\` (${at(faded.span)}): another color at its own opacity. Change that color, or give ${key} its own value in the code.`,
+      reason: `${key} is \`${withOpacity.text}\` (${at(withOpacity.span)}): another color at its own opacity. Change that color, or give ${key} its own value in the code.`,
     };
   }
   if (!NAME.test(name.text)) return { reason: changedSince(own, name) };
@@ -179,7 +179,7 @@ function spanText(fileText: string, span: CodeSpan): { text: string } | { reason
 }
 
 /** The first name on the way to a value that has opacity calls after it, which makes the value another color. */
-async function withOpacityOnTheWay(
+async function firstNameWithOpacity(
   via: CodeSpan[],
   read: ReadSource,
 ): Promise<{ text: string; span: CodeSpan } | undefined> {
