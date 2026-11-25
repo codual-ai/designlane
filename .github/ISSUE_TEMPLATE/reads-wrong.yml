@@ -19,7 +19,16 @@ body:
     id: code
     attributes:
       label: The code it reads wrong
-      description: The smallest piece that still shows the problem.
+      description: >-
+        A few lines that still show the problem: the view, with only what's needed around the part it reads wrong.
+        Leave out anything private.
+      placeholder: |
+        @Composable
+        fun Bar() {
+          Row {
+            FilledIconToggleButton(checked = true, onCheckedChange = {}) { Icon(icon, null) }
+          }
+        }
       render: text
     validations:
       required: true

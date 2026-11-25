@@ -170,7 +170,43 @@ describe("designlane doctor", () => {
     expect(url.searchParams.get("title")).toBe("Designlane reads Home wrong");
     expect(url.searchParams.get("framework")).toBe("SwiftUI");
     expect(url.searchParams.get("version")).toMatch(/^\d+\.\d+\.\d+/);
-    expect(url.searchParams.get("got")).toBe(out.slice(0, out.indexOf("\n\nTo report it")));
+    // The report, and none of what --report adds after it.
+    expect(url.searchParams.get("got")).toBe(out.slice(0, out.indexOf("\n\nFirst check")));
+    // A search for issues already reporting what it found; one screen's report needs no pointer to one.
+    const search = new URL(
+      out
+        .split("\n")
+        .find((l) => l.startsWith("First check"))
+        ?.split(": ")[1] ?? "",
+    );
+    expect(search.searchParams.get("q")).toBe('is:issue "Meter"');
+    expect(out).not.toContain("--screen Home --report");
+  });
+
+  it("points a whole app's report at its screen with most issues, and searches for nothing when it found nothing", async () => {
+    const root = await tempDir(APP);
+    const { out } = await designlane("doctor", root, "--report");
+    expect(out).toContain(
+      `A screen's report, with where each issue is, is easier to act on: designlane doctor ${root} --screen Home --report`,
+    );
+    const clean = await designlane(
+      "doctor",
+      await tempDir({
+        "App/A.swift": swift('struct A: View { var body: some View { VStack { Text("a") } } }'),
+      }),
+      "--report",
+    );
+    expect(clean.out).not.toContain("First check");
+    expect(clean.out).not.toContain("A screen's report");
+    // The folder it was given, and a screen whose name another view shares, by its id.
+    const dir = await tempDir({
+      "App/A/Home.swift": swift("struct Home: View { var body: some View { VStack { Meter(); Meter() } } }"),
+      "App/B/Home.swift": swift('struct Home: View { var body: some View { Text("b") } }'),
+    });
+    const shared = await designlane("doctor", dir, "--report");
+    expect(shared.out).toContain(
+      `designlane doctor ${dir} --screen 'swiftui:App/A/Home.swift#Home' --report`,
+    );
   });
 
   it("cuts a long report to fit a link, and refuses --report with --json", async () => {

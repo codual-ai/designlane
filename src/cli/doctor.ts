@@ -96,20 +96,85 @@ export async function doctor(argv: string[], { out, error }: Output): Promise<nu
             .join("\n\n")
         : report(all, { everything: values.all === true, askToReport: values.report !== true });
     out(text);
-    if (values.report) {
-      const frameworks = [...new Set(screens.map((s) => s.framework))];
-      const link = issueLink(text, {
-        version: await packageVersion(),
-        ...(frameworks.length === 1 && frameworks[0] && { framework: FRAMEWORK_NAMES[frameworks[0]] }),
-        ...(values.screen !== undefined && { screen: values.screen }),
-      });
-      out(
-        "\nTo report it, open this link. Designlane sends nothing itself; the link gives GitHub the lines above, file and screen names included, filled into a new issue. Check them, add the code it reads wrong, and submit it to publish it:",
-      );
-      out(link);
-    }
+    if (values.report) out(await reportGuide(text, { all, screen: values.screen, folder: positionals[0] }));
   }
   return 0;
+}
+
+/** How many of the names doctor found an issue search looks for: the most common. */
+const SEARCHED_NAMES = 5;
+
+/** What `--report` adds after the report: a search for issues already reporting what it found, a pointer to one
+ * screen's report when this is the whole app's, and the link to a new issue with it filled in. */
+async function reportGuide(
+  text: string,
+  {
+    all,
+    screen,
+    folder,
+  }: {
+    all: { screen: ScreenRef; issues: LayoutIssues }[];
+    /** The `--screen` asked for, when it was. */
+    screen: string | undefined;
+    /** The app's folder as the command was given it, when it was. */
+    folder: string | undefined;
+  },
+): Promise<string> {
+  const lines: string[] = [];
+  const names = namesFound(all).slice(0, SEARCHED_NAMES);
+  if (names.length > 0) lines.push("", `First check it isn't reported already: ${issueSearch(names)}`);
+  const worst = screen === undefined ? mostIssues(all) : undefined;
+  if (worst) {
+    const command = ["designlane", "doctor", ...(folder ? [folder] : []), "--screen", worst, "--report"];
+    lines.push(
+      "",
+      `A screen's report, with where each issue is, is easier to act on: ${command.map(shellWord).join(" ")}`,
+    );
+  }
+  const frameworks = [...new Set(all.map((a) => a.screen.framework))];
+  const link = issueLink(text, {
+    version: await packageVersion(),
+    ...(frameworks.length === 1 && frameworks[0] && { framework: FRAMEWORK_NAMES[frameworks[0]] }),
+    ...(screen !== undefined && { screen }),
+  });
+  lines.push(
+    "",
+    "To report it, open this link. Designlane sends nothing itself; the link gives GitHub the lines above, file and screen names included, filled into a new issue. Check them, add the code it reads wrong, and submit it to publish it:",
+    link,
+  );
+  return lines.join("\n");
+}
+
+/** The elements and views doctor's issues name (`FilledIconToggleButton`), the most often named first. */
+function namesFound(all: { issues: LayoutIssues }[]): string[] {
+  const counts = new Map<string, number>();
+  for (const { issues } of all)
+    for (const issue of issues.issues)
+      if (NAMED.has(issue.kind) && issue.detail)
+        counts.set(issue.detail, (counts.get(issue.detail) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
+}
+
+/** How `--screen` names the screen with the most issues: by its name, or by its id when another view shares the
+ * name. None when no screen has any. */
+function mostIssues(all: { screen: ScreenRef; issues: LayoutIssues }[]): string | undefined {
+  const issuesOf = (a: { issues: LayoutIssues }) => a.issues.issues.length + (a.issues.unreadable ? 1 : 0);
+  const [worst] = [...all].filter((a) => issuesOf(a) > 0).sort((a, b) => issuesOf(b) - issuesOf(a));
+  if (!worst) return undefined;
+  const shared = all.some((a) => a.screen !== worst.screen && a.screen.name === worst.screen.name);
+  return shared ? worst.screen.id : worst.screen.name;
+}
+
+/** A search of the repo's issues for any of `names`, each quoted so it's searched as written, never read as search
+ * syntax (`label:bug`, `OR`). */
+function issueSearch(names: string[]): string {
+  const terms = names.map((name) => `"${name.replaceAll('"', "")}"`);
+  return `${ISSUES_URL}?${new URLSearchParams({ q: `is:issue ${terms.join(" OR ")}` })}`;
+}
+
+/** A word of a command as a shell reads it: quoted when it has anything but plain characters (a space, a `#`). */
+function shellWord(word: string): string {
+  return /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
 }
 
 /** How much of a screen's name the title carries: enough to say which, never so much the link can't fit. */

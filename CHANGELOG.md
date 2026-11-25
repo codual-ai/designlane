@@ -8,7 +8,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `designlane doctor --report` adds a link to a new GitHub issue with the report, the framework and Designlane's
-  version filled in, for you to check and send.
+  version filled in, for you to check and send. Before it, a search for issues already reporting what it found, and,
+  for a whole app's report, the command for its screen with most issues, whose report says where each is.
 
 ## 0.6.0 - 2026-11-22
 
