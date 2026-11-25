@@ -654,6 +654,105 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
     ).toEqual(["bare", "other", "primary"]);
   });
 
+  describe("a Swift color written as another's name with opacity after it", () => {
+    const GREY = "enum Palette { static let grey = Color(hex: 0xAFAFBA) }";
+    const grey = { "Palette.grey": color("#afafba", 1) };
+
+    it("is that color at the opacity the call gives it", async () => {
+      const lines = [GREY, "let layer = Palette.grey.withAlphaComponent(0.6)"];
+      expect(await leftOut("swift", lines, { colors: { ...grey, layer: color("#afafba99", 2) } })).toEqual(
+        [],
+      );
+      expect(await leftOut("swift", lines, { colors: { ...grey, layer: color("#afafba", 2) } })).toEqual([
+        "layer",
+      ]);
+    });
+
+    it("multiplies the opacity with .opacity, and sets it with .withAlphaComponent", async () => {
+      const lines = [
+        GREY,
+        "let faint = Palette.grey.opacity(0.5).opacity(0.5)",
+        "let reset = Palette.grey.opacity(0.5).withAlphaComponent(0.6)",
+      ];
+      const colors = { ...grey, faint: color("#afafba40", 2), reset: color("#afafba99", 3) };
+      expect(await leftOut("swift", lines, { colors })).toEqual([]);
+    });
+
+    it("takes an opacity that isn't a whole byte rounded either way, and no other", async () => {
+      const lines = [GREY, "let layer = Palette.grey.withAlphaComponent(0.7)"];
+      // 0.7 is 178.5 of 255.
+      for (const value of ["#afafbab2", "#afafbab3"])
+        expect(await leftOut("swift", lines, { colors: { ...grey, layer: color(value, 2) } })).toEqual([]);
+      for (const value of ["#afafbab4", "#000000b3"])
+        expect(await leftOut("swift", lines, { colors: { ...grey, layer: color(value, 2) } })).toEqual([
+          "layer",
+        ]);
+    });
+
+    it("keeps its own rounding of the opacity, and a name built on it starts from that", async () => {
+      const lines = [
+        GREY,
+        "let layer = Palette.grey.withAlphaComponent(0.7)",
+        "let card = layer.opacity(0.5)",
+      ];
+      const { tokens, reading } = await read(APPS.swift.files(lines), {
+        colors: {
+          "Palette.grey": { light: { value: "#afafba", at: "App/Theme.swift:2" } },
+          layer: { light: { value: "#afafbab2", at: "App/Theme.swift:3" } },
+          // Half of layer's own b3, 179 of 255: 89.5, written 59 or 5a.
+          card: { light: { value: "#afafba5a", at: "App/Theme.swift:4" } },
+        },
+      });
+      expect(tokens?.colors.find((c) => c.reference === "layer")?.light).toBe("#afafbab3");
+      expect(reading.unconfirmed).toEqual([]);
+    });
+
+    it("takes a whole byte only as itself, whatever noise the arithmetic leaves", async () => {
+      // 0.8 × 0.75 is 0.6, exactly 153 of 255.
+      const lines = [GREY, "let even = Palette.grey.opacity(0.8).opacity(0.75)"];
+      expect(await leftOut("swift", lines, { colors: { ...grey, even: color("#afafba99", 2) } })).toEqual([]);
+      expect(await leftOut("swift", lines, { colors: { ...grey, even: color("#afafba9a", 2) } })).toEqual([
+        "even",
+      ]);
+    });
+
+    it("takes either rounding through a name built on it", async () => {
+      const lines = [GREY, "let layer = Palette.grey.withAlphaComponent(0.7)", "let card = layer"];
+      const colors = { ...grey, layer: color("#afafbab2", 2), card: color("#afafbab2", 3) };
+      expect(await leftOut("swift", lines, { colors })).toEqual([]);
+    });
+
+    it("reads the opacity on the next line", async () => {
+      const lines = [GREY, "let layer = Palette.grey", "  .opacity(0.5)"];
+      expect(await leftOut("swift", lines, { colors: { ...grey, layer: color("#afafba80", 2) } })).toEqual(
+        [],
+      );
+    });
+
+    it("isn't read with another call after the opacity", async () => {
+      const lines = [GREY, "let darker = Palette.grey.opacity(0.5).darker()"];
+      expect(await leftOut("swift", lines, { colors: { ...grey, darker: color("#afafba80", 2) } })).toEqual([
+        "darker",
+      ]);
+    });
+  });
+
+  it("keeps the name and its opacity whole as the way to the color", async () => {
+    const lines = [
+      "enum Palette { static let grey = Color(hex: 0xAFAFBA) }",
+      "let layer = Palette.grey.opacity(0.5)",
+    ];
+    const { tokens, at } = await read(APPS.swift.files(lines), {
+      colors: {
+        "Palette.grey": { light: { value: "#afafba", at: "App/Theme.swift:2" } },
+        layer: { light: { value: "#afafba80", at: "App/Theme.swift:3" } },
+      },
+    });
+    const layer = tokens?.colors.find((c) => c.reference === "layer")?.locations?.light;
+    expect(at(layer)).toBe("Color(hex: 0xAFAFBA)");
+    expect(layer?.via?.map((v) => at({ ...v, kind: "literal" }))).toEqual(["Palette.grey.opacity(0.5)"]);
+  });
+
   it("reads a theme's color through the theme's own", async () => {
     const { reading, tokens } = await read(
       APPS.kotlin.files(["val accent = Color.Black", "val primary = accent"]),

@@ -12,6 +12,7 @@ import type { Color } from "../edit/color-value.js";
 import { type Language, languageOf } from "../edit/notation.js";
 import { weightReadings } from "../edit/type-values.js";
 import { colorOf } from "../frameworks/css-color.js";
+import { type OpacityCall, opacityCallsAt } from "../frameworks/swiftui-colors.js";
 import type { ValueKind } from "./types.js";
 
 /** A value found, and where its text is written in the file: what an edit would replace. */
@@ -288,11 +289,12 @@ function trimmed(code: string, start: number, end: number): Span {
 }
 
 /** What a color definition's value is: a color written in place (each of its readings, for eight hex digits whose
- * opacity may be first or last), a light and a dark one, or another color's name. */
+ * opacity may be first or last), a light and a dark one, or another color's name, in Swift with opacity calls
+ * after it (`Palette.grey.withAlphaComponent(0.6)`). */
 export type ColorValue =
   | { colors: Found<Color>[] }
   | { light: Found<Color>[]; dark: Found<Color>[] }
-  | { name: string; start: number; end: number };
+  | { name: string; start: number; end: number; opacity?: OpacityCall[] };
 
 /** The colors SwiftUI and Compose name that are the same everywhere (`.white`, `Color.Black`, `.clear`), not the
  * platform's adapting ones (`.red`, `.secondary`). */
@@ -309,6 +311,8 @@ const COLOR_CALL =
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
 /** Another color's name: `Purple40`, `.brand`, `Color.brand`, `colors.primary`. */
 const NAME = /^\.?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+/** An opacity call after a color: `.withAlphaComponent(0.6)`, `.opacity(0.5)`. */
+const OPACITY_CALL = /\.(?:withAlphaComponent|opacity)\(/;
 /** A light and a dark color given together: `Color(light: …, dark: …)`. */
 const PAIR = /^(?:\.init|(?:UI|NS)?Color(?:\.init)?)\(\s*(?:light|any)\s*:/;
 
@@ -337,7 +341,20 @@ export function colorValue(
   if (colors.length > 0) return { colors };
   if (NAME.test(value) && !NAMED_COLOR.test(value))
     return { name: value.replace(/^\./, ""), start: span.start, end: span.end };
+  if (language === "swift") return nameWithOpacity(value, span);
   return undefined;
+}
+
+/** Another color's name with opacity calls after it, and nothing else: `Palette.grey.withAlphaComponent(0.6)`. */
+function nameWithOpacity(value: string, span: Span): ColorValue | undefined {
+  const first = OPACITY_CALL.exec(value)?.index;
+  if (first === undefined) return undefined;
+  // The name may end a line, with its opacity on the next.
+  const name = value.slice(0, first).trimEnd();
+  if (!NAME.test(name) || NAMED_COLOR.test(name)) return undefined;
+  const { calls, end } = opacityCallsAt(value, first);
+  if (end !== value.length) return undefined;
+  return { name: name.replace(/^\./, ""), start: span.start, end: span.end, opacity: calls };
 }
 
 /** The readings of a color written whole: nothing before or after it, like `.opacity(0.5)`, changes it. */

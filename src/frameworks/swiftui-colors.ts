@@ -283,23 +283,56 @@ export function* literals(
   }
 }
 
-/**
- * `hex` with the opacity calls chained after its colour at `from` applied in order: `.withAlphaComponent(0.7)` sets the
- * opacity and `.opacity(0.5)` multiplies it, as UIKit and SwiftUI do. Undefined when nothing is chained.
- */
-function chainedOpacity(hex: string, text: string, from: number): string | undefined {
-  let value: string | undefined;
+/** An opacity call chained after a colour: `.withAlphaComponent(0.7)` sets its opacity, `.opacity(0.5)` multiplies
+ * it, as UIKit and SwiftUI do. */
+export interface OpacityCall {
+  sets: boolean;
+  opacity: number;
+}
+
+/** The opacity calls chained one after another from `from` in `text`, and where the last one ends. */
+export function opacityCallsAt(text: string, from: number): { calls: OpacityCall[]; end: number } {
+  const calls: OpacityCall[] = [];
+  let end = from;
   CHAINED_ALPHA.lastIndex = from;
   // Sticky, so each call is read where the last one ended, without copying the rest of the file.
   for (let call = CHAINED_ALPHA.exec(text); call; call = CHAINED_ALPHA.exec(text)) {
-    const before = value ?? hex;
-    const opacity = Number(call[2]);
-    value =
-      call[1] === "withAlphaComponent"
-        ? withOpacity(before.slice(0, 7), opacity)
-        : withOpacity(before, opacity);
+    calls.push({ sets: call[1] === "withAlphaComponent", opacity: Number(call[2]) });
+    end = CHAINED_ALPHA.lastIndex;
   }
-  return value;
+  return { calls, end };
+}
+
+/** `hex` with `calls` applied in order. */
+function withOpacityCalls(hex: string, calls: OpacityCall[]): string {
+  return calls.reduce(
+    (color, { sets, opacity }) => withOpacity(sets ? color.slice(0, 7) : color, opacity),
+    hex,
+  );
+}
+
+/** `hex` with `calls` applied: its opacity rounded to the nearest byte, and each way it may be written, since what the
+ * calls give is rarely a whole byte (0.7 is 178.5 of 255, written `b2` or `b3`). */
+export function withOpacityRounded(
+  hex: string,
+  calls: OpacityCall[],
+): { value: string; writtenAs: string[] } {
+  const own = hex.length === 9 ? Number.parseInt(hex.slice(7), 16) / 255 : 1;
+  const clamped = (opacity: number) => Math.max(0, Math.min(1, opacity));
+  const exact = calls.reduce((opacity, call) => clamped(call.opacity) * (call.sets ? 1 : opacity), own) * 255;
+  const nearest = Math.round(exact);
+  // Arithmetic leaves noise: 0.8 × 0.75 of 255 comes out a hair over 153, which is still only 153.
+  const isWhole = Math.abs(exact - nearest) < 1e-9;
+  const writtenAs = (byte: number) =>
+    `${hex.slice(0, 7)}${byte >= 255 ? "" : byte.toString(16).padStart(2, "0")}`;
+  const bytes = isWhole ? [nearest] : [Math.floor(exact), Math.ceil(exact)];
+  return { value: writtenAs(nearest), writtenAs: bytes.map(writtenAs) };
+}
+
+/** `hex` with the opacity calls chained after its colour at `from` applied, or undefined when nothing is chained. */
+function chainedOpacity(hex: string, text: string, from: number): string | undefined {
+  const { calls } = opacityCallsAt(text, from);
+  return calls.length > 0 ? withOpacityCalls(hex, calls) : undefined;
 }
 
 /** `hex` with its opacity multiplied by `opacity` (0–1): `#3366cc` at 0.3 is `#3366cc4d`. */

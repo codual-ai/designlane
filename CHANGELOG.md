@@ -17,6 +17,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   values a design-system module declares for one of its components, and tokens nothing uses yet, and to leave out a
   value one screen or feature sets for itself, even when it's named. docs/how-we-check.md says what counts as a token.
 
+### Fixed
+
+- Checking an agent's map reads a SwiftUI color written as another's name with opacity after it
+  (`Palette.grey.withAlphaComponent(0.6)`, `.opacity(0.5)`): it's that color at the opacity the calls give it, with
+  either rounding of the opacity to a byte (0.7 as `b2` or `b3`). Changing it from Figma is refused, saying to change
+  the color it's built on, or give it its own value.
+
 ## 0.6.0 - 2026-11-22
 
 ### Added

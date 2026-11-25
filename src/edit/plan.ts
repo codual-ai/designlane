@@ -20,7 +20,7 @@ import {
 } from "./edit-tokens.js";
 import { COLOR_EDITOR, FAMILY_EDITOR, SIZE_EDITOR, type ValueEditor, WEIGHT_EDITOR } from "./editors.js";
 import { languageOf, MAX_VALUE_LENGTH, QUOTES, type SpanText, spliced } from "./notation.js";
-import { type ReadSource, readingOnce, sourceOf } from "./read-source.js";
+import { type ReadSource, readingOnce, sourceOf, textOf } from "./read-source.js";
 import { dependents, ownerOf, sharers } from "./sharers.js";
 
 export interface TokenChange {
@@ -45,6 +45,8 @@ export type EditPlan = { ok: true; edit: TextEdit } | { ok: false; reason: strin
 
 /** A name on the way to a value: `colors.blue0`, `Palette.Yellow500`, `@color/blue600`, `colors.brand[500]`. */
 const NAME = /^[@?]?[A-Za-z_$][\w.$/[\]"'-]*$/;
+/** A color's name with opacity calls after it: `Palette.grey.withAlphaComponent(0.6)`, the call maybe on the next line. */
+const WITH_OPACITY = /^[A-Za-z_$.][\w.$]*\s*\.(?:withAlphaComponent|opacity)\(/;
 
 const refuse = (reason: string): EditPlan => ({ ok: false, reason });
 const at = (span: CodeSpan) => `${span.file}:${span.line}`;
@@ -134,7 +136,14 @@ async function targetOf(
   const ownFile = await sourceOf(read, own.file);
   if ("reason" in ownFile) return ownFile;
   const name = spanText(ownFile.source, own);
-  if ("reason" in name || !NAME.test(name.text)) return { reason: changedSince(own, name) };
+  if ("reason" in name) return { reason: changedSince(own, name) };
+  const faded = await withOpacityOnTheWay(location.via ?? [], read);
+  if (faded) {
+    return {
+      reason: `${key} is \`${faded.text}\` (${at(faded.span)}): another color at its own opacity. Change that color, or give ${key} its own value in the code.`,
+    };
+  }
+  if (!NAME.test(name.text)) return { reason: changedSince(own, name) };
   if (!isColor) {
     return { reason: `it comes from \`${name.text}\` (${at(own)}), which other styles may build on too.` };
   }
@@ -167,6 +176,18 @@ function spanText(fileText: string, span: CodeSpan): { text: string } | { reason
   const outer = quotedSpan(fileText, span);
   const isComputed = isOperatorAfter(fileText, outer.end) || isOperatorBefore(fileText, outer.start);
   return runsOn || runsIn || isComputed ? { reason: changedSince(span, { text }) } : { text };
+}
+
+/** The first name on the way to a value that has opacity calls after it, which makes the value another color. */
+async function withOpacityOnTheWay(
+  via: CodeSpan[],
+  read: ReadSource,
+): Promise<{ text: string; span: CodeSpan } | undefined> {
+  for (const span of via) {
+    const text = textOf(await read(span.file))?.slice(span.start, span.end);
+    if (text !== undefined && WITH_OPACITY.test(text)) return { text, span };
+  }
+  return undefined;
 }
 
 function changedSince(span: CodeSpan, found?: { text: string } | { reason: string }) {

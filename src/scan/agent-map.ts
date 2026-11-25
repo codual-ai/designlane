@@ -8,6 +8,7 @@ import { z } from "zod";
 import { type Color, showColor } from "../edit/color-value.js";
 import { languageOf } from "../edit/notation.js";
 import { colorOf } from "../frameworks/css-color.js";
+import { withOpacityRounded } from "../frameworks/swiftui-colors.js";
 import { readText, realPathInside } from "./files.js";
 import {
   colorValue,
@@ -370,6 +371,9 @@ interface Located {
   value: string;
   location: ValueLocation;
   pair?: boolean;
+  /** Each way the value may be written, when it's reached through opacity that isn't a whole byte: the value's
+   * opacity rounded down and up. */
+  writtenAs?: string[];
 }
 
 interface ReadColor {
@@ -441,14 +445,25 @@ async function colorAt(
         why: `${written.name}'s dark color isn't one Designlane read`,
         at: given.at,
       };
-    if (through.value !== value)
+    // With opacity after the name, the color is that one's at the opacity the calls give it, rounded either way. The
+    // value kept is Designlane's own rounding, so a name built on this one starts from it, not from the map's.
+    const { value: reached, writtenAs } = written.opacity
+      ? withOpacityRounded(through.value, written.opacity)
+      : { value: through.value, writtenAs: through.writtenAs ?? [through.value] };
+    if (!writtenAs.includes(value))
       return {
         kind: "other-value",
-        why: `${written.name} is ${through.value} there, not ${value}`,
+        why: written.opacity
+          ? `${written.name} at that opacity is ${reached}, not ${value}`
+          : `${written.name} is ${through.value} there, not ${value}`,
         at: given.at,
       };
     const via: CodeSpan = { file: at.file, line: at.line, start: written.start, end: written.end };
-    return { value, location: { ...through.location, via: [via, ...(through.location.via ?? [])] } };
+    return {
+      value: reached,
+      ...(writtenAs.length > 1 && { writtenAs }),
+      location: { ...through.location, via: [via, ...(through.location.via ?? [])] },
+    };
   }
   const found = "colors" in written ? written.colors : written[appearance];
   const match = found.find((f) => holdsColor(f.value, value));

@@ -87,6 +87,68 @@ describe("a colour reached through a name", () => {
     ).toMatch(/^refused: link takes its colour from `P.brand` \(Theme.swift:2\)/);
   });
 
+  it("refuses a colour reached through a name with opacity after it, since its value isn't the name's", async () => {
+    const swift: Files = {
+      "Theme.swift":
+        "enum P { static let grey = Color(hex: 0xAFAFBA) }\nenum T { static let layer = P.grey.withAlphaComponent(0.6) }",
+    };
+    const layer = {
+      file: "Theme.swift",
+      text: "Color(hex: 0xAFAFBA)",
+      kind: "expression" as const,
+      via: [{ file: "Theme.swift", text: "P.grey.withAlphaComponent(0.6)" }],
+    };
+    const tokens = tokensFile(swift, {
+      colors: [{ key: "layer", light: "#afafba99", at: { light: layer } }],
+    });
+    expect(outcome(await plan(swift, tokens, { token: "layer", property: "light", value: "#de2413" }))).toBe(
+      "refused: layer is `P.grey.withAlphaComponent(0.6)` (Theme.swift:2): another color at its own opacity. Change that color, or give layer its own value in the code.",
+    );
+  });
+
+  it("refuses a colour reached through a name with its opacity on the next line", async () => {
+    const swift: Files = {
+      "Theme.swift": "enum P { static let grey = Color(hex: 0xAFAFBA) }\nlet layer = P.grey\n  .opacity(0.5)",
+    };
+    const layer = {
+      file: "Theme.swift",
+      text: "Color(hex: 0xAFAFBA)",
+      kind: "expression" as const,
+      via: [{ file: "Theme.swift", text: "P.grey\n  .opacity(0.5)" }],
+    };
+    const tokens = tokensFile(swift, {
+      colors: [{ key: "layer", light: "#afafba80", at: { light: layer } }],
+    });
+    expect(
+      outcome(await plan(swift, tokens, { token: "layer", property: "light", value: "#de2413" })),
+    ).toMatch(
+      /^refused: layer is `P.grey\n {2}.opacity\(0.5\)` \(Theme.swift:2\): another color at its own opacity/,
+    );
+  });
+
+  it("refuses a colour reached through a name built on one with opacity after it, saying so", async () => {
+    const swift: Files = {
+      "Theme.swift": [
+        "enum P { static let grey = Color(hex: 0xAFAFBA) }",
+        "enum T { static let layer = P.grey.opacity(0.5) }",
+        "enum U { static let card = T.layer }",
+      ].join("\n"),
+    };
+    const card = {
+      file: "Theme.swift",
+      text: "Color(hex: 0xAFAFBA)",
+      kind: "expression" as const,
+      via: [
+        { file: "Theme.swift", text: "T.layer" },
+        { file: "Theme.swift", text: "P.grey.opacity(0.5)" },
+      ],
+    };
+    const tokens = tokensFile(swift, { colors: [{ key: "card", light: "#afafba80", at: { light: card } }] });
+    expect(outcome(await plan(swift, tokens, { token: "card", property: "light", value: "#de2413" }))).toBe(
+      "refused: card is `P.grey.opacity(0.5)` (Theme.swift:2): another color at its own opacity. Change that color, or give card its own value in the code.",
+    );
+  });
+
   it("refuses a literal in place of a name when the literal names something only in scope where it's written", async () => {
     const swift: Files = {
       "Theme.swift": [
