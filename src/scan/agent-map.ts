@@ -463,6 +463,7 @@ async function colorAt(
       value: reached,
       ...(writtenAs.length > 1 && { writtenAs }),
       location: { ...through.location, via: [via, ...(through.location.via ?? [])] },
+      ...((at.definition.ofPair || through.pair) && { pair: true }),
     };
   }
   const found = "colors" in written ? written.colors : written[appearance];
@@ -471,7 +472,7 @@ async function colorAt(
     return {
       value,
       location: locationOf(at.file, at.line, match),
-      ...(!("colors" in written) && { pair: true }),
+      ...((!("colors" in written) || at.definition.ofPair) && { pair: true }),
     };
   const there = found[0];
   return there

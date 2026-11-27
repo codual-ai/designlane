@@ -1,5 +1,5 @@
-/** Colours written as hex digits: a literal (`#3366CC`, Android's `#AARRGGBB`) or one inside a call
- * (`Color(0xFF6650A4)`, `.init(hex: 0x112233)`, `UIColor(hex: "#112233")`). */
+/** Colours written as hex digits: a literal (`#3366CC`, Android's `#AARRGGBB`, a Swift enum's `0x3366CC`) or one
+ * inside a call (`Color(0xFF6650A4)`, `.init(hex: 0x112233)`, `UIColor(hex: "#112233")`). */
 
 import { alphaOf, type Color, hexByte, isUpperCase, keepsAlpha } from "./color-value.js";
 import { callArguments, type Language, type SpanText, spliced, type Written } from "./notation.js";
@@ -9,6 +9,8 @@ type Layout = "rgba" | "argb";
 
 const HEX_LITERAL = /^#([0-9a-fA-F]+)$/;
 const HEX_INTEGER = /0[xX]([0-9a-fA-F]+)(?![0-9a-fA-F])/g;
+const HEX_INTEGER_LITERAL = /^(0[xX])([0-9a-fA-F]+)$/;
+const CASE_HEX_NUMBER = /\bcase\s+\w+\s*=\s*0[xX]([0-9a-fA-F_]+)/g;
 const HEX_STRING = /(["'])#?([0-9a-fA-F]+)\1/g;
 const LENGTHS = new Set([3, 4, 6, 8]);
 /** A number in code is a colour only at full length; `0xFFF` is no colour. */
@@ -20,6 +22,17 @@ const NIBBLE = 17;
 /** The ways a literal or a call's one hex number can be read, each with how to write another colour the same way. */
 export function hexReadings({ text, kind, language, fileText }: SpanText): Written<Color>[] {
   if (kind === "literal") {
+    // A number on its own, as a Swift enum's raw value: `case red_800 = 0x73140D`.
+    const integer = HEX_INTEGER_LITERAL.exec(text);
+    if (integer?.[2] && INTEGER_LENGTHS.has(integer[2].length)) {
+      const [, prefix, digits] = integer;
+      // Swift's enum cases can't share a raw value, so a number another case has isn't written.
+      const write = (written: string) =>
+        written.toLowerCase() !== digits.toLowerCase() && rawValueTaken(fileText, written)
+          ? undefined
+          : `${prefix}${written}`;
+      return layoutsIn(language).flatMap((layout) => reading(digits, layout, fileText, write));
+    }
     const digits = HEX_LITERAL.exec(text)?.[1];
     const layout = language === "xml" ? "argb" : "rgba";
     return digits ? reading(digits, layout, fileText, (written) => `#${written}`) : [];
@@ -38,6 +51,15 @@ export function hexReadings({ text, kind, language, fileText }: SpanText): Writt
   return layoutsIn(language).flatMap((layout) => reading(digits, layout, fileText, write));
 }
 
+/** Whether an enum case in `fileText` already has the number `digits` as its raw value, however it's written:
+ * `case red_800 = 0x73140D`, `0x0073_140D`. */
+function rawValueTaken(fileText: string, digits: string): boolean {
+  const number = Number.parseInt(digits, 16);
+  for (const m of fileText.matchAll(CASE_HEX_NUMBER))
+    if (Number.parseInt((m[1] ?? "").replace(/_/g, ""), 16) === number) return true;
+  return false;
+}
+
 /** Kotlin's colour integers are ARGB; elsewhere a helper decides, so both are tried against the value it has. */
 const layoutsIn = (language: Language): Layout[] => (language === "kotlin" ? ["argb"] : ["rgba", "argb"]);
 
@@ -45,7 +67,7 @@ function reading(
   digits: string,
   layout: Layout,
   fileText: string,
-  write: (digits: string) => string,
+  write: (digits: string) => string | undefined,
 ): Written<Color>[] {
   if (!LENGTHS.has(digits.length)) return [];
   const short = digits.length < 6;

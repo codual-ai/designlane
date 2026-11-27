@@ -654,6 +654,92 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
     ).toEqual(["bare", "other", "primary"]);
   });
 
+  describe("a palette enum's colors, and a color given for each appearance on lines of their own", () => {
+    const lines = [
+      "enum CoreColor: Int {",
+      "  case red_300 = 0xF59F95",
+      "  case red_800 = 0x73140D",
+      "}",
+      "let pressed = SemanticColor(",
+      '  "danger/pressed",',
+      "  lightMode: .red_800,",
+      "  darkMode: .red_300",
+      ")",
+    ];
+    const palette = { "CoreColor.red_300": color("#f59f95", 2), "CoreColor.red_800": color("#73140d", 3) };
+
+    it("reads an enum case's hex number, and each appearance's argument through the name it gives", async () => {
+      const { reading, tokens, at } = await read(APPS.swift.files(lines), {
+        colors: {
+          "CoreColor.red_300": { light: { value: "#f59f95", at: "App/Theme.swift:3" } },
+          "CoreColor.red_800": { light: { value: "#73140d", at: "App/Theme.swift:4" } },
+          pressed: {
+            light: { value: "#73140d", at: "App/Theme.swift:8" },
+            dark: { value: "#f59f95", at: "App/Theme.swift:9" },
+          },
+        },
+      });
+      expect(reading.unconfirmed).toEqual([]);
+      const pressed = tokens?.colors.find((c) => c.reference === "pressed")?.locations;
+      expect(at(pressed?.light)).toBe("0x73140D");
+      expect(pressed?.light?.via?.map((v) => at({ ...v, kind: "literal" }))).toEqual([".red_800"]);
+      expect(at(pressed?.dark)).toBe("0xF59F95");
+    });
+
+    it("reads no appearance's argument beside an opacity, nor one labeled for the other appearance", async () => {
+      const faded = [...lines.slice(0, 7), "  lightModeAlpha: 0.5,", ...lines.slice(7)];
+      expect(await leftOut("swift", faded, { colors: { ...palette, pressed: color("#73140d", 7) } })).toEqual(
+        ["pressed"],
+      );
+      expect(await leftOut("swift", lines, { colors: { ...palette, pressed: color("#f59f95", 8) } })).toEqual(
+        ["pressed"],
+      );
+    });
+    it("reads no argument of a call with another call after it", async () => {
+      const lines = ["let pressed = Color(", "  light: .white,", "  dark: .black", ").opacity(0.5)"];
+      expect(await leftOut("swift", lines, { colors: { pressed: color("#ffffff", 2) } })).toEqual([
+        "pressed",
+      ]);
+    });
+
+    it("reads no argument of a call inside the value", async () => {
+      const lines = [
+        "let pressed = choose(",
+        "  fallback: Color(light: .white, dark: .black),",
+        "  actual: .black",
+        ")",
+      ];
+      expect(await leftOut("swift", lines, { colors: { pressed: color("#ffffff", 2) } })).toEqual([
+        "pressed",
+      ]);
+    });
+
+    it("takes a light argument read alone as no dark color, through any names", async () => {
+      const lines = [
+        "let pressed = Color(",
+        "  light: .white,",
+        "  dark: .black",
+        ")",
+        "let alias = pressed",
+        "let alias2 = alias",
+      ];
+      const both = (line: number) => ({
+        light: { value: "#ffffff", at: `@${line}` },
+        dark: { value: "#ffffff", at: `@${line}` },
+      });
+      const pressed = color("#ffffff", 2);
+      expect(await leftOut("swift", lines, { colors: { pressed, alias: both(5) } })).toEqual(["alias"]);
+      expect(
+        await leftOut("swift", lines, { colors: { pressed, alias: color("#ffffff", 5), alias2: both(6) } }),
+      ).toEqual(["alias2"]);
+    });
+
+    it("still reads a string enum's color", async () => {
+      const lines = ["enum Palette: String {", '  case red = "#73140D"', "}"];
+      expect(await leftOut("swift", lines, { colors: { "Palette.red": color("#73140d", 2) } })).toEqual([]);
+    });
+  });
+
   describe("a Swift color written as another's name with opacity after it", () => {
     const GREY = "enum Palette { static let grey = Color(hex: 0xAFAFBA) }";
     const grey = { "Palette.grey": color("#afafba", 1) };
