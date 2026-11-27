@@ -9,7 +9,7 @@
 import { assetReadings, callChannelReadings } from "../edit/color-channels.js";
 import { hexReadings } from "../edit/color-hex.js";
 import type { Color } from "../edit/color-value.js";
-import { type Language, languageOf } from "../edit/notation.js";
+import { callArguments, type Language, languageOf } from "../edit/notation.js";
 import { weightReadings } from "../edit/type-values.js";
 import { colorOf } from "../frameworks/css-color.js";
 import { type OpacityCall, opacityCallsAt } from "../frameworks/swiftui-colors.js";
@@ -32,6 +32,8 @@ export interface Span {
 /** A name a line defines, and where the value it's given is written. */
 export interface Definition extends Span {
   name: string;
+  /** Set for one appearance's color of a light and a dark given together, so the other isn't taken to be it too. */
+  ofPair?: boolean;
 }
 
 /** How many lines a value is read over. */
@@ -215,13 +217,43 @@ export function definitionAt(
         d.end >= text.end &&
         (names.includes(d.name) || related(d.name, names[0] ?? "", appearance)),
     );
-    if (holding.length === 1) return holding[0];
+    const [held] = holding;
+    if (holding.length === 1 && held) return appearanceArgument(code, line, held, appearance) ?? held;
   }
   // The line's own definitions, not those within one's value (`hex:` in `surface = Color(hex: 0x121212)`).
   const top = own.filter((d) => !own.some((o) => o !== d && o.start <= d.start && d.end <= o.end));
   const [only] = top;
   const [name = ""] = names;
   return top.length === 1 && only && related(only.name, name, appearance) ? only : undefined;
+}
+
+/** Labels giving a color for one appearance: `light:`, `lightMode:`, `darkColor:`. */
+const APPEARANCE_LABEL = { light: /^(?:light|any)(?:Mode|Color)?$/, dark: /^dark(?:Mode|Color)?$/ };
+/** An opacity given beside the colors (`lightModeAlpha: 0.32`), which neither color holds. */
+const OPACITY_LABEL = /alpha|opacity/i;
+
+/** The argument on line `line` giving `held`'s color for `appearance`, as `lightMode: .red_800,` does in a
+ * `SemanticColor("danger", lightMode: .red_800, darkMode: .red_300)` written over several lines: one of the call's
+ * own arguments, the call being all of `held`'s value. None when an opacity is given beside it, or a call after it
+ * (`.opacity(0.5)`) changes it. */
+function appearanceArgument(
+  code: string,
+  line: number,
+  held: Definition,
+  appearance: "light" | "dark" | undefined,
+): Definition | undefined {
+  const span = lineAt(code, line);
+  const args = callArguments(code.slice(held.start, held.end));
+  if (!appearance || !span || !args || args.some((a) => a.label && OPACITY_LABEL.test(a.label)))
+    return undefined;
+  const given = args.filter((a) => {
+    const at = held.start + a.start;
+    return a.label && APPEARANCE_LABEL[appearance].test(a.label) && at >= span.start && at < span.end;
+  });
+  const [only] = given;
+  if (given.length !== 1 || !only?.label) return undefined;
+  const start = held.start + only.start;
+  return { name: only.label, start, end: start + only.value.length, ofPair: true };
 }
 
 /** Whether one name holds the other, as `scaledTitle` does `title`, or `surfaceDark` the dark `surface`, but not its
@@ -309,6 +341,7 @@ const NAMED_COLOR = /^(?:(?:UI|NS)?Color)?\.(white|black|clear|White|Black|Trans
 const COLOR_CALL =
   /^(?:\.init|(?:UI|NS)?Color(?:\.init)?|Color\.(?:rgb|argb|hex|fromRGBO?|fromARGB)|rgba?|hsla?)\(/;
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
+const HEX_NUMBER = /^0[xX][0-9a-fA-F]+$/;
 /** Another color's name: `Purple40`, `.brand`, `Color.brand`, `colors.primary`. */
 const NAME = /^\.?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
 /** An opacity call after a color: `.withAlphaComponent(0.6)`, `.opacity(0.5)`. */
@@ -373,6 +406,8 @@ function colorsWritten(language: Language, code: string, span: Span): Found<Colo
   if (named) return found([{ value: fromHex(NAMED_COLORS[named.toLowerCase()] ?? "") }], span, "expression");
   if (HEX.test(value) && (language === "css" || language === "xml"))
     return found(hexReadings(reading(value, "literal")), span, "literal");
+  if (language === "swift" && HEX_NUMBER.test(value) && isCaseRawValue(code, span))
+    return found(hexReadings(reading(value, "literal")), span, "literal");
   const unquoted = /^(["'])(.*)\1$/s.exec(value)?.[2];
   if (unquoted !== undefined) {
     const inner = { start: span.start + 1, end: span.end - 1 };
@@ -394,6 +429,13 @@ function colorsWritten(language: Language, code: string, span: Span): Found<Colo
   if (/\b(?:opacity|alpha)\s*[:=]/.test(value) && readings.every((r) => r.value.alpha === undefined))
     return [];
   return found(readings, span, "expression");
+}
+
+/** Whether `span` is an enum case's raw value, the whole of what follows its `=`: `0x73140D` in
+ * `case red_800 = 0x73140D`. */
+function isCaseRawValue(code: string, span: Span): boolean {
+  const lineStart = code.lastIndexOf("\n", span.start - 1) + 1;
+  return /\bcase\s+[A-Za-z_]\w*\s*=\s*$/.test(code.slice(lineStart, span.start));
 }
 
 /** A CSS color written whole: a function (`rgb(51 102 230)`, `hsl(…)`) or a name (`white`, `rebeccapurple`). */

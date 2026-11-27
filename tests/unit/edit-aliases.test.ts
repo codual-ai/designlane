@@ -87,6 +87,23 @@ describe("a colour reached through a name", () => {
     ).toMatch(/^refused: link takes its colour from `P.brand` \(Theme.swift:2\)/);
   });
 
+  it("refuses an enum's number in place of the case's name", async () => {
+    const files: Files = {
+      "Theme.swift":
+        "enum CoreColor: Int { case red_800 = 0x73140D }\nlet pressed = SemanticColor(lightMode: CoreColor.red_800)",
+    };
+    const light = {
+      file: "Theme.swift",
+      text: "0x73140D",
+      kind: "literal" as const,
+      via: [{ file: "Theme.swift", text: "CoreColor.red_800" }],
+    };
+    const tokens = tokensFile(files, { colors: [{ key: "pressed", light: "#73140d", at: { light } }] });
+    expect(
+      outcome(await plan(files, tokens, { token: "pressed", property: "light", value: "#de2413" })),
+    ).toMatch(/^refused: pressed takes its colour from `CoreColor.red_800`/);
+  });
+
   it("refuses a colour reached through a name with opacity after it, since its value isn't the name's", async () => {
     const swift: Files = {
       "Theme.swift":

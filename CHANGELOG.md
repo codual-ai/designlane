@@ -23,6 +23,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   (`Palette.grey.withAlphaComponent(0.6)`, `.opacity(0.5)`): it's that color at the opacity the calls give it, with
   either rounding of the opacity to a byte (0.7 as `b2` or `b3`). Changing it from Figma is refused, saying to change
   the color it's built on, or give it its own value.
+- Checking an agent's map reads a Swift enum's colors written as hex numbers (`case red_800 = 0x73140D`), and a
+  light or dark color given as an argument on a line of its own (`lightMode: .red_800,` in a call over several
+  lines), through the name it gives. It reads none beside an opacity argument (`lightModeAlpha: 0.32`), or with a
+  call after it. Changing such an enum's number from Figma is refused when another case already has the new one.
 
 ## 0.6.0 - 2026-11-22
 

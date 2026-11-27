@@ -45,6 +45,7 @@ export type EditPlan = { ok: true; edit: TextEdit } | { ok: false; reason: strin
 
 /** A name on the way to a value: `colors.blue0`, `Palette.Yellow500`, `@color/blue600`, `colors.brand[500]`. */
 const NAME = /^[@?]?[A-Za-z_$][\w.$/[\]"'-]*$/;
+const HEX_NUMBER = /^0[xX][0-9a-fA-F]+$/;
 /** A color's name with opacity calls after it: `Palette.grey.withAlphaComponent(0.6)`, the call maybe on the next line. */
 const WITH_OPACITY = /^[A-Za-z_$.][\w.$]*\s*\.(?:withAlphaComponent|opacity)\(/;
 
@@ -148,8 +149,14 @@ async function targetOf(
     return { reason: `it comes from \`${name.text}\` (${at(own)}), which other styles may build on too.` };
   }
   // A literal only compiles in place of a name in the file it's copied from (which has what it needs imported), and
-  // only when it doesn't take its type from where it's written (Swift's `.init(hex: …)`).
-  if (own.file !== location.file || text.text.startsWith(".") || !namesNothing(text.text, location.kind)) {
+  // only when it doesn't take its type from where it's written (Swift's `.init(hex: …)`). An enum's number
+  // (`case red_800 = 0x73140D`) is no color in place of its name.
+  if (
+    own.file !== location.file ||
+    text.text.startsWith(".") ||
+    HEX_NUMBER.test(text.text) ||
+    !namesNothing(text.text, location.kind)
+  ) {
     const from = owner(location) ?? `\`${name.text}\``;
     return {
       reason: `${key} takes its colour from ${from} (${at(own)}), whose value can't be copied there safely. Change ${from}, or give ${key} its own value in the code.`,

@@ -55,6 +55,20 @@ describe("a colour written as hex digits", () => {
     );
   });
 
+  it("rewrites a Swift enum's hex number, but not to another case's", async () => {
+    const code = "enum CoreColor: Int { case red_300 = 0xF59F95; case red_800 = 0x73140D }";
+    expect(await recolored("CoreColor.swift", code, literal("0x73140D"), "#73140d", "#de2413")).toBe(
+      "0xDE2413",
+    );
+    expect(await recolored("CoreColor.swift", code, literal("0x73140D"), "#73140d", "#f59f95")).toContain(
+      "can't hold",
+    );
+    const spelled = "enum CoreColor: Int { case red_300 = 0x00F5_9F95; case red_800 = 0x73140D }";
+    expect(await recolored("CoreColor.swift", spelled, literal("0x73140D"), "#73140d", "#f59f95")).toContain(
+      "can't hold",
+    );
+  });
+
   it("keeps a hex number's opacity argument as it is", async () => {
     const code = "static let tint = UIColor(0x3366CC, alpha: 0.3)";
     const call = expression("UIColor(0x3366CC, alpha: 0.3)");
