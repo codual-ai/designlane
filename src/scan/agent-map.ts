@@ -421,15 +421,28 @@ class Names {
   }
 
   get(name: string): ReadColor | undefined {
-    const own = this.byReference.get(name);
-    if (own) return own;
-    if (!name.includes(".")) {
-      const references = this.byName.get(name);
-      if (references?.size === 1) return this.byReference.get([...references][0] ?? "");
-      if (references && references.size > 1) return undefined;
-    }
+    // An Android resource (`@color/blue_500`) is only that resource, however it's referred to: never a constant of
+    // its name in code.
+    const resource = /^@color\/(\w+)$/.exec(name)?.[1];
+    const references = resource
+      ? [`@color/${resource}`, `R.color.${resource}`]
+      : this.byReference.has(name) || name.includes(".")
+        ? [name]
+        : [...(this.byName.get(name) ?? [])];
+    const read = references.flatMap((r) => this.byReference.get(r) ?? []);
+    const [first] = read;
+    // Two references to one color (`R.color.accent` and `@color/accent`) are one, not two of the name.
+    if (first && read.every((r) => sameColor(r, first))) return first;
+    if (read.length > 1) return undefined;
     return this.parent?.get(name);
   }
+}
+
+/** Whether two colors read are one: the same values, light and dark, written in the same places. */
+function sameColor(a: ReadColor, b: ReadColor): boolean {
+  const same = (x?: Located, y?: Located) =>
+    x?.value === y?.value && x?.location.file === y?.location.file && x?.location.start === y?.location.start;
+  return same(a.light, b.light) && same(a.dark, b.dark);
 }
 
 async function colorAt(

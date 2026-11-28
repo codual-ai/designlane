@@ -349,6 +349,9 @@ const OPACITY_CALL = /\.(?:withAlphaComponent|opacity)\(/;
 /** A light and a dark color given together: `Color(light: …, dark: …)`. */
 const PAIR = /^(?:\.init|(?:UI|NS)?Color(?:\.init)?)\(\s*(?:light|any)\s*:/;
 
+/** An Android color resource's name, as another resource gives it: `@color/blue_500`. */
+const ANDROID_COLOR_NAME = /^@color\/(\w+)$/;
+
 /** The color value written whole from `span.start` to `span.end` of `code` in `file`. */
 export function colorValue(
   file: string,
@@ -372,6 +375,9 @@ export function colorValue(
   }
   const colors = colorsWritten(language, code, span);
   if (colors.length > 0) return { colors };
+  // An Android resource written as another's name: `<color name="primary">@color/blue_500</color>`.
+  if (language === "xml" && ANDROID_COLOR_NAME.test(value))
+    return { name: value, start: span.start, end: span.end };
   if (NAME.test(value) && !NAMED_COLOR.test(value))
     return { name: value.replace(/^\./, ""), start: span.start, end: span.end };
   if (language === "swift") return nameWithOpacity(value, span);

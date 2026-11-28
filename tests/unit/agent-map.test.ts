@@ -1394,3 +1394,94 @@ describe("agent map: a text style checked part by part", () => {
     expect([lit?.line, at(lit)]).toEqual([5, "14"]);
   });
 });
+
+describe("agent map: an Android color written as another's name", () => {
+  const files = {
+    "app/src/main/res/values/colors.xml": [
+      "<resources>",
+      '  <color name="blue_500">#FF2196F3</color>',
+      '  <color name="primary">@color/blue_500</color>',
+      "</resources>",
+    ].join("\n"),
+    "app/src/main/res/values/styles.xml": [
+      "<resources>",
+      '  <style name="Theme.App" parent="Theme.Material3.Light">',
+      '    <item name="colorPrimary">@color/blue_500</item>',
+      '    <item name="colorAccent">@color/unread</item>',
+      "  </style>",
+      "</resources>",
+    ].join("\n"),
+    "app/src/main/java/a/S.kt":
+      'import androidx.compose.runtime.Composable\n@Composable fun S() { Text("a", color = colorResource(R.color.primary)) }',
+  };
+
+  it("reads a resource or a theme's item through the color it names, however the map spells that one", async () => {
+    const { reading, tokens, at } = await read(files, {
+      colors: {
+        // Designlane reads `blue_500` as `R.color.blue_500` too: the same place, so one color.
+        "@color/blue_500": { light: { value: "#2196f3", at: "app/src/main/res/values/colors.xml:2" } },
+        "R.color.primary": { light: { value: "#2196f3", at: "app/src/main/res/values/colors.xml:3" } },
+        "?attr/colorPrimary": { light: { value: "#2196f3", at: "app/src/main/res/values/styles.xml:3" } },
+      },
+    });
+    expect(reading.unconfirmed).toEqual([]);
+    const primary = tokens?.colors.find((c) => c.reference === "?attr/colorPrimary")?.locations?.light;
+    expect([primary?.file, at(primary)]).toEqual(["app/src/main/res/values/colors.xml", "#FF2196F3"]);
+    expect(primary?.via?.map((v) => [v.file, v.line])).toEqual([["app/src/main/res/values/styles.xml", 3]]);
+  });
+
+  it("refuses one the named color doesn't bear out, or naming a color Designlane didn't read", async () => {
+    const { reading } = await read(files, {
+      colors: {
+        "R.color.primary": { light: { value: "#ff0000", at: "app/src/main/res/values/colors.xml:3" } },
+        "?attr/colorAccent": { light: { value: "#ff0000", at: "app/src/main/res/values/styles.xml:4" } },
+      },
+    });
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["R.color.primary", "@color/blue_500 is #2196f3 there, not #ff0000"],
+      ["?attr/colorAccent", "it's written as the name of a color Designlane couldn't confirm"],
+    ]);
+  });
+
+  it("reads a resource's name as that resource only, never a constant of the name in code", async () => {
+    const { reading } = await read(
+      { ...files, "app/src/main/java/a/Palette.kt": "val blue_500 = Color(0xFFFF0000)" },
+      {
+        colors: {
+          blue_500: { light: { value: "#ff0000", at: "app/src/main/java/a/Palette.kt:1" } },
+          "R.color.primary": { light: { value: "#ff0000", at: "app/src/main/res/values/colors.xml:3" } },
+        },
+      },
+    );
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["R.color.primary", "@color/blue_500 is #2196f3 there, not #ff0000"],
+    ]);
+  });
+});
+
+describe("agent map: references to one place", () => {
+  it("are one color only with the same values: not two at different opacities of it", async () => {
+    const { reading } = await read(
+      {
+        "App/Theme.swift": [
+          "import SwiftUI",
+          "enum Palette { static let blue = Color(hex: 0x3366CC) }",
+          "enum A { static let ink = Palette.blue.opacity(0.5) }",
+          "enum B { static let ink = Palette.blue.opacity(0.8) }",
+          "enum C { static let text = ink }",
+          'struct S: View { var body: some View { Text("a") } }',
+        ].join("\n"),
+      },
+      {
+        colors: {
+          "Palette.blue": { light: { value: "#3366cc", at: "App/Theme.swift:2" } },
+          "A.ink": { light: { value: "#3366cc80", at: "App/Theme.swift:3" } },
+          "B.ink": { light: { value: "#3366cccc", at: "App/Theme.swift:4" } },
+          "C.text": { light: { value: "#3366cc80", at: "App/Theme.swift:5" } },
+        },
+      },
+    );
+    // `ink` could be either, so `text` isn't read through it.
+    expect(reading.unconfirmed.map((u) => u.reference)).toEqual(["C.text"]);
+  });
+});

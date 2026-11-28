@@ -34,6 +34,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
   with no place, so changing it from Figma is refused. A size written as a name (`fontSize: fontScale.small`) is read
   through it, in another file too, and through a default import (`import variables from './variables'`), and a size
   in a call the style is built with (`AppTextStyle(TextStyle(fontSize = 16.sp))`) when it's the only one.
+- Checking an agent's map reads an Android color resource or theme item written as another's name
+  (`<color name="primary">@color/blue_500</color>`, `<item name="colorPrimary">@color/blue_500</item>`) through the
+  color it names. Two references to one place (`R.color.blue_500`, `@color/blue_500`) are read as one color, not as
+  two of the same name.
 
 ## 0.6.0 - 2026-11-22
 
