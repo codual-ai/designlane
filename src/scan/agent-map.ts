@@ -4,19 +4,26 @@
  * app's design system: the map decides what the design system is, and the code what each value is.
  */
 
+import path from "node:path";
 import { z } from "zod";
 import { type Color, showColor } from "../edit/color-value.js";
 import { languageOf } from "../edit/notation.js";
 import { colorOf } from "../frameworks/css-color.js";
+import { lineNumbers } from "../frameworks/source-text.js";
 import { withOpacityRounded } from "../frameworks/swiftui-colors.js";
-import { readText, realPathInside } from "./files.js";
+import { listFiles, readText, realPathInside } from "./files.js";
 import {
   colorValue,
   type Definition,
   definitionAt as definitionOnLine,
+  definitionsAt,
+  type Found,
   holdsColor,
   lineAt,
   numberValue,
+  openBrackets,
+  sizeName,
+  type TextStyleValue,
   textStyleValue,
   valueAfter,
   withoutComments,
@@ -139,6 +146,13 @@ export interface MapReading {
 /** What a map's entries are checked against: each file's text, read once, from inside the app's folder only. */
 type Texts = (file: string) => Promise<string | undefined>;
 
+/** The app's code: each file's text, and its files, listed once, for a name defined in a file other than where it's
+ * written. */
+interface Code {
+  texts: Texts;
+  files: () => Promise<string[]>;
+}
+
 /** The scan with the map's design system in place of what Designlane found of the same kinds: its colors and themes,
  * text styles, spacing and corner radii, each one the code bears out where the map says it's written. A kind the map
  * gives none of is left as Designlane read it. */
@@ -164,6 +178,12 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
     }
     return text;
   };
+  let listed: Promise<string[]> | undefined;
+  const files = () => {
+    listed ??= listFiles(scan.root).then((list) => list.files.map((f) => f.rel));
+    return listed;
+  };
+  const code: Code = { texts, files };
   const unconfirmed: Unconfirmed[] = [];
   let confirmed = 0;
   const known = framework.tokens;
@@ -259,7 +279,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
 
   const typeStyles: TypeStyle[] = [];
   for (const [reference, style] of Object.entries(map.textStyles)) {
-    const read = await textStyleAt(texts, reference, style);
+    const read = await textStyleAt(code, reference, style);
     if ("why" in read) {
       unconfirmed.push({ reference, at: style.at, kind: read.kind, why: read.why });
       continue;
@@ -514,6 +534,142 @@ function fontOf(
   return value ?? family;
 }
 
+/** How many names a size is followed through: `fontScale.finePrint` to `variables.fontSizeExtraSmall` to `9`. */
+const MAX_NAMES = 3;
+
+/** The number a size written as a name (`fontScale.finePrint`) is given where the name is defined, following a name
+ * given another (`finePrint: variables.fontSizeExtraSmall`), and where the number is, reached through the names. */
+async function sizeThroughName(
+  code: Code,
+  file: string,
+  text: string,
+  name: Found<string>,
+  via: CodeSpan[] = [],
+): Promise<{ value: number; location: ValueLocation } | Failure> {
+  const through = [...via, spanOf(file, text, name)];
+  const defined = await definedOnce(code, file, name.value, (c, d) => sizeWritten(c, d, nameOf(name.value)));
+  const size = defined?.value;
+  if (defined && size && "name" in size && through.length < MAX_NAMES)
+    return sizeThroughName(code, defined.file, defined.code, size.name, through);
+  if (!defined || !size || !("number" in size))
+    return { kind: "unread-name", why: `${name.value} isn't defined once in the app as a number`, at: "" };
+  const { number } = size;
+  return {
+    value: number.value,
+    location: { ...locationOf(defined.file, lineOf(defined.code, number.start), number), via: through },
+  };
+}
+
+/** A size where a name is defined: a number, or another name. */
+function sizeWritten(
+  code: string,
+  definition: Definition,
+  label: string,
+): { number: Found<number> } | { name: Found<string> } | undefined {
+  const number = numberValue(code, definition, label);
+  if (number) return { number };
+  const name = sizeName(code, definition);
+  return name && { name };
+}
+
+/** Where `written` (`fontScale.finePrint`) is defined with a value `read` reads, and only when that's one place:
+ * in the file its owner is imported from (`import fontScale from './typography'`), or else in `file`, then in the
+ * app's other files of its language. A name with owners counts only inside each of theirs, so neither
+ * `lineHeightScale.finePrint` nor `dark.fontScale.finePrint` is taken for `light.fontScale.finePrint`. */
+async function definedOnce<T>(
+  code: Code,
+  file: string,
+  written: string,
+  read: (code: string, definition: Definition) => T | undefined,
+): Promise<{ file: string; code: string; value: T } | undefined> {
+  const [name, ...owners] = namesOf(written).reverse();
+  const language = languageOf(file);
+  if (!name || !language) return undefined;
+  const outer = owners.at(-1);
+  const imported = outer ? await importOf(code, file, outer) : undefined;
+  // An import Designlane can't follow (a package, an alias, `* as`) is no file to look in, nor any other.
+  if (imported === null) return undefined;
+  const chain = imported?.default ? [...owners.slice(0, -1), "default"] : owners;
+  const word = new RegExp(`(?<![\\w$])${escapedName(name)}(?![\\w$])`, "g");
+  const definedIn = async (other: string) => {
+    const text = await code.texts(other);
+    if (!text?.includes(name)) return [];
+    const at = [...text.matchAll(word)].map((m) => m.index ?? 0);
+    const lines = lineNumbers(text, at);
+    const opens = openBrackets(text, at);
+    return at.flatMap((offset, i) => {
+      if (!ownedBy(text, opens[i] ?? [], chain)) return [];
+      return definitionsAt(text, lines[i] ?? 1, language).flatMap((d) => {
+        const value = d.name === name && d.start > offset ? read(text, d) : undefined;
+        return value === undefined ? [] : [{ file: other, code: text, value }];
+      });
+    });
+  };
+  if (imported) {
+    const found = await definedIn(imported.file);
+    return found.length === 1 ? found[0] : undefined;
+  }
+  const own = await definedIn(file);
+  if (own.length > 0) return own.length === 1 ? own[0] : undefined;
+  const others: { file: string; code: string; value: T }[] = [];
+  for (const other of await code.files())
+    if (other !== file && languageOf(other) === language) others.push(...(await definedIn(other)));
+  return others.length === 1 ? others[0] : undefined;
+}
+
+/** Whether brackets opened at `open` (outermost first) are, from the innermost, those of each of `owners`
+ * (innermost first): the owner named on the line its bracket opens, as in `fontScale = {`, `object Dimens {`,
+ * `enum FontSize {`, `export default {`. */
+function ownedBy(code: string, open: number[], owners: string[]): boolean {
+  return owners.every((owner, i) => {
+    const bracket = open[open.length - 1 - i];
+    if (bracket === undefined) return false;
+    const opening = code.slice(code.lastIndexOf("\n", bracket - 1) + 1, bracket);
+    return new RegExp(`(?<![\\w$])${escapedName(owner)}(?![\\w$])`).test(opening);
+  });
+}
+
+/** The app's file `file` imports `name` from, with a relative path: as its default export
+ * (`import variables from './variables'`) or by name (`import { fontScale } from './typography'`). Undefined when
+ * `file` doesn't import it, and null when it does in a way Designlane doesn't follow. */
+async function importOf(
+  code: Code,
+  file: string,
+  name: string,
+): Promise<{ file: string; default: boolean } | null | undefined> {
+  const text = await code.texts(file);
+  const n = escapedName(name);
+  const statement =
+    text &&
+    new RegExp(
+      `\\bimport\\b${IN_IMPORT}*?(?<![\\w$])${n}(?![\\w$])${IN_IMPORT}*?\\bfrom\\s*(["'])([^"']+)\\1`,
+    ).exec(text);
+  if (!statement) return undefined;
+  const isDefault = new RegExp(`^import\\s+(?:type\\s+)?${n}\\s*(?:,|from\\b)`).test(statement[0]);
+  const isNamed = new RegExp(`\\{[^}]*(?<![\\w$])${n}(?![\\w$])(?!\\s+as\\b)[^}]*\\}`).test(statement[0]);
+  const from = statement[2] ?? "";
+  if ((!isDefault && !isNamed) || !from.startsWith(".")) return null;
+  const base = path.posix.join(path.posix.dirname(file), from);
+  const files = new Set(await code.files());
+  const found = IMPORT_ENDINGS.map((ending) => base + ending).find((candidate) => files.has(candidate));
+  return found ? { file: found, default: isDefault } : null;
+}
+
+/** A character of one import statement: not its end, nor the start of the next one. */
+const IN_IMPORT = "(?:(?!\\bimport\\b)[^;])";
+
+/** The files an import's path may name, by what's written after it. */
+const IMPORT_ENDINGS = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js"];
+
+const escapedName = (name: string) => name.replace(/\$/g, "\\$");
+const lineOf = (code: string, at: number) => lineNumbers(code, [at])[0] ?? 1;
+const spanOf = (file: string, code: string, span: { start: number; end: number }): CodeSpan => ({
+  file,
+  line: lineOf(code, span.start),
+  start: span.start,
+  end: span.end,
+});
+
 /** Whether a font resource's name (`roboto_regular_mono`) is of `family` (`roboto mono`): its words, in order,
  * starting with the first. */
 function namesFont(resource: string, family: string): boolean {
@@ -544,74 +700,130 @@ const WEIGHT_VALUES: Record<(typeof AGENT_WEIGHTS)[number], number> = {
   black: 900,
 };
 
+/** A text style the map gives, checked part by part where it says it's written. A part the code there gives
+ * another value for refuses the style; one Designlane can't read there (a family from a spread, a size worked out
+ * as the app runs) is kept from the map without a place, so it's listed but never edited. The style is kept when
+ * the code bears out at least one of its parts. */
 async function textStyleAt(
-  texts: Texts,
+  code: Code,
   reference: string,
   style: z.infer<typeof TextStyleSchema>,
 ): Promise<Read<{ locations: TypeLocations }>> {
   if (style.size === undefined && !style.family)
     return { kind: "no-size-or-family", why: "it gives neither a size nor a family", at: style.at };
-  const at = await definitionAt(texts, reference, style.at);
+  const at = await definitionAt(code.texts, reference, style.at);
   if ("why" in at) return at;
   const written = textStyleValue(at.file, at.code, at.definition);
-  const locations: TypeLocations = {};
-  if (style.size !== undefined) {
-    if (written.size?.value !== style.size)
-      return {
-        kind: written.size ? "other-value" : "no-size",
-        why: written.size
-          ? `its size there is ${written.size.value}, not ${style.size}`
-          : `no size is written there`,
-        at: style.at,
-      };
-    locations.fontSize = locationOf(at.file, at.line, written.size);
-  }
-  if (style.family && PLATFORM_FONT.test(style.family)) {
+  const parts: Part[] = [];
+  if (style.size !== undefined) parts.push(await sizePart(code, at, written, style.size));
+  if (style.family) parts.push(familyPart(at, written, style.family));
+  if (style.weight) parts.push(weightPart(at, written, style.weight));
+  const failures = parts.filter(isFailure);
+  const wrong = failures.find((part) => !part.unread);
+  if (wrong) return failureAt(wrong, style.at);
+  const locations: TypeLocations = Object.assign({}, ...parts.filter((part) => !isFailure(part)));
+  const [unread] = failures;
+  if (Object.keys(locations).length === 0 && unread) return failureAt(unread, style.at);
+  return { locations };
+}
+
+/** A part of a text style not borne out: `unread` when the code gives it in a way Designlane can't read there,
+ * rather than not at all (a part not written is the platform's default, which the map's other value isn't). */
+type Unread = Failure & { unread?: boolean };
+/** One part of a text style: where the code there writes it, or why it isn't read there. */
+type Part = TypeLocations | Unread;
+const isFailure = (part: Part): part is Unread => "why" in part;
+const failureAt = ({ kind, why }: Unread, at: string): Failure => ({ kind, why, at });
+type StyleAt = { file: string; line: number; code: string };
+
+async function sizePart(code: Code, at: StyleAt, written: TextStyleValue, wanted: number): Promise<Part> {
+  // A size written as a name (`fontSize: fontScale.finePrint`) is the number that name is defined as.
+  const size = written.size
+    ? { value: written.size.value, location: locationOf(at.file, at.line, written.size) }
+    : written.sizeName && (await sizeThroughName(code, at.file, at.code, written.sizeName));
+  if (!size)
+    return {
+      kind: "no-size",
+      why: "no size is written there",
+      at: "",
+      unread: !!(written.sized || written.builtOn),
+    };
+  if ("why" in size) return { ...size, unread: true };
+  if (size.value !== wanted)
+    return {
+      kind: "other-value",
+      why: written.sizeName
+        ? `${written.sizeName.value} is ${size.value}, not ${wanted}`
+        : `its size there is ${size.value}, not ${wanted}`,
+      at: "",
+    };
+  return { fontSize: size.location };
+}
+
+function familyPart(at: StyleAt, written: TextStyleValue, wanted: string): Part {
+  const family = written.family;
+  if (PLATFORM_FONT.test(wanted)) {
     // The platform's font is one no name is written for (`.system(size: 17)`): one that is, isn't it.
     // Compose names the platform's font too: `FontFamily.Default`, `FontFamily.SansSerif`.
-    if (written.family && !/^FontFamily\.(?:Default|SansSerif)$/.test(written.family.value))
+    if (family && !/^FontFamily\.(?:Default|SansSerif)$/.test(family.value))
+      return { kind: "other-value", why: `its family there is ${family.value}, not the platform's`, at: "" };
+    return {};
+  }
+  // Not written is no family but the platform's, unless the style is built on one that gives it.
+  const notWritten = (unread: boolean): Unread => ({
+    kind: "no-family",
+    why: `the family ${wanted} isn't written there`,
+    at: "",
+    unread,
+  });
+  if (!family) return notWritten(!!written.builtOn);
+  const name = wanted.toLowerCase();
+  if (family.kind === "literal") {
+    // A font's file name names its family and weight: `Inter-SemiBold`.
+    const value = family.value.toLowerCase();
+    const kind = value === name ? "literal" : value.startsWith(`${name}-`) ? "family-name" : undefined;
+    if (!kind)
+      return { kind: "other-value", why: `its family there is ${family.value}, not ${wanted}`, at: "" };
+    return { fontFamily: locationOf(at.file, at.line, { ...family, kind }) };
+  }
+  // Compose's font is a resource the family names: `FontFamily(Font(R.font.inter_variable))` for Inter.
+  const font = fontOf(at.code, family);
+  const resource = /\bR\.font\.(\w+)/.exec(at.code.slice(font.start, font.end));
+  // A family named, but not for a font resource Designlane reads (`fontFamily = brandFamily()`).
+  if (!resource) return notWritten(true);
+  if (!namesFont(resource[1] ?? "", name))
+    return { kind: "other-value", why: `its font there is R.font.${resource[1]}, not ${wanted}`, at: "" };
+  const start = font.start + resource.index + resource[0].length - (resource[1] ?? "").length;
+  return {
+    fontFamily: locationOf(at.file, at.line, {
+      start,
+      end: start + (resource[1] ?? "").length,
+      kind: "family-name",
+    }),
+  };
+}
+
+function weightPart(at: StyleAt, written: TextStyleValue, wanted: (typeof AGENT_WEIGHTS)[number]): Part {
+  const value = WEIGHT_VALUES[wanted];
+  if (written.weight) {
+    if (written.weight.value !== value)
       return {
         kind: "other-value",
-        why: `its family there is ${written.family.value}, not the platform's`,
-        at: style.at,
+        why: `its weight there is ${written.weight.value}, not ${wanted}`,
+        at: "",
       };
-  } else if (style.family) {
-    const family = written.family;
-    const wanted = style.family.toLowerCase();
-    const named = family?.kind === "literal" ? family.value.toLowerCase() : undefined;
-    // Compose's font is a resource the family names: `FontFamily(Font(R.font.inter_variable))` for Inter.
-    const font = family?.kind === "identifier" ? fontOf(at.code, family) : undefined;
-    const resource = font && /\bR\.font\.(\w+)/.exec(at.code.slice(font.start, font.end));
-    if (family && font && resource && namesFont(resource[1] ?? "", wanted)) {
-      const start = font.start + resource.index + resource[0].length - (resource[1] ?? "").length;
-      locations.fontFamily = locationOf(at.file, at.line, {
-        start,
-        end: start + (resource[1] ?? "").length,
-        kind: "family-name",
-      });
-    } else {
-      // A font's file name names its family and weight: `Inter-SemiBold`.
-      const kind = named === wanted ? "literal" : named?.startsWith(`${wanted}-`) ? "family-name" : undefined;
-      if (!family || !kind)
-        return { kind: "no-family", why: `the family ${style.family} isn't written there`, at: style.at };
-      locations.fontFamily = locationOf(at.file, at.line, { ...family, kind });
-    }
+    return { fontWeight: locationOf(at.file, at.line, written.weight) };
   }
-  if (style.weight) {
-    const wanted = WEIGHT_VALUES[style.weight];
-    // Text given no weight is regular, so a regular style's weight needn't be written, and has no place.
-    if (
-      written.weight?.value !== wanted &&
-      (written.weight || written.weighted || style.weight !== "regular")
-    )
-      return {
-        kind: written.weight ? "other-value" : "no-weight",
-        why: written.weight
-          ? `its weight there is ${written.weight.value}, not ${style.weight}`
-          : `the weight ${style.weight} isn't written there`,
-        at: style.at,
-      };
-    if (written.weight) locations.fontWeight = locationOf(at.file, at.line, written.weight);
-  }
-  return { locations };
+  // Text given no weight is regular, so a regular style's weight needn't be written, and has no place. One given a
+  // weight Designlane doesn't read (`.bold()`, `Inter-Bold`) isn't regular, but may be the map's other weight.
+  if (wanted === "regular")
+    return written.weighted
+      ? { kind: "no-weight", why: "a weight is written there, so it isn't regular", at: "" }
+      : {};
+  return {
+    kind: "no-weight",
+    why: `the weight ${wanted} isn't written there`,
+    at: "",
+    unread: !!(written.weighted || written.builtOn),
+  };
 }

@@ -140,8 +140,10 @@ npx designlane --from-agent designlane/agent.json                           # ch
 
 The map lists each color (with its dark value and themes), text style, spacing step, corner radius and reusable
 component, each with the file and line it's written on. Designlane reads the value written there with its own readers,
-following a color written as another's name (`primary = Purple40`), and keeps only what the code bears out: a value
-that's computed, written elsewhere, or not what the map says is left out. A component must be a view declared there,
+following a color written as another's name (`primary = Purple40`) or a size written as a name (`fontSize:
+fontScale.small`), and keeps only what the code bears out: a value that's computed, written elsewhere, or not what the
+map says is left out. A text style is kept when the code bears out one of its parts; a part it builds on another style
+for (`...base`, `base.copy(…)`) is kept from the map, with no place, so it's never edited. A component must be a view declared there,
 taking the parameters the map lists. The tokens it keeps are the app's design system, with where each is written, so
 `designlane edit` and the Figma plugin change the right line.
 

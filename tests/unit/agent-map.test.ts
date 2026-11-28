@@ -199,7 +199,7 @@ describe("agent map: checked where it says each value is written", () => {
       ["Theme.outside", "the file isn't in the app's folder"],
       ["Theme.word", "blue-ish isn't a color"],
       ["Theme.spacer", "no spacer is defined there"],
-      ["Theme.body", "the family Roboto isn't written there"],
+      ["Theme.body", "its family there is Inter-SemiBold, not Roboto"],
       ["Theme.md", "the code there writes 16, not 8"],
     ]);
     expect(reading.unconfirmed.map((u) => u.kind)).toEqual([
@@ -209,7 +209,7 @@ describe("agent map: checked where it says each value is written", () => {
       "outside-app",
       "invalid-value",
       "no-definition",
-      "no-family",
+      "other-value",
       "other-value",
     ]);
     expect(tokens?.colors.filter((c) => c.kind !== "inline")).toEqual([]);
@@ -1080,7 +1080,9 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
     ).toEqual(["body", "title.a", "x"]);
   });
 
-  it("reads a weight given by a condition as none, and a color with an opacity the reading misses as none", async () => {
+  it("keeps a weight given by a condition unchecked, never regular, and a color with an opacity the reading misses as none", async () => {
+    // The condition may give the map's bold, so the style is kept by its size, its weight unplaced; but a weight is
+    // given, so it isn't regular.
     expect(
       await leftOut(
         "kotlin",
@@ -1095,7 +1097,7 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
           },
         },
       ),
-    ).toEqual(["Body", "Plain"]);
+    ).toEqual(["Plain"]);
     expect(
       await leftOut(
         "swift",
@@ -1248,5 +1250,147 @@ describe("agent map: only a definition's own value, read whole, confirms it", ()
         },
       ),
     ).toEqual(["Mono", "Other", "Serif"]);
+  });
+});
+
+describe("agent map: a text style checked part by part", () => {
+  const RN = {
+    "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+    "src/S.tsx": 'import { View } from "react-native";\nexport function S() { return <View />; }',
+    "src/styles/variables.ts": ["export default {", "  fontSizeSmall: 9,", "  fontSizeLarge: 20,", "};"].join(
+      "\n",
+    ),
+    "src/styles/typography.ts": [
+      "import variables from './variables';",
+      "const fontScale = {",
+      "  small: variables.fontSizeSmall,",
+      "};",
+      "const lineHeightScale = {",
+      "  small: 12,",
+      "};",
+      "export const textVariants = {",
+      "  finePrint: {",
+      "    ...fontFamilyScale.regular,",
+      "    fontSize: fontScale.small,",
+      "    lineHeight: lineHeightScale.small,",
+      "  },",
+      "  heading: {",
+      "    fontSize: fontScale.small,",
+      "  },",
+      "};",
+    ].join("\n"),
+  };
+
+  it("keeps a style by the parts it reads, and those from a spread without a place, for no edit to change", async () => {
+    const { reading, tokens, at } = await read(RN, {
+      textStyles: {
+        "textVariants.finePrint": {
+          family: "Brand Sans",
+          size: 9,
+          weight: "bold",
+          at: "src/styles/typography.ts:9",
+        },
+      },
+    });
+    expect(reading.unconfirmed).toEqual([]);
+    const style = tokens?.typeStyles.find((s) => s.reference === "textVariants.finePrint");
+    expect(style).toMatchObject({ family: "Brand Sans", size: 9, weight: "bold" });
+    expect(Object.keys(style?.locations ?? {})).toEqual(["fontSize"]);
+    expect(at(style?.locations?.fontSize)).toBe("9");
+  });
+
+  it("follows a size's names to the number, across files and a default import, owner by owner", async () => {
+    const { tokens, at } = await read(RN, {
+      textStyles: { "textVariants.finePrint": { size: 9, at: "src/styles/typography.ts:9" } },
+    });
+    const size = tokens?.typeStyles.find((s) => s.reference === "textVariants.finePrint")?.locations
+      ?.fontSize;
+    // `lineHeightScale.small` is 12, but it's another owner's `small`.
+    expect([size?.file, at(size)]).toEqual(["src/styles/variables.ts", "9"]);
+    expect(
+      size?.via?.map((v) => [v.file, v.line, RN[v.file as keyof typeof RN].slice(v.start, v.end)]),
+    ).toEqual([
+      ["src/styles/typography.ts", 11, "fontScale.small"],
+      ["src/styles/typography.ts", 3, "variables.fontSizeSmall"],
+    ]);
+  });
+
+  it("refuses a part the code gives otherwise, or leaves at the default, whatever else it can't read", async () => {
+    const { reading } = await read(RN, {
+      textStyles: {
+        "textVariants.finePrint": { size: 12, at: "src/styles/typography.ts:9" },
+        "textVariants.heading": { size: 9, weight: "bold", at: "src/styles/typography.ts:14" },
+      },
+    });
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["textVariants.finePrint", "fontScale.small is 9, not 12"],
+      // Nothing it's built on gives a weight, so it's regular.
+      ["textVariants.heading", "the weight bold isn't written there"],
+    ]);
+  });
+
+  it("reads the one size a call it's built with gives, and refuses a style it reads nothing of", async () => {
+    const { reading, tokens, at } = await read(
+      APPS.kotlin.files([
+        "val Body = AppTextStyle(TextStyle(fontSize = 16.sp))",
+        "val Copy = Body.copy(color = Color.Red)",
+        "val Both = AppTextStyle(TextStyle(fontSize = 16.sp), TextStyle(fontSize = 12.sp))",
+      ]),
+      {
+        textStyles: {
+          Body: { size: 16, at: "app/src/main/java/a/Theme.kt:2" },
+          Copy: { size: 16, at: "app/src/main/java/a/Theme.kt:3" },
+          Both: { size: 16, at: "app/src/main/java/a/Theme.kt:4" },
+        },
+      },
+    );
+    expect(at(tokens?.typeStyles.find((s) => s.reference === "Body")?.locations?.fontSize)).toBe("16.sp");
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["Copy", "no size is written there"],
+      ["Both", "no size is written there"],
+    ]);
+  });
+
+  it("takes a size from its own owners only, not a nested object's, another import's, or a namesake's", async () => {
+    const files = {
+      "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+      "src/S.tsx": 'import { View } from "react-native";\nexport function S() { return <View />; }',
+      "src/sizes.ts": "export default {\n  small: compute(),\n};",
+      "src/other.ts": "export const variables = {\n  small: 12,\n};",
+      "src/theme.ts": [
+        "import variables from './sizes';",
+        "const light = {",
+        "  fontScale: {",
+        '    note: "}",',
+        "    small: 14,",
+        "  },",
+        "};",
+        "const dark = {",
+        "  fontScale: {",
+        "    small: 12,",
+        "  },",
+        "};",
+        "export const styles = {",
+        "  nested: { label: { fontSize: 12 } },",
+        "  imported: { fontSize: variables.small },",
+        "  lit: { fontSize: light.fontScale.small },",
+        "};",
+      ].join("\n"),
+    };
+    const { reading, tokens, at } = await read(files, {
+      textStyles: {
+        "styles.nested": { size: 12, at: "src/theme.ts:14" },
+        "styles.imported": { size: 12, at: "src/theme.ts:15" },
+        "styles.lit": { size: 14, at: "src/theme.ts:16" },
+      },
+    });
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["styles.nested", "no size is written there"],
+      // `./sizes` computes it; `other.ts`'s `variables` isn't the one imported.
+      ["styles.imported", "variables.small isn't defined once in the app as a number"],
+    ]);
+    // `light`'s, past a string with a brace in it, not `dark`'s.
+    const lit = tokens?.typeStyles.find((s) => s.reference === "styles.lit")?.locations?.fontSize;
+    expect([lit?.line, at(lit)]).toEqual([5, "14"]);
   });
 });
