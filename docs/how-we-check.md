@@ -57,7 +57,8 @@ Three readings of an app can disagree:
 - **The coding agent's map**: what an agent lists as the design system (see the README). Its instructions,
   `designlane prompt`, use the definition above.
 - **Designlane's check of the map**: each entry the agent lists is confirmed if the code bears it out, or refused with
-  the reason.
+  the reason. A text style is checked part by part: it's refused when the code gives a part another value, and kept
+  when it bears out at least one, with a part it can't read there (one from a style it's built on) left unchecked.
 
 None of them is the answer. What a value really is gets decided against the definition above, by reading where it's
 declared and how the app uses it.
@@ -86,7 +87,8 @@ agent's map, or the agent's instructions.
 1. **Gather the candidates** from all three readings, including the entries the check refuses, and the one-offs
    `drift.md` flags.
 2. **Decide each against the definition**, from where it's declared and how the app uses it. A second reading by an
-   agent does this at scale; it decides each candidate twice, and where the two disagree, a person decides.
+   agent does this at scale. It decides every candidate once, and a fixed tenth of them again to measure how often it
+   agrees with itself; a person decides where it's unsure, or where its two decisions differ.
 3. **Check the deciding against a person** on a sample before relying on it.
 4. **Keep the decisions**, so the same candidate isn't decided again and only a change to Designlane changes the
    result.

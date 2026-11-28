@@ -592,25 +592,41 @@ const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Each value given a label inside `span`, the label matched by `pattern` ending where its value starts. */
 function labelled(code: string, span: Span, pattern: RegExp): Span[] {
-  return [...code.slice(span.start, span.end).matchAll(pattern)].flatMap((m) => {
-    const at = span.start + (m.index ?? 0);
-    // Its own, not a nested object's or call's: `{ nested: { fontSize: 12 }, fontSize: 24 }` gives 24.
-    if (depthAt(code, span.start, at) > 1) return [];
-    const value = valueAfter(code, at + m[0].length);
-    return value ? [value] : [];
+  const matches = [...code.slice(span.start, span.end).matchAll(pattern)];
+  const opens = openBrackets(
+    code,
+    matches.map((m) => span.start + (m.index ?? 0)),
+    span.start,
+  );
+  const all = matches.flatMap((m, i) => {
+    const value = valueAfter(code, span.start + (m.index ?? 0) + m[0].length);
+    return value ? [{ ...value, open: opens[i] ?? [] }] : [];
   });
+  // Its own, not a nested object's or call's: `{ nested: { fontSize: 12 }, fontSize: 24 }` gives 24. With none of
+  // its own, the one a call it's built with gives, through calls only: `Wrapper(TextStyle(fontSize = 16.sp))`.
+  const own = all.filter((s) => s.open.length <= 1);
+  const [only] = all;
+  const throughCalls = all.length === 1 && only?.open.every((at) => code[at] === "(");
+  return (own.length > 0 ? own : throughCalls && only ? [only] : []).map(({ start, end }) => ({
+    start,
+    end,
+  }));
 }
 
-/** How many brackets are open at `to`, from `from`. */
-function depthAt(code: string, from: number, to: number): number {
-  let depth = 0;
-  for (let i = from; i < to; i++) {
+/** The brackets open at each of the ascending `offsets`, outermost first, as where each opens: read in one pass
+ * from `from`, strings skipped. */
+export function openBrackets(code: string, offsets: number[], from = 0): number[][] {
+  const open: number[] = [];
+  const out: number[][] = [];
+  for (let i = from; i < code.length && out.length < offsets.length; i++) {
+    while (out.length < offsets.length && (offsets[out.length] ?? 0) <= i) out.push([...open]);
     const c = code[i];
     if (c === '"' || c === "'" || c === "`") i = stringEnd(code, i) - 1;
-    else if (c === "(" || c === "[" || c === "{") depth++;
-    else if (c === ")" || c === "]" || c === "}") depth--;
+    else if (c === "(" || c === "[" || c === "{") open.push(i);
+    else if (c === ")" || c === "]" || c === "}") open.pop();
   }
-  return depth;
+  while (out.length < offsets.length) out.push([...open]);
+  return out;
 }
 
 /** A text style's size, family and weight, each the value its own label is given: `size:`, `fontSize`; `fontFamily`,
@@ -618,11 +634,22 @@ function depthAt(code: string, from: number, to: number): number {
  * a number whole is its size (`static let title = 28.0`). */
 export interface TextStyleValue {
   size?: Found<number>;
+  /** The name the size is written as, when it's not a number there: `fontScale.finePrint`, `Dimens.large.sp`. */
+  sizeName?: Found<string>;
   family?: Found<string>;
   weight?: Found<number>;
   /** A weight is given in a way Designlane doesn't read for an edit: `.bold()`, or the font's name (`Inter-Bold`). */
   weighted?: boolean;
+  /** A size label is written, with a value Designlane doesn't read: `fontSize: 30 * MULTIPLIER`. */
+  sized?: boolean;
+  /** The style is built on another, which may give what it doesn't write itself: `...base`, `base.copy(…)`,
+   * `base.with(…)`. */
+  builtOn?: boolean;
 }
+
+/** What a style is built on: a spread (`...fontFamilyScale.regular`), or a copy of another (`bodyMedium.copy(`,
+ * `body.with(`). */
+const BUILT_ON = /\.\.\.\s*[A-Za-z_$]|[\w$)]\.(?:copy|with|merge)\(/;
 
 /** SwiftUI's weight modifiers, and a font name's weight: `Inter-Bold`, `Inter_18pt-SemiBold`. */
 const WEIGHT_MODIFIER = /\.(?:bold|fontWeight)\(\s*\)|\.bold\(\s*\)/;
@@ -630,6 +657,8 @@ const NAMED_WEIGHT =
   /[-_](?:thin|hairline|ultra_?light|extra_?light|light|medium|semi_?bold|demi_?bold|bold|heavy|extra_?bold|black)(?:italic)?$/i;
 
 const SIZE = /(?<![\w$.])(?:size|ofSize|fontSize|textSize)\s*[:=]\s*/g;
+/** A size written as a name, with Compose's unit after it: `fontScale.finePrint`, `FONT_SIZES.XXXL`, `Dimens.large.sp`. */
+const SIZE_NAME = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*?)(?:\.(?:sp|dp))?$/;
 const FAMILY =
   /(?<![\w$.])(?:fontFamily|family)\s*[:=]\s*|(?:\.custom|\b(?:UI|NS)?Font)\(\s*(?:name\s*:\s*)?(?=["'])/g;
 const WEIGHT = /(?<![\w$.])(?:fontWeight|weight)\s*[:=]\s*|\.(?:weight|fontWeight)\(\s*/g;
@@ -639,12 +668,15 @@ export function textStyleValue(file: string, code: string, span: Span): TextStyl
   const out: TextStyleValue = {};
   const whole = numberValue(code, span, undefined, false);
   if (whole) return { size: whole };
-  for (const s of labelled(code, span, SIZE)) {
+  const sizes = labelled(code, span, SIZE);
+  for (const s of sizes) {
     const size = numberValue(code, s);
     if (size) {
       out.size = size;
       break;
     }
+    const name = out.sizeName ? undefined : sizeName(code, s);
+    if (name) out.sizeName = name;
   }
   const [family] = labelled(code, span, FAMILY);
   if (family) {
@@ -672,6 +704,8 @@ export function textStyleValue(file: string, code: string, span: Span): TextStyl
         break;
       }
     }
+  if (!out.size && !out.sizeName && sizes.length > 0) out.sized = true;
+  if (BUILT_ON.test(code.slice(span.start, span.end))) out.builtOn = true;
   // A weight given but not read for an edit (`if (bold) FontWeight.Bold else …`, `.bold()`, `Inter-Bold`) is no
   // regular one.
   if (!out.weight)
@@ -680,6 +714,14 @@ export function textStyleValue(file: string, code: string, span: Span): TextStyl
       WEIGHT_MODIFIER.test(code.slice(span.start, span.end)) ||
       (out.family?.kind === "literal" && NAMED_WEIGHT.test(out.family.value));
   return out;
+}
+
+/** A size written as a name at `span`, its unit left out: `fontScale.finePrint`, `Dimens.large` in `Dimens.large.sp`. */
+export function sizeName(code: string, span: Span): Found<string> | undefined {
+  const name = SIZE_NAME.exec(code.slice(span.start, span.end))?.[1];
+  return name
+    ? { value: name, start: span.start, end: span.start + name.length, kind: "identifier" }
+    : undefined;
 }
 
 export type { Language };

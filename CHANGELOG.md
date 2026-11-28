@@ -28,6 +28,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   lines), through the name it gives. It reads none beside an opacity argument (`lightModeAlpha: 0.32`), or with a
   call after it. Changing such an enum's number from Figma is refused when another case already has the new one.
 
+- Checking an agent's map checks a text style part by part: it's kept when the code bears out its size, family or
+  weight, and refused only when the code gives one of them another value, or none where nothing could give it. A part
+  it takes from a style it's built on (`...base`, `base.copy(…)`) or a weight given by a condition is kept from the map
+  with no place, so changing it from Figma is refused. A size written as a name (`fontSize: fontScale.small`) is read
+  through it, in another file too, and through a default import (`import variables from './variables'`), and a size
+  in a call the style is built with (`AppTextStyle(TextStyle(fontSize = 16.sp))`) when it's the only one.
+
 ## 0.6.0 - 2026-11-22
 
 ### Added
