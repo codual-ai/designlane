@@ -38,6 +38,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   (`<color name="primary">@color/blue_500</color>`, `<item name="colorPrimary">@color/blue_500</item>`) through the
   color it names. Two references to one place (`R.color.blue_500`, `@color/blue_500`) are read as one color, not as
   two of the same name.
+- Checking an agent's map reads a color a JSON file names (`"primary": "#5D8017"`, `"muted": "rgba(0, 0, 0, 0.5)"`)
+  as code's, by its key, rather than as an asset catalog's, and changing it from Figma rewrites its string.
 
 ## 0.6.0 - 2026-11-22
 

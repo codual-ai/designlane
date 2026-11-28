@@ -236,3 +236,14 @@ describe("hex digits it won't misread", () => {
     );
   });
 });
+
+describe("a colour a JSON file names", () => {
+  it("is rewritten in its string, as hex digits or a CSS color function", async () => {
+    const json = '{\n  "colors": { "primary": "#5D8017" }\n}';
+    expect(await recolored("src/theme.json", json, literal("#5D8017"), "#5d8017", "#de2413")).toBe("#DE2413");
+    const css = '{ "muted": "rgba(0, 0, 0, 0.5)" }';
+    expect(
+      await recolored("src/theme.json", css, expression("rgba(0, 0, 0, 0.5)"), "#00000080", "#de241380"),
+    ).toBe("rgba(222, 36, 19, 0.5)");
+  });
+});

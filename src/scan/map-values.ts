@@ -361,7 +361,7 @@ export function colorValue(
 ): ColorValue | undefined {
   const language = languageOf(file);
   if (!language) return undefined;
-  if (language === "json") return { colors: assetColor(code, span, appearance) };
+  if (isAssetCatalog(file)) return { colors: assetColor(code, span, appearance) };
   const value = code.slice(span.start, span.end);
   if (PAIR.test(value) && closeOf(value) === value.length - 1) {
     const labelled = (label: RegExp) => {
@@ -418,7 +418,8 @@ function colorsWritten(language: Language, code: string, span: Span): Found<Colo
   if (unquoted !== undefined) {
     const inner = { start: span.start + 1, end: span.end - 1 };
     if (HEX.test(unquoted)) return found(hexReadings(reading(unquoted, "literal")), inner, "literal");
-    const css = language === "js" || language === "css" ? cssColor(unquoted) : undefined;
+    const css =
+      language === "js" || language === "css" || language === "json" ? cssColor(unquoted) : undefined;
     return css ? found([{ value: css }], inner, /^[a-z]+$/i.test(unquoted) ? "literal" : "expression") : [];
   }
   if (language === "css") {
@@ -450,6 +451,10 @@ function cssColor(text: string): Color | undefined {
   const hex = colorOf(text, true);
   return hex ? fromHex(hex) : undefined;
 }
+
+/** Whether `file` is an asset catalog's color, rather than JSON that names colors (`"primary": "#3366CC"`). */
+export const isAssetCatalog = (file: string) => ASSET_CATALOG.test(file);
+const ASSET_CATALOG = /\.(?:colorset|xcassets)\/|(?:^|\/)Contents\.json$/;
 
 /** An asset catalog color at the line the map gives: the one `components` of the entry or object opening there. */
 function assetColor(code: string, line: Span, appearance?: "light" | "dark"): Found<Color>[] {

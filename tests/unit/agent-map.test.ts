@@ -1485,3 +1485,50 @@ describe("agent map: references to one place", () => {
     expect(reading.unconfirmed.map((u) => u.reference)).toEqual(["C.text"]);
   });
 });
+
+describe("agent map: colors a JSON file names", () => {
+  const files = {
+    "package.json": '{ "dependencies": { "react-native": "0.76.0" } }',
+    "src/S.tsx": 'import { View } from "react-native";\nexport function S() { return <View />; }',
+    "src/styles/theme.json": [
+      "{",
+      '  "colors": {',
+      '    "primary": "#5D8017",',
+      '    "muted": "rgba(0, 0, 0, 0.5)",',
+      '    "link": "primary",',
+      '    "primaryDisabled": "#5D8017"',
+      "  }",
+      "}",
+    ].join("\n"),
+  };
+
+  it("reads each key's color like code's, not as an asset catalog's", async () => {
+    const { reading, tokens, at } = await read(files, {
+      colors: {
+        "colors.primary": { light: { value: "#5d8017", at: "src/styles/theme.json:3" } },
+        "colors.muted": { light: { value: "#00000080", at: "src/styles/theme.json:4" } },
+      },
+    });
+    expect(reading.unconfirmed).toEqual([]);
+    expect(at(tokens?.colors.find((c) => c.reference === "colors.primary")?.locations?.light)).toBe(
+      "#5D8017",
+    );
+    expect(tokens?.colors.find((c) => c.reference === "colors.muted")?.kind).toBe("code");
+  });
+
+  it("refuses another key's color, one only named like it, or a string naming one", async () => {
+    const { reading } = await read(files, {
+      colors: {
+        "colors.accent": { light: { value: "#5d8017", at: "src/styles/theme.json:3" } },
+        "colors.link": { light: { value: "#5d8017", at: "src/styles/theme.json:5" } },
+        "colors.primary": { light: { value: "#5d8017", at: "src/styles/theme.json:6" } },
+      },
+    });
+    expect(reading.unconfirmed.map((u) => [u.reference, u.why])).toEqual([
+      ["colors.accent", "no color is written there"],
+      ["colors.link", "no color is written there"],
+      // A key only named like it is another's.
+      ["colors.primary", "no primary is defined there"],
+    ]);
+  });
+});
