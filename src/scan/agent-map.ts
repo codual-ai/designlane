@@ -19,6 +19,7 @@ import {
   definitionsAt,
   type Found,
   holdsColor,
+  isAssetCatalog,
   lineAt,
   numberValue,
   openBrackets,
@@ -243,7 +244,7 @@ export async function applyMap(scan: ScanResult, json: unknown): Promise<MapRead
           source: file,
           reference,
           line,
-          kind: file.endsWith(".json") ? "asset" : "code",
+          kind: isAssetCatalog(file) ? "asset" : "code",
           uses: usesOf(reference, known.colors),
           locations: { light: light.location, ...(dark && { dark: dark.location }) },
         });
@@ -373,10 +374,13 @@ async function definitionAt(
   const span = lineAt(code, line);
   if (!span) return { kind: "no-line", why: `the file has no line ${line}`, at };
   // An asset catalog's color is the entry opening at the line, not a name.
-  if (language === "json") return { file, line, code, definition: { name: nameOf(reference), ...span } };
+  if (isAssetCatalog(file)) return { file, line, code, definition: { name: nameOf(reference), ...span } };
   const names = namesOf(reference).slice(-2).reverse();
   const definition = definitionOnLine(code, line, language, names, appearance);
-  if (!definition) return { kind: "no-definition", why: `no ${nameOf(reference)} is defined there`, at };
+  // JSON is only data, so its key is the name: no `primaryDisabled` for `colors.primary`.
+  const named = language !== "json" || names.includes(definition?.name ?? "");
+  if (!definition || !named)
+    return { kind: "no-definition", why: `no ${nameOf(reference)} is defined there`, at };
   return { file, line, code, definition };
 }
 
